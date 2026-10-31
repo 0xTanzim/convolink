@@ -55,4 +55,50 @@ describe("SessionOrchestrator.compare()", () => {
     expect(report.metrics.length).toBe(2);
     expect(report.markdownReport).toContain("# Multi-Model Comparison: Design Redis cache layer");
   });
+
+  it("orchestrates comparison with stage 2 arbitration", async () => {
+    const browser = new FakeBrowserPort();
+
+    browser.listTabs = async () => [
+      { targetId: "tab-ds", title: "DeepSeek", url: "https://chat.deepseek.com/a/chat/s/1" },
+      { targetId: "tab-gpt", title: "ChatGPT", url: "https://chatgpt.com/c/2" },
+    ];
+
+    browser.evalResponseMap.set("resolveSelectors", {
+      ok: true,
+      layoutVariant: "v1",
+      composerSelector: "textarea",
+      sendButtonSelector: "button",
+      stopIndicatorSelector: null,
+      turnContainerSelector: ".turn",
+    });
+
+    browser.evalResponseMap.set("awaitCompletion", {
+      mdCount: 1,
+      hasNewTurn: true,
+      isGenerating: false,
+      turnIndex: 0,
+      text: "Candidate solution",
+      codeBlocks: [{ language: "typescript", code: "const a = 1;" }],
+    });
+
+    const orchestrator = new SessionOrchestrator({
+      browser,
+      drivers: [new DeepSeekDriver(), new ChatGPTDriver()],
+      lockService: new LockService(),
+      policyGate: new PolicyService(),
+      journalService: new StateJournalService(),
+    });
+
+    const report = await orchestrator.compare({
+      prompt: "Build an event bus",
+      platforms: ["deepseek", "chatgpt"],
+      arbitrate: true,
+      arbiter: "deepseek",
+    });
+
+    expect(report.arbitration).toBeDefined();
+    expect(report.arbitration?.arbiterPlatform).toBe("deepseek");
+    expect(report.markdownReport).toContain("Technical Arbiter Synthesis (DeepSeek)");
+  });
 });

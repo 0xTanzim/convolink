@@ -1,5 +1,7 @@
 import type { DiscoveredTab, AskResult } from "./orchestrator.types.js";
-import type { ExecutionScheduleMode, ModelExecutionResult } from "./comparison.types.js";
+import type { ExecutionScheduleMode, ModelExecutionResult, ArbitrationResult } from "./comparison.types.js";
+import type { PlatformId } from "../ports/platform.port.js";
+import { ArbiterPromptBuilder } from "./arbiter-prompt.builder.js";
 
 export type AskRunner = (tab: DiscoveredTab, prompt: string, timeoutMs?: number) => Promise<AskResult>;
 
@@ -9,6 +11,17 @@ export interface ExecutionParams {
   readonly mode?: ExecutionScheduleMode;
   readonly timeoutMs?: number;
   readonly staggerMs?: number;
+}
+
+export interface ArbitrationParams extends ExecutionParams {
+  readonly arbitrate?: boolean;
+  readonly arbiter?: PlatformId;
+  readonly arbiterTab?: DiscoveredTab;
+}
+
+export interface ComparisonExecutionOutput {
+  readonly results: ModelExecutionResult[];
+  readonly arbitration?: ArbitrationResult;
 }
 
 export class ComparisonEngineService {
@@ -26,6 +39,48 @@ export class ComparisonEngineService {
       return this.executeSequential(params);
     }
     return this.executeParallel(params, staggerMs);
+  }
+
+  public async executeComparisonWithArbitration(params: ArbitrationParams): Promise<ComparisonExecutionOutput> {
+    const results = await this.executeComparison(params);
+    if (!params.arbitrate) {
+      return { results };
+    }
+
+    const arbiterTab = this.resolveArbiterTab(params, results);
+    const validCandidates = results.filter((r) => r.status === "success" && r.turn?.markdownContent);
+    if (!arbiterTab || validCandidates.length === 0) {
+      return { results };
+    }
+
+    const prompt = ArbiterPromptBuilder.build({
+      originalPrompt: params.prompt,
+      candidateResults: results,
+    });
+
+    const exec = await this.runSingleTab(arbiterTab, prompt, params.timeoutMs);
+    const arbitration: ArbitrationResult = {
+      arbiterPlatform: arbiterTab.platformId ?? "chatgpt",
+      status: exec.status,
+      elapsedMs: exec.elapsedMs,
+      turn: exec.turn,
+      artifacts: exec.artifacts,
+      error: exec.error,
+    };
+
+    return { results, arbitration };
+  }
+
+  private resolveArbiterTab(params: ArbitrationParams, results: ModelExecutionResult[]): DiscoveredTab | undefined {
+    if (params.arbiterTab) return params.arbiterTab;
+    if (params.arbiter) {
+      return params.tabs.find((t) => t.platformId === params.arbiter);
+    }
+    // Default priority: deepseek -> first successful candidate -> first tab
+    const deepseekTab = params.tabs.find((t) => t.platformId === "deepseek");
+    if (deepseekTab) return deepseekTab;
+    const firstSuccessful = results.find((r) => r.status === "success");
+    return firstSuccessful?.tab ?? params.tabs[0];
   }
 
   private async executeParallel(params: ExecutionParams, staggerMs: number): Promise<ModelExecutionResult[]> {

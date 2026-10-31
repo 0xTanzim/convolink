@@ -50,18 +50,22 @@ export class ComparisonCoordinator {
     const start = Date.now();
     const mode = options.mode ?? "parallel";
 
-    const results = await this.engine.executeComparison({
+    const execution = await this.engine.executeComparisonWithArbitration({
       prompt: options.prompt,
       tabs: targetTabs,
       mode,
       timeoutMs: options.timeoutMs,
       staggerMs: mode === "parallel" ? 250 : 0,
+      arbitrate: options.arbitrate,
+      arbiter: options.arbiter,
     });
 
+    const results = execution.results;
+    const arbitration = execution.arbitration;
     const totalDurationMs = Date.now() - start;
     const metrics = this.reporter.computeMetrics(results);
     const fastestPlatform = this.reporter.determineFastestPlatform(metrics);
-    const markdownReport = this.reporter.buildMarkdownReport(comparisonId, options.prompt, results, metrics, mode);
+    const markdownReport = this.reporter.buildMarkdownReport(comparisonId, options.prompt, results, metrics, mode, arbitration);
 
     if (options.outDir && this.fileSink) {
       await this.fileSink.persist(
@@ -80,6 +84,7 @@ export class ComparisonCoordinator {
       results,
       metrics,
       fastestPlatform,
+      arbitration,
       markdownReport,
     };
   }

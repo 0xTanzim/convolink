@@ -3,6 +3,7 @@ import type {
   ExecutionScheduleMode,
   ModelExecutionResult,
   PlatformMetric,
+  ArbitrationResult,
 } from "./comparison.types.js";
 import type { WorkspaceFileSink } from "./workspace-sink.service.js";
 
@@ -47,6 +48,7 @@ export class ComparisonReportService {
     results: readonly ModelExecutionResult[],
     metrics: readonly PlatformMetric[],
     mode: ExecutionScheduleMode = "parallel",
+    arbitration?: ArbitrationResult,
   ): string {
     const fastest = this.determineFastestPlatform(metrics);
     const dateStr = new Date().toISOString();
@@ -70,6 +72,25 @@ export class ComparisonReportService {
       })
       .join("\n---\n\n");
 
+    let arbiterSection = "";
+    if (arbitration) {
+      const arbiterName = this.formatPlatformName(arbitration.arbiterPlatform);
+      const arbiterDuration = arbitration.elapsedMs > 0 ? `${(arbitration.elapsedMs / 1000).toFixed(1)}s` : "-";
+      const arbiterContent = arbitration.turn
+        ? arbitration.turn.markdownContent
+        : `*Arbitration failed: ${arbitration.error || "Unknown error"}*`;
+
+      arbiterSection = `
+---
+
+## ⚖️ Technical Arbiter Synthesis (${arbiterName})
+
+> **Arbiter Platform:** \`${arbiterName}\` | **Status:** \`${arbitration.status}\` | **Elapsed:** \`${arbiterDuration}\`
+
+${arbiterContent}
+`;
+    }
+
     return `# Multi-Model Comparison: ${prompt}
 
 - **Comparison ID:** \`${comparisonId}\`
@@ -84,7 +105,7 @@ export class ComparisonReportService {
 | Platform | Status | Elapsed | Output Chars | Code Blocks |
 | :--- | :--- | :--- | :--- | :--- |
 ${tableRows}
-
+${arbiterSection}
 ---
 
 ## 📝 Full Model Outputs

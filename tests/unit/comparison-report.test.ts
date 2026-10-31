@@ -80,4 +80,25 @@ describe("ComparisonReportService", () => {
     expect(report).toContain("| **DeepSeek** | ✅ Done | 1.4s");
     expect(report).toContain("| **Gemini** | ❌ Failed");
   });
+
+  it("renders the Technical Arbiter Synthesis section when arbitration result is present", () => {
+    const service = new ComparisonReportService();
+    const metrics = service.computeMetrics(mockResults);
+    const report = service.buildMarkdownReport("cmp-456", "Refactor lock", mockResults, metrics, "parallel", {
+      arbiterPlatform: "deepseek",
+      status: "success",
+      elapsedMs: 1800,
+      turn: {
+        turnIndex: 2,
+        role: "assistant",
+        markdownContent: "Unified Production Consensus: Combines Map lock with atomics.",
+        codeBlocks: [{ language: "ts", code: "export class LockFreeSync {}" }],
+        contentHash: "h-arb-rep",
+      },
+    });
+
+    expect(report).toContain("Technical Arbiter Synthesis (DeepSeek)");
+    expect(report).toContain("Unified Production Consensus: Combines Map lock with atomics.");
+    expect(report).toContain("1.8s");
+  });
 });

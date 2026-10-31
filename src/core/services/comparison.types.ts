@@ -14,6 +14,15 @@ export interface ModelExecutionResult {
   readonly error?: string;
 }
 
+export interface ArbitrationResult {
+  readonly arbiterPlatform: PlatformId;
+  readonly status: "success" | "failed" | "timeout";
+  readonly elapsedMs: number;
+  readonly turn?: ConversationTurn;
+  readonly artifacts?: readonly ExtractedArtifact[];
+  readonly error?: string;
+}
+
 export interface PlatformMetric {
   readonly platform: PlatformId;
   readonly status: "success" | "failed" | "timeout";
@@ -32,6 +41,7 @@ export interface ComparisonReport {
   readonly results: readonly ModelExecutionResult[];
   readonly metrics: readonly PlatformMetric[];
   readonly fastestPlatform?: PlatformId;
+  readonly arbitration?: ArbitrationResult;
   readonly markdownReport: string;
 }
 
@@ -42,4 +52,6 @@ export interface CompareOptions {
   readonly mode?: ExecutionScheduleMode;
   readonly outDir?: string;
   readonly autoSpawn?: boolean;
+  readonly arbitrate?: boolean;
+  readonly arbiter?: PlatformId;
 }

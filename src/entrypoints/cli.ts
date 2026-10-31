@@ -167,27 +167,18 @@ async function handleAsk(
   }
 }
 
-async function handleCompare(
-  orchestrator: ReturnType<typeof createContainer>["orchestrator"],
-  args: string[],
-): Promise<number> {
+async function handleCompare(orchestrator: ReturnType<typeof createContainer>["orchestrator"], args: string[]): Promise<number> {
   const parsed = parseCompareArgs(args);
-  let prompt = parsed.prompt || (await readStdin());
-
+  const prompt = parsed.prompt || (await readStdin());
   if (!prompt.trim()) {
     console.error("Error: Prompt is required for comparison.");
     return 1;
   }
-
   try {
     const report = await orchestrator.compare({
-      prompt,
-      platforms: parsed.platforms,
-      mode: parsed.mode,
-      timeoutMs: parsed.timeoutMs,
-      outDir: parsed.outDir,
+      prompt, platforms: parsed.platforms, mode: parsed.mode, timeoutMs: parsed.timeoutMs,
+      outDir: parsed.outDir, arbitrate: parsed.arbitrate, arbiter: parsed.arbiter,
     });
-
     console.log(report.markdownReport);
     return 0;
   } catch (err: unknown) {

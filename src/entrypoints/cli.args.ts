@@ -50,6 +50,8 @@ export interface ParsedCompareArgs {
   mode?: "parallel" | "sequential";
   outDir?: string;
   transport?: "raw-cdp" | "agent-browser";
+  arbitrate?: boolean;
+  arbiter?: PlatformId;
 }
 
 export function parseCompareArgs(args: string[]): ParsedCompareArgs {
@@ -57,6 +59,8 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
   let mode: "parallel" | "sequential" | undefined;
   let platforms: PlatformId[] | undefined;
   let transport: "raw-cdp" | "agent-browser" | undefined;
+  let arbitrate: boolean | undefined;
+  let arbiter: PlatformId | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -70,12 +74,17 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
       mode = args[++i] as "parallel" | "sequential";
     } else if (a === "--transport" && i + 1 < args.length) {
       transport = args[++i] as "raw-cdp" | "agent-browser";
+    } else if (a === "--arbitrate") {
+      arbitrate = true;
+    } else if (a === "--arbiter" && i + 1 < args.length) {
+      arbitrate = true;
+      arbiter = args[++i] as PlatformId;
     } else if (!a.startsWith("-")) {
       prompt = prompt ? `${prompt} ${a}` : a;
     }
   }
 
-  return { prompt, platforms, timeoutMs, mode, outDir, transport };
+  return { prompt, platforms, timeoutMs, mode, outDir, transport, arbitrate, arbiter };
 }
 
 export async function readStdin(): Promise<string> {
@@ -111,5 +120,13 @@ Options for ask:
   --write-files, -w              Extract and save code blocks to local workspace
   --out-dir <path>               Output directory for saved artifacts (default: ./artifacts)
   --no-continue                  Disable automated stream continuation
+
+Options for compare:
+  --platforms <p1,p2>            Comma-separated platforms (default: chatgpt,deepseek,gemini)
+  --mode <parallel|sequential>   Execution schedule (default: parallel)
+  --arbitrate                    Trigger Stage 2 Technical Arbiter consensus synthesis
+  --arbiter <platform>           Designate specific arbiter platform (e.g. deepseek)
+  --out-dir <path>               Directory to save REPORT.md and namespaced artifacts
+  --timeout <ms>                 Timeout per model execution (default: 120000)
 `);
 }

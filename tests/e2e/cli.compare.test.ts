@@ -13,6 +13,8 @@ describe("CLI Compare Command", () => {
       const code = await runCli(["--help"]);
       expect(code).toBe(0);
       expect(output).toContain("convo compare");
+      expect(output).toContain("--arbitrate");
+      expect(output).toContain("--arbiter <platform>");
     } finally {
       console.log = origLog;
     }
