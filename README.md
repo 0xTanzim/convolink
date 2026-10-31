@@ -5,7 +5,7 @@
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-93%20passing%20(bun:test)-success)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/Tests-109%20passing%20(bun:test)-success)](https://bun.sh)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#architecture)
 [![License](https://img.shields.io/badge/License-MIT-green)](#license)
 
@@ -15,13 +15,15 @@
 
 Modern web AI interfaces (**ChatGPT Plus/Pro**, **DeepSeek-V3/R1**, and **Google Gemini Advanced**) provide leading-edge reasoning, real-time web search grounding, interactive Canvas side drawers, and generous subscription compute. However, developers and autonomous coding agents are traditionally isolated from these web interfaces—forced to either manually copy-paste code snippets or pay redundant, metered token fees for API models that lack the UI's specialized scaffolding.
 
-**ConvoLink** bridges this gap. It connects your CLI and autonomous agents directly to your existing, authenticated browser tabs using the non-invasive **Chrome DevTools Protocol (CDP)**.
+**ConvoLink** bridges this gap. It connects your CLI and autonomous agents directly to your existing, authenticated browser tabs using the non-invasive **Chrome DevTools Protocol (CDP)** and standard **W3C WebDriver BiDi**.
 
 ### Key Capabilities
 
 - 💰 **Zero-Cost Subscription Compute:** Run high-volume code generations directly through your active web subscriptions without managing API keys or paying extra token fees.
 - ⚖️ **Multi-Model Comparison Engine (`convo compare`):** Broadcast a prompt across ChatGPT, DeepSeek, and Gemini simultaneously with staggered 250ms dispatch and failure isolation, producing deterministic benchmark tables and namespaced code artifacts.
-- ⚡ **Dual First-Class Transports:** Seamlessly switch between direct native `RawCdpAdapter` (<2ms latency, zero sub-processes) and `AgentBrowserAdapter` (utilizing the installed `agent-browser` 0.39.2 CLI with interactive snapshot refs `@e1`, `@e2`).
+- 🧑‍⚖️ **Two-Stage Arbiter Consensus Engine (`--arbitrate`, `--arbiter`):** Collect candidate answers from multiple models in parallel, feed them into a designated reasoning Arbiter (e.g. DeepSeek R1), critique logic flaws and hallucinations, and output unified production code.
+- 🦊 **Multi-Browser Transports (Chromium & Firefox):** Seamlessly switch between direct native `RawCdpAdapter` (<2ms latency), `AgentBrowserAdapter` (`agent-browser` 0.39.2 CLI), and `FirefoxBidiAdapter` (standard W3C WebDriver BiDi protocol).
+- 🧠 **2026 Resilient Web Selectors:** Multi-selector fallback chains for modern ChatGPT (ProseMirror & CodeMirror), Google Gemini (Quill & Markdown), and DeepSeek (Chat & DeepThink R1).
 - 🪄 **Tab & Fresh Chat Spawning:** Reset active conversations on demand (`--new`) or spawn new tabs in the background (`--open-tab`, `tab new <platform>`) without stealing window focus.
 - ↩️ **State Movement & Mistake Rollback:** Automatic pre-mutation checkpoint journaling (`convo undo`, `convo back`, `convo history`) guarantees that if an agent resets a conversation or navigates away by mistake, it can immediately restore the prior thread URL without state loss.
 - 📁 **Automated Artifact & Multi-File Extraction:** Automatically parses fenced code blocks containing `// filepath:`, `# filepath:`, or `<!-- file: -->` directives and writes clean source trees directly to your workspace.
@@ -47,6 +49,7 @@ flowchart TD
 
     subgraph CoreKernel ["Pure Domain Kernel (src/core/) — Zero Browser Imports"]
         Orchestrator["SessionOrchestrator"]
+        ComparisonEngine["ComparisonEngineService & ArbiterPromptBuilder"]
         LockService["LockService (tmpfs Mutex)"]
         PolicyService["PolicyService (Secret Scrubbing)"]
         ArtifactService["ArtifactService (Directive Parser)"]
@@ -56,7 +59,8 @@ flowchart TD
     subgraph OutboundAdapters ["Outbound Infrastructure Adapters (src/adapters/)"]
         CDP["RawCdpAdapter (WebSocket CDP :9222)"]
         AgentBrowser["AgentBrowserAdapter (agent-browser CLI)"]
-        DeepSeek["DeepSeekDriver (Vue Microtask Settling)"]
+        FirefoxBiDi["FirefoxBidiAdapter (W3C WebDriver BiDi)"]
+        DeepSeek["DeepSeekDriver (Vue Microtask Settling & R1)"]
         ChatGPT["ChatGPTDriver (CodeMirror 6 & ProseMirror)"]
         Gemini["GeminiDriver (Quill DOM & Sandbox Links)"]
     end
@@ -158,14 +162,26 @@ ConvoLink commands are accessible via `convo <command>` or `convolink <command>`
 | :--- | :--- | :--- | :--- |
 | `--new` | `-n` | `false` | Resets the active tab to a fresh conversation before submitting. |
 | `--open-tab` | | `false` | Spawns a brand-new tab in the background before submitting. |
-| `--transport <name>` | | `raw-cdp` | Transport engine: `raw-cdp` (native WebSocket) or `agent-browser`. |
+| `--transport <name>` | | `raw-cdp` | Transport engine: `raw-cdp`, `agent-browser`, or `firefox-bidi`. |
 | `--platform <name>` | `-p` | First available | Target platform (`chatgpt`, `deepseek`, `gemini`). |
 | `--targetId <hex>` | `-t` | First available | Target specific Chrome tab by its CDP `targetId`. |
 | `--write-files` | `-w` | `false` | Automatically extract code blocks and write them to disk. |
 | `--out-dir <path>` | `-o` | `./artifacts` | Target directory for extracted artifact files. |
 | `--no-continue` | | `false` | Disable automatic multi-chunk stream continuation. |
-| `--think` | | `undefined` | Toggle reasoning / deep-thinking mode (e.g., DeepSeek R1). |
+| `--think` | | `undefined` | Toggle reasoning / deep-thinking mode (e.g., DeepThink R1). |
 | `--timeout <ms>` | | `120000` | Maximum wait time for model completion (in ms). |
+
+### `compare` Command Options
+
+| Flag | Default | Description |
+| :--- | :--- | :--- |
+| `--platforms <p1,p2>` | `chatgpt,deepseek,gemini` | Comma-separated list of model platforms to query. |
+| `--mode <mode>` | `parallel` | Execution schedule: `parallel` (staggered 250ms) or `sequential`. |
+| `--arbitrate` | `false` | Trigger Stage 2 Technical Arbiter consensus synthesis. |
+| `--arbiter <platform>` | `deepseek` | Designate specific model platform as the Arbiter judge. |
+| `--out-dir <path>` | `undefined` | Output directory to save `REPORT.md` and namespaced artifacts. |
+| `--timeout <ms>` | `120000` | Timeout per model execution (in ms). |
+| `--transport <name>` | `raw-cdp` | Transport engine (`raw-cdp`, `agent-browser`, `firefox-bidi`). |
 
 ---
 
