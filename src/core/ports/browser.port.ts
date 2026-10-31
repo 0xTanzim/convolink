@@ -47,4 +47,16 @@ export interface BrowserPort {
   pressKey(handle: SessionHandle, selector: string, key: string): Promise<void>;
   setInputFiles(handle: SessionHandle, selector: string, filePaths: string[]): Promise<void>;
   downloadFile?(handle: SessionHandle, url: string): Promise<Buffer>;
+
+  /** Creates a new browser tab navigating to the given URL */
+  createTab?(url: string): Promise<TabDescriptor>;
+
+  /** Closes a specific tab target cleanly */
+  closeTab?(targetId: string): Promise<void>;
+
+  /** Navigates an attached tab session to a new URL */
+  navigate?(handle: SessionHandle, url: string): Promise<void>;
+
+  /** Navigates an attached tab session back in browser history */
+  goBack?(handle: SessionHandle): Promise<void>;
 }

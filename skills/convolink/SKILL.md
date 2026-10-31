@@ -93,6 +93,43 @@ Toggle reasoning/thinking models on supported platforms (e.g., DeepSeek R1, Chat
 convo ask --platform deepseek "Solve this complex concurrency problem" --think
 ```
 
+### 2.5 Fresh Chat & Tab Spawning (`--new` / `--open-tab`)
+Start fresh chats or spin up brand new tabs without manual browser navigation:
+```bash
+# Reset active ChatGPT tab to a clean conversation before submitting
+convo ask --platform chatgpt "Start a clean refactoring session" --new
+
+# Spawn a brand new background tab on DeepSeek without stealing focus
+convo ask --platform deepseek "Design distributed cache" --open-tab
+
+# Or manually manage tabs:
+convo tab new deepseek         # Create tab for DeepSeek
+convo tab close <targetId>     # Close specific tab cleanly
+```
+
+### 2.6 State Movement & Mistake Rollback (`undo` / `back`)
+If an agent makes a mistake by resetting a conversation or navigating away, ConvoLink provides safe recovery:
+```bash
+# Revert mistaken new-chat/navigation back to the prior conversation URL
+convo undo
+
+# Step back in active tab browser history
+convo back
+
+# Inspect recent checkpoints and thread URLs
+convo history
+```
+
+### 2.7 Dual Transport Selection (`--transport`)
+ConvoLink supports both high-performance direct CDP and the specialized `agent-browser` CLI:
+```bash
+# Default: native WebSocket (<2ms latency, zero dependencies)
+convo ask "Refactor auth" --transport raw-cdp
+
+# Agent-browser mode: leverages installed agent-browser 0.39.2 CLI
+convo ask "Refactor auth" --transport agent-browser
+```
+
 ---
 
 ## 3. Best Practices for Prompts

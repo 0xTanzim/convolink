@@ -74,4 +74,51 @@ describe("AgentBrowserAdapter", () => {
     await adapter.detach(handle);
     expect(closed).toBe(false); // MUST NEVER CALL CLOSE
   });
+
+  it("creates a new tab via agent-browser tab new", async () => {
+    const executed: string[][] = [];
+    const trackingExecutor = async (args: string[]) => {
+      executed.push(args);
+      if (args.includes("tab") && args.includes("new")) {
+        return { stdout: "[t3] New Tab - https://chatgpt.com", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    const adapter = new AgentBrowserAdapter(9222, trackingExecutor);
+    const tab = await adapter.createTab("https://chatgpt.com");
+
+    expect(tab.url).toBe("https://chatgpt.com");
+    expect(executed.some((cmd) => cmd.includes("tab") && cmd.includes("new") && cmd.includes("https://chatgpt.com"))).toBe(true);
+  });
+
+  it("closes a specific tab via agent-browser tab close", async () => {
+    const executed: string[][] = [];
+    const trackingExecutor = async (args: string[]) => {
+      executed.push(args);
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    const adapter = new AgentBrowserAdapter(9222, trackingExecutor);
+    await adapter.closeTab("t3");
+
+    expect(executed.some((cmd) => cmd.includes("tab") && cmd.includes("close") && cmd.includes("t3"))).toBe(true);
+  });
+
+  it("navigates and goes back via agent-browser", async () => {
+    const executed: string[][] = [];
+    const trackingExecutor = async (args: string[]) => {
+      executed.push(args);
+      return { stdout: "", stderr: "", exitCode: 0 };
+    };
+
+    const adapter = new AgentBrowserAdapter(9222, trackingExecutor);
+    const handle: SessionHandle = { sessionId: "s1", targetId: "t1", adapterId: "agent-browser" };
+
+    await adapter.navigate(handle, "https://chat.deepseek.com/");
+    await adapter.goBack(handle);
+
+    expect(executed.some((cmd) => cmd.includes("open") && cmd.includes("https://chat.deepseek.com/"))).toBe(true);
+    expect(executed.some((cmd) => cmd.includes("back"))).toBe(true);
+  });
 });

@@ -11,6 +11,7 @@ import type { PolicyGatePort, RiskLabel } from "../ports/policy.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService, ExtractedArtifact } from "./artifact.service.js";
 import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { StateJournalService } from "./journal.service.js";
 
 export interface DiscoveredTab {
   readonly targetId: string;
@@ -48,6 +49,8 @@ export interface AskOptions {
   readonly autoContinue?: boolean;
   readonly writeFiles?: boolean;
   readonly outDir?: string;
+  readonly newChat?: boolean;
+  readonly openTab?: boolean;
 }
 
 export interface AskResult {
@@ -68,4 +71,5 @@ export interface OrchestratorDependencies {
   readonly policyGate: PolicyGatePort;
   readonly artifactService?: ArtifactService;
   readonly fileSink?: WorkspaceFileSink;
+  readonly journalService?: StateJournalService;
 }

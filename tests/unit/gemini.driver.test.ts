@@ -129,4 +129,14 @@ describe("GeminiDriver", () => {
     await driver.triggerContinuation(handle, browser);
     expect(browser.clickedSelectors.length).toBe(1);
   });
+
+  it("provides base URL and triggers new chat", async () => {
+    const browser = new FakeBrowserPort();
+    const driver = new GeminiDriver();
+
+    expect(driver.getBaseUrl()).toBe("https://gemini.google.com/app");
+
+    await driver.startNewChat(handle, browser);
+    expect(browser.evaluatedExpressions.some((e) => e.includes("startNewChat"))).toBe(true);
+  });
 });

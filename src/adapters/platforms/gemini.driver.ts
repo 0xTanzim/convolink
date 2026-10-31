@@ -11,9 +11,14 @@ import type {
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { GEMINI_RESOLVE_SELECTORS_EXPR, getGeminiReadThreadExpr } from "./gemini.scripts.js";
 
 export class GeminiDriver implements PlatformPort {
   public readonly id: PlatformId = "gemini";
+
+  public getBaseUrl(): string {
+    return "https://gemini.google.com/app";
+  }
 
   public matchesUrl(url: string): boolean {
     return url.includes("gemini.google.com");
@@ -25,22 +30,7 @@ export class GeminiDriver implements PlatformPort {
   }
 
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
-    const expr = `(() => {
-      /* resolveSelectors */
-      const composer = document.querySelector('rich-textarea div.ql-editor.textarea, rich-textarea [contenteditable="true"]');
-      const sendBtn = document.querySelector('button[aria-label="Send message"], button.send-button, button[aria-label*="Dictate"]');
-      const stopSpinner = document.querySelector('mat-mdc-progress-spinner, button[aria-label="Stop response"]');
-      const turns = document.querySelectorAll('user-query, model-response');
-      return {
-        ok: Boolean(composer && sendBtn),
-        layoutVariant: "gemini-modern",
-        composerSelector: "rich-textarea div.ql-editor.textarea",
-        sendButtonSelector: 'button[aria-label="Send message"]',
-        stopIndicatorSelector: stopSpinner ? "mat-mdc-progress-spinner" : null,
-        turnContainerSelector: turns.length > 0 ? "user-query, model-response" : "main",
-      };
-    })()`;
-    return browser.evaluate<SelectorResolution>(handle, expr);
+    return browser.evaluate<SelectorResolution>(handle, GEMINI_RESOLVE_SELECTORS_EXPR);
   }
 
   public async readThread(
@@ -49,29 +39,17 @@ export class GeminiDriver implements PlatformPort {
     options?: { lastNTurns?: number },
   ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
     const lastN = options?.lastNTurns ?? 50;
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getGeminiReadThreadExpr(lastN));
+  }
+
+  public async startNewChat(handle: SessionHandle, browser: BrowserPort): Promise<void> {
     const expr = `(() => {
-      /* readThread */
-      const nodes = Array.from(document.querySelectorAll('user-query, model-response')).slice(-${lastN});
-      const turns = [];
-      let index = 0;
-      for (const node of nodes) {
-        const isUser = node.tagName.toLowerCase() === 'user-query';
-        const rawText = (node.innerText || '').trim();
-        const codeBlocks = Array.from(node.querySelectorAll('pre code')).map(c => ({
-          language: c.className.replace(/^language-/, '') || 'text',
-          code: c.textContent || '',
-        }));
-        turns.push({
-          turnIndex: index++,
-          role: isUser ? "user" : "assistant",
-          markdownContent: rawText,
-          codeBlocks,
-          contentHash: String(rawText.length),
-        });
-      }
-      return { layoutVariant: "gemini-modern", turns };
+      /* startNewChat */
+      const btn = document.querySelector('button[aria-label="New chat"], a[href="/app"]');
+      if (btn) (btn as HTMLElement).click();
+      else window.location.href = "https://gemini.google.com/app";
     })()`;
-    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, expr);
+    await browser.evaluate(handle, expr);
   }
 
   public async applyToggles(handle: SessionHandle, browser: BrowserPort, _toggles: ToggleOptions): Promise<void> {

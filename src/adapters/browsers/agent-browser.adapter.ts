@@ -127,49 +127,41 @@ export class AgentBrowserAdapter implements BrowserPort {
   }
 
   public async fillText(handle: SessionHandle, selector: string, text: string): Promise<void> {
-    await this.execute([
-      "--cdp",
-      String(this.port),
-      "tab",
-      handle.targetId,
-      "fill",
-      selector,
-      text,
-    ]);
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "fill", selector, text]);
   }
 
   public async click(handle: SessionHandle, selector: string): Promise<void> {
-    await this.execute([
-      "--cdp",
-      String(this.port),
-      "tab",
-      handle.targetId,
-      "click",
-      selector,
-    ]);
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "click", selector]);
   }
 
   public async pressKey(handle: SessionHandle, selector: string, key: string): Promise<void> {
-    await this.execute([
-      "--cdp",
-      String(this.port),
-      "tab",
-      handle.targetId,
-      "press",
-      key,
-    ]);
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "press", key]);
   }
 
   public async setInputFiles(handle: SessionHandle, selector: string, filePaths: string[]): Promise<void> {
-    await this.execute([
-      "--cdp",
-      String(this.port),
-      "tab",
-      handle.targetId,
-      "upload",
-      selector,
-      ...filePaths,
-    ]);
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "upload", selector, ...filePaths]);
+  }
+
+  public async createTab(url: string): Promise<TabDescriptor> {
+    const res = await this.execute(["--cdp", String(this.port), "tab", "new", url]);
+    if (res.exitCode !== 0) {
+      throw new BrowserConnectionError(`127.0.0.1:${this.port}`, res.stderr || "tab new failed");
+    }
+    const match = res.stdout.match(/\[(t\d+)\]/);
+    const targetId = match && match[1] ? match[1] : `tab-${Date.now()}`;
+    return { targetId, url, title: `Tab ${targetId}` };
+  }
+
+  public async closeTab(targetId: string): Promise<void> {
+    await this.execute(["--cdp", String(this.port), "tab", "close", targetId]);
+  }
+
+  public async navigate(handle: SessionHandle, url: string): Promise<void> {
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "open", url]);
+  }
+
+  public async goBack(handle: SessionHandle): Promise<void> {
+    await this.execute(["--cdp", String(this.port), "tab", handle.targetId, "back"]);
   }
 
   private async defaultSpawnExecutor(args: string[]): Promise<{ stdout: string; stderr: string; exitCode: number }> {

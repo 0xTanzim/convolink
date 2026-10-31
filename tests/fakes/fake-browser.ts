@@ -48,4 +48,27 @@ export class FakeBrowserPort implements BrowserPort {
 
   public async pressKey(_handle: SessionHandle, _selector: string, _key: string): Promise<void> {}
   public async setInputFiles(_handle: SessionHandle, _selector: string, _filePaths: string[]): Promise<void> {}
+
+  public createdTabs: string[] = [];
+  public closedTabs: string[] = [];
+  public navigatedUrls: Array<{ handle: SessionHandle; url: string }> = [];
+  public backNavigations: SessionHandle[] = [];
+
+  public async createTab(url: string): Promise<TabDescriptor> {
+    this.createdTabs.push(url);
+    const targetId = `tab-spawned-${this.createdTabs.length}`;
+    return { targetId, url, title: `Tab for ${url}` };
+  }
+
+  public async closeTab(targetId: string): Promise<void> {
+    this.closedTabs.push(targetId);
+  }
+
+  public async navigate(handle: SessionHandle, url: string): Promise<void> {
+    this.navigatedUrls.push({ handle, url });
+  }
+
+  public async goBack(handle: SessionHandle): Promise<void> {
+    this.backNavigations.push(handle);
+  }
 }

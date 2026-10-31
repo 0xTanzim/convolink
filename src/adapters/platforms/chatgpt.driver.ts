@@ -4,9 +4,14 @@ import type {
   PlatformId, PlatformPort, SelectorResolution, ToggleOptions, TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { CHATGPT_RESOLVE_SELECTORS_EXPR, getChatGPTReadThreadExpr } from "./chatgpt.scripts.js";
 
 export class ChatGPTDriver implements PlatformPort {
   public readonly id: PlatformId = "chatgpt";
+
+  public getBaseUrl(): string {
+    return "https://chatgpt.com/";
+  }
 
   public matchesUrl(url: string): boolean {
     return url.includes("chatgpt.com") || url.includes("chat.openai.com");
@@ -17,22 +22,7 @@ export class ChatGPTDriver implements PlatformPort {
   }
 
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
-    const expr = `(() => {
-      /* resolveSelectors */
-      const pm = document.querySelector('div.ProseMirror[contenteditable="true"]');
-      const ta = document.querySelector('#prompt-textarea');
-      const send = document.querySelector('button[aria-label="Send"], button[data-testid="send-button"], button[aria-label="Dictate"], button[aria-label="Start Voice"]');
-      const stop = document.querySelector('button[aria-label*="Stop"], button[data-testid="stop-button"]');
-      const turns = document.querySelectorAll('[data-turn-key]');
-      return {
-        ok: Boolean((pm || ta) && send), layoutVariant: pm ? "chatgpt-2026-turnkey" : "chatgpt-legacy",
-        composerSelector: pm ? "div.ProseMirror[contenteditable='true']" : "#prompt-textarea",
-        sendButtonSelector: send ? 'button[aria-label="Send"]' : null,
-        stopIndicatorSelector: stop ? 'button[aria-label*="Stop"]' : null,
-        turnContainerSelector: turns.length > 0 ? "[data-turn-key]" : "article",
-      };
-    })()`;
-    return browser.evaluate<SelectorResolution>(handle, expr);
+    return browser.evaluate<SelectorResolution>(handle, CHATGPT_RESOLVE_SELECTORS_EXPR);
   }
 
   public async readThread(
@@ -41,39 +31,17 @@ export class ChatGPTDriver implements PlatformPort {
     options?: { lastNTurns?: number },
   ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
     const lastN = options?.lastNTurns ?? 50;
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getChatGPTReadThreadExpr(lastN));
+  }
+
+  public async startNewChat(handle: SessionHandle, browser: BrowserPort): Promise<void> {
     const expr = `(() => {
-      /* readThread */
-      const nodes = Array.from(document.querySelectorAll('[data-turn-key]')).slice(-${lastN});
-      const turns = [];
-      let index = 0;
-      for (const t of nodes) {
-        let u = '', a = '';
-        for (const b of Array.from(t.querySelectorAll('div.block-BQZwFn'))) {
-          const txt = b.innerText || '';
-          if (txt.startsWith('You said:')) u = txt.replace(/^You said:\\s*/, '').trim();
-          else if (txt.startsWith('ChatGPT said:')) a = txt.replace(/^ChatGPT said:\\s*/, '').trim();
-        }
-        if (!u && !a) {
-          const raw = t.innerText || '';
-          const idx = raw.lastIndexOf('ChatGPT said:');
-          if (idx !== -1) {
-            u = raw.substring(0, idx).replace(/^You said:\\s*/, '').trim();
-            a = raw.substring(idx + 'ChatGPT said:'.length).trim();
-          } else a = raw;
-        }
-        if (u) turns.push({ turnIndex: index++, role: "user", markdownContent: u, codeBlocks: [], contentHash: String(u.length) });
-        if (a) {
-          const codeBlocks = Array.from(t.querySelectorAll('[class*="CodeBlock"], pre')).filter(b => b.classList.toString().includes('CodeBlock') || !b.closest('[class*="CodeBlock"]')).map(b => {
-            const cnt = b.querySelector('.cm-content') || b.querySelector('code') || b;
-            const rLang = b.querySelector('code')?.className?.replace(/^language-/, '') || (b.innerText || '').split(/\\s+/)[0];
-            return { language: (rLang || 'text').trim().split(/\\s+/)[0].toLowerCase(), code: (cnt ? (cnt.innerText || cnt.textContent) : '').trim() };
-          });
-          turns.push({ turnIndex: index++, role: "assistant", markdownContent: a, codeBlocks, contentHash: String(a.length) });
-        }
-      }
-      return { layoutVariant: "chatgpt-2026-turnkey", turns };
+      /* startNewChat */
+      const btn = document.querySelector('button[aria-label="New chat"], a[href="/"], button[data-testid="new-chat-button"]');
+      if (btn) (btn as HTMLElement).click();
+      else window.location.href = "https://chatgpt.com/";
     })()`;
-    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, expr);
+    await browser.evaluate(handle, expr);
   }
 
   public async applyToggles(handle: SessionHandle, browser: BrowserPort, toggles: ToggleOptions): Promise<void> {

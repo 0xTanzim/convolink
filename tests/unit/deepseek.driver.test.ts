@@ -98,4 +98,14 @@ describe("DeepSeekDriver", () => {
     await driver.triggerContinuation(handle, browser);
     expect(browser.clickedSelectors.length).toBe(1);
   });
+
+  it("provides base URL and triggers new chat", async () => {
+    const browser = new FakeBrowserPort();
+    const driver = new DeepSeekDriver();
+
+    expect(driver.getBaseUrl()).toBe("https://chat.deepseek.com/");
+
+    await driver.startNewChat(handle, browser);
+    expect(browser.evaluatedExpressions.some((e) => e.includes("startNewChat"))).toBe(true);
+  });
 });

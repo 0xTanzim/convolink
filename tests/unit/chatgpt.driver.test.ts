@@ -112,4 +112,14 @@ describe("ChatGPTDriver", () => {
     await driver.triggerContinuation(handle, browser);
     expect(browser.clickedSelectors).toContain('button[aria-label*="Continue generating"], button.continue-btn');
   });
+
+  it("provides base URL and triggers new chat", async () => {
+    const browser = new FakeBrowserPort();
+    const driver = new ChatGPTDriver();
+
+    expect(driver.getBaseUrl()).toBe("https://chatgpt.com/");
+
+    await driver.startNewChat(handle, browser);
+    expect(browser.evaluatedExpressions.some((e) => e.includes("startNewChat"))).toBe(true);
+  });
 });

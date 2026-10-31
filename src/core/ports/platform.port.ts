@@ -105,4 +105,10 @@ export interface PlatformPort {
 
   /** Scans for downloadable file links or blobs generated in the active turn */
   findDownloadLinks?(handle: SessionHandle, browser: BrowserPort): Promise<DownloadLinkDescriptor[]>;
+
+  /** Canonical base URL to open a new session for this platform */
+  getBaseUrl(): string;
+
+  /** Resets or starts a new conversation in the active tab without creating a new tab */
+  startNewChat?(handle: SessionHandle, browser: BrowserPort): Promise<void>;
 }

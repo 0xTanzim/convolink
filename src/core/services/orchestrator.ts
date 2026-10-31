@@ -1,17 +1,19 @@
 import type { SessionHandle, TabDescriptor } from "../ports/browser.port.js";
-import type { PlatformPort } from "../ports/platform.port.js";
+import type { PlatformId, PlatformPort } from "../ports/platform.port.js";
 import type { BrowserPort } from "../ports/browser.port.js";
 import type { PolicyGatePort } from "../ports/policy.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService } from "./artifact.service.js";
 import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { StateJournalService } from "./journal.service.js";
+import { TabManagerService } from "./tab-manager.service.js";
+import { runDoctorAudit } from "./doctor.service.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
 import type {
   AskOptions,
   AskResult,
   DiscoveredTab,
   DoctorReport,
-  DoctorTabDiagnosis,
   OrchestratorDependencies,
 } from "./orchestrator.types.js";
 
@@ -24,6 +26,8 @@ export class SessionOrchestrator {
   private readonly policyGate: PolicyGatePort;
   private readonly artifactService?: ArtifactService;
   private readonly fileSink?: WorkspaceFileSink;
+  private readonly journalService?: StateJournalService;
+  private readonly tabManager: TabManagerService;
 
   public constructor(deps: OrchestratorDependencies) {
     this.browser = deps.browser;
@@ -32,6 +36,8 @@ export class SessionOrchestrator {
     this.policyGate = deps.policyGate;
     this.artifactService = deps.artifactService;
     this.fileSink = deps.fileSink;
+    this.journalService = deps.journalService;
+    this.tabManager = new TabManagerService(this.browser, this.drivers, this.lockService, deps.journalService);
   }
 
   public async listTabs(): Promise<DiscoveredTab[]> {
@@ -40,46 +46,50 @@ export class SessionOrchestrator {
   }
 
   public async doctor(): Promise<DoctorReport> {
-    const transportHealth = await this.browser.health();
     const tabs = await this.listTabs();
-    const diagnoses: DoctorTabDiagnosis[] = [];
+    return runDoctorAudit(this.browser, tabs, (url) => this.findDriver(url), this.lockService);
+  }
 
-    for (const tab of tabs) {
-      const driver = this.findDriver(tab.url);
-      const isLocked = this.lockService.isLocked(tab.targetId);
+  public async createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
+    return this.tabManager.createTab(platformOrUrl);
+  }
 
-      if (!driver) {
-        diagnoses.push({ targetId: tab.targetId, title: tab.title, url: tab.url, platformId: null, selectorsOk: false, layoutVariant: null, isLocked });
-        continue;
-      }
-      let selectorsOk = false, layoutVariant: string | null = null, error: string | undefined;
-      try {
-        const handle = await this.browser.attach(tab.targetId);
-        const resolution = await driver.resolveSelectors(handle, this.browser);
-        selectorsOk = resolution.ok;
-        layoutVariant = resolution.layoutVariant;
-        await this.browser.detach(handle);
-      } catch (err: unknown) {
-        error = err instanceof Error ? err.message : String(err);
-      }
-      diagnoses.push({ targetId: tab.targetId, title: tab.title, url: tab.url, platformId: driver.id, selectorsOk, layoutVariant, isLocked, error });
-    }
+  public async closeTab(targetId: string): Promise<void> {
+    return this.tabManager.closeTab(targetId);
+  }
 
-    return {
-      transportHealth,
-      totalTabs: tabs.length,
-      supportedTabs: diagnoses.filter((d) => d.platformId !== null).length,
-      tabs: diagnoses,
-    };
+  public async startNewChat(targetId?: string, platform?: PlatformId): Promise<DiscoveredTab> {
+    const tabs = await this.listTabs();
+    const tab = this.resolveTargetTab({ targetId, platform, prompt: "" }, tabs);
+    const driver = this.findDriver(tab.url);
+    if (!driver) throw new PlatformDriverNotFoundError(tab.url);
+    await this.tabManager.startNewChat(tab, driver);
+    return tab;
+  }
+
+  public async undo(targetId?: string): Promise<{ restoredUrl: string } | null> {
+    const tabs = await this.listTabs();
+    const tab = this.resolveTargetTab({ targetId, prompt: "" }, tabs);
+    return this.tabManager.undo(tab);
+  }
+
+  public async goBack(targetId?: string): Promise<void> {
+    const tabs = await this.listTabs();
+    const tab = this.resolveTargetTab({ targetId, prompt: "" }, tabs);
+    return this.tabManager.goBack(tab.targetId);
   }
 
   public async ask(options: AskOptions): Promise<AskResult> {
     const tabs = await this.listTabs();
-    const targetTab = this.resolveTargetTab(options, tabs);
-    const driver = this.findDriver(targetTab.url);
+    const targetTab = options.openTab
+      ? await this.createTab(options.platform ?? "chatgpt")
+      : this.resolveTargetTab(options, tabs);
 
-    if (!driver) {
-      throw new PlatformDriverNotFoundError(targetTab.url);
+    const driver = this.findDriver(targetTab.url);
+    if (!driver) throw new PlatformDriverNotFoundError(targetTab.url);
+
+    if (options.newChat) {
+      await this.tabManager.startNewChat(targetTab, driver);
     }
 
     const sanitized = this.policyGate.sanitizeOutboundPrompt(options.prompt);
@@ -95,19 +105,8 @@ export class SessionOrchestrator {
       }
 
       const timeoutMs = options.timeoutMs ?? 120_000;
-      const fingerprint = await driver.submitPrompt(
-        sessionHandle,
-        this.browser,
-        sanitized.cleanText,
-        options.files,
-      );
-
-      const completion = await driver.awaitCompletion(
-        sessionHandle,
-        this.browser,
-        fingerprint,
-        timeoutMs,
-      );
+      const fingerprint = await driver.submitPrompt(sessionHandle, this.browser, sanitized.cleanText, options.files);
+      const completion = await driver.awaitCompletion(sessionHandle, this.browser, fingerprint, timeoutMs);
 
       let currentTurn = completion.turn;
       let contCount = 0;
@@ -138,22 +137,26 @@ export class SessionOrchestrator {
         writtenFiles = res.writtenFiles.map((f) => f.path);
       }
 
-      const riskLabels = this.policyGate.classifyInboundResponse(currentTurn.markdownContent);
+      this.journalService?.record({
+        targetId: targetTab.targetId,
+        platformId: targetTab.platformId,
+        url: targetTab.url,
+        threadId: targetTab.threadId,
+        action: "ask",
+      });
 
       return {
         tab: targetTab,
         turn: currentTurn,
         elapsedMs: completion.elapsedMs,
-        riskLabels,
+        riskLabels: this.policyGate.classifyInboundResponse(currentTurn.markdownContent),
         redactedSecretsCount: sanitized.redactedCount,
         artifacts: artifacts.length > 0 ? artifacts : undefined,
         writtenFiles: writtenFiles.length > 0 ? writtenFiles : undefined,
         canvasDocument,
       };
     } finally {
-      if (sessionHandle) {
-        await this.browser.detach(sessionHandle);
-      }
+      if (sessionHandle) await this.browser.detach(sessionHandle);
       this.lockService.releaseLock(lockHandle);
     }
   }
@@ -173,23 +176,19 @@ export class SessionOrchestrator {
     return this.drivers.find((d) => d.matchesUrl(url));
   }
 
-  private resolveTargetTab(options: AskOptions, tabs: DiscoveredTab[]): DiscoveredTab {
+  private resolveTargetTab(options: { targetId?: string; platform?: PlatformId; prompt?: string }, tabs: DiscoveredTab[]): DiscoveredTab {
     if (options.targetId) {
       const found = tabs.find((t) => t.targetId === options.targetId);
       if (!found) throw new TabNotFoundError(`targetId:${options.targetId}`);
       return found;
     }
-
     if (options.platform) {
       const found = tabs.find((t) => t.platformId === options.platform);
       if (!found) throw new TabNotFoundError(`platform:${options.platform}`);
       return found;
     }
-
     const supported = tabs.find((t) => t.platformId !== null);
-    if (!supported) {
-      throw new TabNotFoundError("No active tabs with supported AI platform found");
-    }
+    if (!supported) throw new TabNotFoundError("No active tabs with supported AI platform found");
     return supported;
   }
 }

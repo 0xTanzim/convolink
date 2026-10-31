@@ -11,9 +11,14 @@ import type {
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr } from "./deepseek.scripts.js";
 
 export class DeepSeekDriver implements PlatformPort {
   public readonly id: PlatformId = "deepseek";
+
+  public getBaseUrl(): string {
+    return "https://chat.deepseek.com/";
+  }
 
   public matchesUrl(url: string): boolean {
     return url.includes("chat.deepseek.com");
@@ -25,23 +30,7 @@ export class DeepSeekDriver implements PlatformPort {
   }
 
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
-    const expression = `(() => {
-      /* resolveSelectors */
-      const textarea = document.querySelector('textarea');
-      const sendBtn = document.querySelector('div[role="button"].ds-button--circle');
-      const mdList = document.querySelectorAll('.ds-markdown');
-      const stopSvg = document.querySelector('svg linearGradient');
-
-      return {
-        ok: Boolean(textarea && sendBtn),
-        layoutVariant: "deepseek-standard-v1",
-        composerSelector: textarea ? "textarea" : null,
-        sendButtonSelector: sendBtn ? 'div[role="button"].ds-button--circle' : null,
-        stopIndicatorSelector: stopSvg ? "svg linearGradient" : null,
-        turnContainerSelector: mdList.length > 0 ? ".ds-markdown" : null,
-      };
-    })()`;
-    return browser.evaluate<SelectorResolution>(handle, expression);
+    return browser.evaluate<SelectorResolution>(handle, DEEPSEEK_RESOLVE_SELECTORS_EXPR);
   }
 
   public async readThread(
@@ -50,31 +39,17 @@ export class DeepSeekDriver implements PlatformPort {
     options?: { lastNTurns?: number },
   ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
     const lastN = options?.lastNTurns ?? 50;
-    const expression = `(() => {
-      /* readThread */
-      const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
-      const slice = mdList.slice(-${lastN});
-      
-      return {
-        layoutVariant: "deepseek-standard-v1",
-        turns: slice.map((el, i) => {
-          const codeBlocks = Array.from(el.querySelectorAll('pre')).map(p => {
-            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap');
-            const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
-            return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
-          });
-          const text = el.innerText || '';
-          return {
-            turnIndex: i,
-            role: "assistant",
-            markdownContent: text,
-            codeBlocks,
-            contentHash: String(text.length),
-          };
-        }),
-      };
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getDeepSeekReadThreadExpr(lastN));
+  }
+
+  public async startNewChat(handle: SessionHandle, browser: BrowserPort): Promise<void> {
+    const expr = `(() => {
+      /* startNewChat */
+      const btn = document.querySelector('div.ds-button, button[class*="new-chat"], a[href="/"]');
+      if (btn) (btn as HTMLElement).click();
+      else window.location.href = "https://chat.deepseek.com/";
     })()`;
-    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, expression);
+    await browser.evaluate(handle, expr);
   }
 
   public async applyToggles(handle: SessionHandle, browser: BrowserPort, toggles: ToggleOptions): Promise<void> {

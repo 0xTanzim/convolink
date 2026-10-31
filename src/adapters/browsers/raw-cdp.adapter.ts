@@ -5,19 +5,7 @@ import type {
   TransportHealth,
 } from "../../core/ports/browser.port.js";
 import { BrowserConnectionError, TabNotFoundError } from "../../core/errors/bridge-errors.js";
-
-interface CdpTarget {
-  id: string;
-  type: string;
-  title: string;
-  url: string;
-  webSocketDebuggerUrl?: string;
-}
-
-interface PendingMessage {
-  resolve: (value: any) => void;
-  reject: (reason: any) => void;
-}
+import type { CdpTarget, PendingMessage } from "./raw-cdp.types.js";
 
 export class RawCdpAdapter implements BrowserPort {
   public readonly id = "raw-cdp" as const;
@@ -145,20 +133,31 @@ export class RawCdpAdapter implements BrowserPort {
   }
 
   public async pressKey(handle: SessionHandle, selector: string, key: string): Promise<void> {
-    await this.evaluate(handle, `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (el) {
-        el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true }));
-        el.dispatchEvent(new KeyboardEvent('keyup', { key: ${JSON.stringify(key)}, bubbles: true }));
-      }
-    })()`);
+    const expr = `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (el) { el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true })); el.dispatchEvent(new KeyboardEvent('keyup', { key: ${JSON.stringify(key)}, bubbles: true })); } })()`;
+    await this.evaluate(handle, expr);
   }
 
   public async setInputFiles(handle: SessionHandle, selector: string, _filePaths: string[]): Promise<void> {
-    await this.evaluate(handle, `(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (el && 'files' in el) el.dispatchEvent(new Event('change', { bubbles: true }));
-    })()`);
+    await this.evaluate(handle, `(() => { const el = document.querySelector(${JSON.stringify(selector)}); if (el && 'files' in el) el.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  }
+
+  public async createTab(url: string): Promise<TabDescriptor> {
+    const res = await fetch(`http://127.0.0.1:${this.port}/json/new?${encodeURIComponent(url)}`, { method: "PUT" });
+    if (!res.ok) throw new Error(`HTTP ${res.status}: Failed to create tab`);
+    const data = (await res.json()) as CdpTarget;
+    return { targetId: data.id, url: data.url, title: data.title, webSocketDebuggerUrl: data.webSocketDebuggerUrl };
+  }
+
+  public async closeTab(targetId: string): Promise<void> {
+    await fetch(`http://127.0.0.1:${this.port}/json/close/${targetId}`);
+  }
+
+  public async navigate(handle: SessionHandle, url: string): Promise<void> {
+    await this.evaluate(handle, `(() => { window.location.href = ${JSON.stringify(url)}; })()`);
+  }
+
+  public async goBack(handle: SessionHandle): Promise<void> {
+    await this.evaluate(handle, `(() => { window.history.back(); })()`);
   }
 
   public async downloadFile(handle: SessionHandle, url: string): Promise<Buffer> {
