@@ -1,4 +1,5 @@
 import type { PlatformId, ToggleOptions } from "../core/ports/platform.port.js";
+import type { BrowserAdapterId } from "../core/ports/browser.port.js";
 
 export interface ParsedAskArgs {
   prompt: string;
@@ -11,7 +12,7 @@ export interface ParsedAskArgs {
   autoContinue?: boolean;
   newChat?: boolean;
   openTab?: boolean;
-  transport?: "raw-cdp" | "agent-browser";
+  transport?: BrowserAdapterId;
 }
 
 export function parseAskArgs(args: string[]): ParsedAskArgs {
@@ -19,7 +20,7 @@ export function parseAskArgs(args: string[]): ParsedAskArgs {
   let think: boolean | undefined, search: boolean | undefined, writeFiles: boolean | undefined;
   let outDir: string | undefined, autoContinue: boolean | undefined;
   let newChat = false, openTab = false;
-  let transport: "raw-cdp" | "agent-browser" | undefined;
+  let transport: BrowserAdapterId | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -27,7 +28,7 @@ export function parseAskArgs(args: string[]): ParsedAskArgs {
     else if (a === "--target" && i + 1 < args.length) targetId = args[++i];
     else if (a === "--timeout" && i + 1 < args.length) timeoutMs = Number(args[++i]);
     else if (a === "--out-dir" && i + 1 < args.length) outDir = args[++i];
-    else if (a === "--transport" && i + 1 < args.length) transport = args[++i] as "raw-cdp" | "agent-browser";
+    else if (a === "--transport" && i + 1 < args.length) transport = args[++i] as BrowserAdapterId;
     else if (a === "-w" || a === "--write-files") writeFiles = true;
     else if (a === "--no-continue") autoContinue = false;
     else if (a === "--think") think = true;
@@ -49,7 +50,7 @@ export interface ParsedCompareArgs {
   timeoutMs?: number;
   mode?: "parallel" | "sequential";
   outDir?: string;
-  transport?: "raw-cdp" | "agent-browser";
+  transport?: BrowserAdapterId;
   arbitrate?: boolean;
   arbiter?: PlatformId;
 }
@@ -58,7 +59,7 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
   let prompt = "", timeoutMs: number | undefined, outDir: string | undefined;
   let mode: "parallel" | "sequential" | undefined;
   let platforms: PlatformId[] | undefined;
-  let transport: "raw-cdp" | "agent-browser" | undefined;
+  let transport: BrowserAdapterId | undefined;
   let arbitrate: boolean | undefined;
   let arbiter: PlatformId | undefined;
 
@@ -73,7 +74,7 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
     } else if (a === "--mode" && i + 1 < args.length) {
       mode = args[++i] as "parallel" | "sequential";
     } else if (a === "--transport" && i + 1 < args.length) {
-      transport = args[++i] as "raw-cdp" | "agent-browser";
+      transport = args[++i] as BrowserAdapterId;
     } else if (a === "--arbitrate") {
       arbitrate = true;
     } else if (a === "--arbiter" && i + 1 < args.length) {
@@ -113,7 +114,7 @@ Options for ask:
   --open-tab                     Spawn brand new tab in background before submitting
   --platform <id>                Target specific platform (deepseek | chatgpt | gemini)
   --target <targetId>            Target specific browser tab targetId
-  --transport <name>             Transport engine: raw-cdp (default) | agent-browser
+  --transport <name>             Transport engine: raw-cdp (default) | agent-browser | firefox-bidi
   --think / --no-think           Enable or disable deep thinking mode
   --search / --no-search         Enable or disable web search mode
   --timeout <ms>                 Response wait timeout in milliseconds (default: 120000)

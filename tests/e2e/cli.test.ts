@@ -34,6 +34,7 @@ describe("CLI Entrypoint", () => {
       expect(output).toContain("convo undo");
       expect(output).toContain("convo history");
       expect(output).toContain("--transport");
+      expect(output).toContain("firefox-bidi");
       expect(output).toContain("--new, -n");
       expect(output).toContain("--open-tab");
     } finally {

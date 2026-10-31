@@ -1,10 +1,11 @@
 import { createContainer } from "../container.js";
 import { parseAskArgs, parseCompareArgs, printHelp, readStdin } from "./cli.args.js";
+import type { BrowserAdapterId } from "../core/ports/browser.port.js";
 
 export async function runCli(args: string[]): Promise<number> {
   const command = args[0] || "doctor";
   const transportFlagIdx = args.indexOf("--transport");
-  const transport = transportFlagIdx !== -1 ? (args[transportFlagIdx + 1] as "raw-cdp" | "agent-browser") : undefined;
+  const transport = transportFlagIdx !== -1 ? (args[transportFlagIdx + 1] as BrowserAdapterId) : undefined;
   const container = createContainer({ transport });
 
   switch (command) {
@@ -117,7 +118,7 @@ function handleHistory(container: ReturnType<typeof createContainer>, targetId?:
 async function handleAsk(
   orchestrator: ReturnType<typeof createContainer>["orchestrator"],
   args: string[],
-  transport?: "raw-cdp" | "agent-browser",
+  transport?: BrowserAdapterId,
 ): Promise<number> {
   const parsed = parseAskArgs(args);
   let prompt = parsed.prompt || (await readStdin());
