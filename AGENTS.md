@@ -102,7 +102,7 @@ convolink/
 ├── .github/                       # CI/CD Workflows (lint, typecheck, unit tests)
 ├── docs/                          # Architectural documentation
 │   ├── ARCHITECTURE.md            # Hexagonal topology & contracts
-│   ├── ADR.md                     # Architecture Decision Records (ADR-001 to ADR-011)
+│   ├── ADR.md                     # Architecture Decision Records (ADR-001 to ADR-016)
 │   └── PROJECT_BRIEF.md           # Product requirements & problem statement
 ├── scripts/
 │   └── fedora-chrome-debug.sh     # Native helper to launch/verify Chrome on port 9222
@@ -118,14 +118,17 @@ convolink/
 │   │   │   └── policy.port.ts
 │   │   ├── services/              # Pure domain services
 │   │   │   ├── orchestrator.ts
-│   │   │   ├── compiler.service.ts
+│   │   │   ├── comparison-engine.ts
+│   │   │   ├── tab-resolver.ts
+│   │   │   ├── thread-export.service.ts
 │   │   │   ├── lock.service.ts
 │   │   │   └── policy.service.ts
 │   │   └── errors/                # Strongly-typed domain error classes
 │   │       └── bridge-errors.ts
 │   ├── adapters/                  # INFRASTRUCTURE IMPLEMENTATIONS
-│   │   ├── browsers/              # Transports (Raw CDP, Playwright, agent-browser)
+│   │   ├── browsers/              # Transports (Raw CDP, Firefox BiDi, Playwright, agent-browser)
 │   │   │   ├── raw-cdp.adapter.ts
+│   │   │   ├── firefox-bidi.adapter.ts
 │   │   │   ├── playwright.adapter.ts
 │   │   │   └── agent-browser.adapter.ts
 │   │   ├── platforms/             # Platform drivers (DeepSeek, ChatGPT, Gemini)
@@ -136,8 +139,10 @@ convolink/
 │   │       ├── sqlite-ledger.adapter.ts
 │   │       └── workspace-md.adapter.ts
 │   ├── entrypoints/               # INBOUND INTERFACES
-│   │   ├── cli.ts                 # CLI commands (doctor, sync, ask, rollover)
-│   │   └── mcp.ts                 # Model Context Protocol stdio server
+│   │   ├── cli.ts                 # CLI commands (doctor, ask, compare, export, resume, mcp)
+│   │   ├── mcp.server.ts          # Model Context Protocol stdio server
+│   │   ├── mcp.tools.ts           # Cognitive browser tool schemas
+│   │   └── mcp.ts                 # MCP stdio runner
 │   └── container.ts               # Dependency Injection assembly
 ├── tests/
 │   ├── unit/                      # Fast in-memory pure domain tests

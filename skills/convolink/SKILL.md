@@ -120,28 +120,65 @@ convo back
 convo history
 ```
 
-### 2.7 Dual Transport Selection (`--transport`)
-ConvoLink supports both high-performance direct CDP and the specialized `agent-browser` CLI:
+### 2.7 Multi-Browser Transport Selection (`--transport`)
+ConvoLink features modular transport adapters covering all major automation protocols:
 ```bash
-# Default: native WebSocket (<2ms latency, zero dependencies)
+# Default: High-performance Chromium CDP WebSocket (<2ms latency, zero dependencies)
 convo ask "Refactor auth" --transport raw-cdp
 
-# Agent-browser mode: leverages installed agent-browser 0.39.2 CLI
+# Firefox WebDriver BiDi: Connects directly to Firefox on port 9222 via W3C WebDriver BiDi
+convo ask "Refactor auth" --transport firefox-bidi
+
+# Playwright: Cross-browser automation engine
+convo ask "Refactor auth" --transport playwright
+
+# Agent-browser: Leverages installed agent-browser 0.39.2 CLI
 convo ask "Refactor auth" --transport agent-browser
 ```
 
-### 2.8 Multi-Model Comparison (`convo compare`)
-Query multiple models simultaneously with isolated execution and emit an automated comparison matrix:
+### 2.8 Multi-Model Comparison & Technical Arbiter (`convo compare`)
+Query multiple AI models simultaneously with failure isolation and optional consensus arbitration:
 ```bash
-# Compare across all open platform tabs
+# Basic comparison across all open tabs
 convo compare "Design a production-ready rate limiter in Go"
 
-# Compare specific platforms with custom timeout and artifact saving
-convo compare "Implement distributed lock" \
+# Compare specific platforms with custom timeout and artifact output directory
+convo compare "Implement distributed lock with Redlock vs single Redis" \
   --platforms chatgpt,deepseek,gemini \
   --mode parallel \
   --out-dir ./reports/dist-lock
+
+# Two-Stage Consensus Arbitration: Stage 1 parallel candidates -> Stage 2 synthesis by Technical Arbiter
+convo compare "Write a thread-safe LRU cache in Rust" \
+  --platforms chatgpt,gemini,deepseek \
+  --arbitrate \
+  --arbiter deepseek
 ```
+
+### 2.9 Durable Turn Ledger & Session Continuity (`export` / `resume`)
+Every conversation turn is durably persisted in `$XDG_DATA_HOME/convolink/ledger.sqlite` via native `bun:sqlite`:
+```bash
+# Export full conversation turns and code blocks as structured Markdown
+convo export <threadId> --format md
+
+# Export as JSON context packet
+convo export <threadId> --format json
+
+# Re-attach and restore an existing conversation by its saved thread ID
+convo resume <threadId>
+```
+
+### 2.10 Model Context Protocol (MCP) Server
+ConvoLink runs as a production JSON-RPC 2.0 MCP server over `stdio`, exposing browser AI intelligence to Claude Desktop, Cursor, Antigravity, and OpenCode:
+```bash
+# Launch MCP server from CLI
+convo mcp
+
+# Or execute standalone binary directly
+bun run bin/convolink-mcp.ts
+```
+Exposed tools: `convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`.  
+See [references/mcp.md](references/mcp.md) for IDE integration snippets and parameter schemas.
 
 ---
 

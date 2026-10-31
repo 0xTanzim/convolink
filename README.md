@@ -5,7 +5,7 @@
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-109%20passing%20(bun:test)-success)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/Tests-122%20passing%20(bun:test)-success)](https://bun.sh)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#architecture)
 [![License](https://img.shields.io/badge/License-MIT-green)](#license)
 
@@ -44,7 +44,7 @@ flowchart TD
     subgraph InboundEntrypoints ["Inbound Entrypoints"]
         CLI["CLI (bin/convolink.ts, bin/convo.ts)"]
         Skills["Agent Skills (skills/convolink/)"]
-        MCP["MCP Server (Planned)"]
+        MCP["MCP Server (bin/convolink-mcp.ts stdio)"]
     end
 
     subgraph CoreKernel ["Pure Domain Kernel (src/core/) — Zero Browser Imports"]
@@ -53,7 +53,7 @@ flowchart TD
         LockService["LockService (tmpfs Mutex)"]
         PolicyService["PolicyService (Secret Scrubbing)"]
         ArtifactService["ArtifactService (Directive Parser)"]
-        WorkspaceSink["WorkspaceFileSink"]
+        ThreadExport["ThreadExportService"]
     end
 
     subgraph OutboundAdapters ["Outbound Infrastructure Adapters (src/adapters/)"]
@@ -63,6 +63,7 @@ flowchart TD
         DeepSeek["DeepSeekDriver (Vue Microtask Settling & R1)"]
         ChatGPT["ChatGPTDriver (CodeMirror 6 & ProseMirror)"]
         Gemini["GeminiDriver (Quill DOM & Sandbox Links)"]
+        Sqlite["SqliteLedgerAdapter (bun:sqlite WAL Ledger)"]
     end
 
     InboundEntrypoints --> CoreKernel
@@ -149,7 +150,10 @@ ConvoLink commands are accessible via `convo <command>` or `convolink <command>`
 | `doctor [--launch]` | Runs connection checks, tests CDP latency, audits open AI tabs, and can auto-launch Chrome. |
 | `list` | Lists all open browser tabs matching supported AI platforms. |
 | `ask <prompt>` | Submits a prompt to an AI tab, awaits completion, and outputs response. |
-| `compare <prompt>` | Broadcasts prompt across multiple models in parallel and emits benchmark matrix. |
+| `compare <prompt>` | Broadcasts prompt across multiple models in parallel with optional Technical Arbiter. |
+| `export <threadId>` | Exports full conversation history and extracted code blocks as Markdown or JSON. |
+| `resume <threadId>` | Restores a conversation session by re-opening the saved thread URL in the browser. |
+| `mcp` | Launches the Model Context Protocol (MCP) server over `stdio` for agent IDEs. |
 | `tab new <platform>` | Spawns a fresh background tab for a platform (`chatgpt`, `deepseek`, `gemini`). |
 | `tab close <targetId>` | Cleanly closes a specific browser tab target. |
 | `back [targetId]` | Navigates the attached tab session back in browser history. |
@@ -252,6 +256,34 @@ For deep-dive directive formatting, agents can consult the bundled reference gui
 
 ---
 
+## 🔌 Model Context Protocol (MCP) Integration
+
+ConvoLink exposes its capabilities through a native JSON-RPC 2.0 MCP server over `stdio`, allowing tools like Claude Desktop, Cursor, Antigravity, and OpenCode to tap into live browser AI tabs.
+
+### Launch MCP Server
+```bash
+convo mcp
+# Or execute standalone binary:
+bun run bin/convolink-mcp.ts
+```
+
+### Claude Desktop Configuration
+Add to `claude_desktop_config.json`:
+```json
+{
+  "mcpServers": {
+    "convolink": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+    }
+  }
+}
+```
+
+See [skills/convolink/references/mcp.md](skills/convolink/references/mcp.md) for full tool schemas (`convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`).
+
+---
+
 ## 🧪 Testing & Verification
 
 ConvoLink adheres to strict **Test-Driven Development (TDD)**. All business logic is covered by isolated unit tests using in-memory test doubles (`FakeBrowserPort`, `FakeThreadStore`).
@@ -262,20 +294,20 @@ Run the full automated test suite:
 # Run all tests (unit, integration, e2e)
 bun test
 
-# Run unit tests only (< 50ms)
+# Run unit tests only
 bun run test:unit
 
-# Run type checking
+# Run strict TypeScript 7 type checking
 bun run typecheck
 ```
 
 ```text
 bun test v1.4.4 (38afee6c8)
 
- 93 pass
+ 122 pass
  0 fail
- 274 expect() calls
-Ran 93 tests across 23 files. [339.00ms]
+ 385 expect() calls
+Ran 122 tests across 30 files. [1105.00ms]
 $ tsc --noEmit (0 errors)
 ```
 
