@@ -8,6 +8,8 @@ import type { WorkspaceFileSink } from "./workspace-sink.service.js";
 import type { StateJournalService } from "./journal.service.js";
 import { TabManagerService } from "./tab-manager.service.js";
 import { runDoctorAudit } from "./doctor.service.js";
+import { ComparisonCoordinator } from "./comparison-coordinator.service.js";
+import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
 import type {
   AskOptions,
@@ -77,6 +79,11 @@ export class SessionOrchestrator {
     const tabs = await this.listTabs();
     const tab = this.resolveTargetTab({ targetId, prompt: "" }, tabs);
     return this.tabManager.goBack(tab.targetId);
+  }
+
+  public async compare(options: CompareOptions): Promise<ComparisonReport> {
+    const coordinator = new ComparisonCoordinator(this, this.tabManager, this.fileSink);
+    return coordinator.run(options);
   }
 
   public async ask(options: AskOptions): Promise<AskResult> {
@@ -164,11 +171,8 @@ export class SessionOrchestrator {
   private toDiscoveredTab(raw: TabDescriptor): DiscoveredTab {
     const driver = this.findDriver(raw.url);
     return {
-      targetId: raw.targetId,
-      title: raw.title,
-      url: raw.url,
-      platformId: driver?.id ?? null,
-      threadId: driver ? driver.extractThreadId(raw.url) : null,
+      targetId: raw.targetId, title: raw.title, url: raw.url,
+      platformId: driver?.id ?? null, threadId: driver ? driver.extractThreadId(raw.url) : null,
     };
   }
 

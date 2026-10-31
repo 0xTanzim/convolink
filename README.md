@@ -5,7 +5,7 @@
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-84%20passing%20(bun:test)-success)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/Tests-93%20passing%20(bun:test)-success)](https://bun.sh)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#architecture)
 [![License](https://img.shields.io/badge/License-MIT-green)](#license)
 
@@ -20,6 +20,7 @@ Modern web AI interfaces (**ChatGPT Plus/Pro**, **DeepSeek-V3/R1**, and **Google
 ### Key Capabilities
 
 - 💰 **Zero-Cost Subscription Compute:** Run high-volume code generations directly through your active web subscriptions without managing API keys or paying extra token fees.
+- ⚖️ **Multi-Model Comparison Engine (`convo compare`):** Broadcast a prompt across ChatGPT, DeepSeek, and Gemini simultaneously with staggered 250ms dispatch and failure isolation, producing deterministic benchmark tables and namespaced code artifacts.
 - ⚡ **Dual First-Class Transports:** Seamlessly switch between direct native `RawCdpAdapter` (<2ms latency, zero sub-processes) and `AgentBrowserAdapter` (utilizing the installed `agent-browser` 0.39.2 CLI with interactive snapshot refs `@e1`, `@e2`).
 - 🪄 **Tab & Fresh Chat Spawning:** Reset active conversations on demand (`--new`) or spawn new tabs in the background (`--open-tab`, `tab new <platform>`) without stealing window focus.
 - ↩️ **State Movement & Mistake Rollback:** Automatic pre-mutation checkpoint journaling (`convo undo`, `convo back`, `convo history`) guarantees that if an agent resets a conversation or navigates away by mistake, it can immediately restore the prior thread URL without state loss.
@@ -144,6 +145,7 @@ ConvoLink commands are accessible via `convo <command>` or `convolink <command>`
 | `doctor [--launch]` | Runs connection checks, tests CDP latency, audits open AI tabs, and can auto-launch Chrome. |
 | `list` | Lists all open browser tabs matching supported AI platforms. |
 | `ask <prompt>` | Submits a prompt to an AI tab, awaits completion, and outputs response. |
+| `compare <prompt>` | Broadcasts prompt across multiple models in parallel and emits benchmark matrix. |
 | `tab new <platform>` | Spawns a fresh background tab for a platform (`chatgpt`, `deepseek`, `gemini`). |
 | `tab close <targetId>` | Cleanly closes a specific browser tab target. |
 | `back [targetId]` | Navigates the attached tab session back in browser history. |
@@ -254,10 +256,10 @@ bun run typecheck
 ```text
 bun test v1.4.4 (38afee6c8)
 
- 84 pass
+ 93 pass
  0 fail
- 239 expect() calls
-Ran 84 tests across 19 files. [41.00ms]
+ 274 expect() calls
+Ran 93 tests across 23 files. [339.00ms]
 $ tsc --noEmit (0 errors)
 ```
 

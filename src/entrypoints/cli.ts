@@ -1,5 +1,5 @@
 import { createContainer } from "../container.js";
-import { parseAskArgs, printHelp } from "./cli.args.js";
+import { parseAskArgs, parseCompareArgs, printHelp, readStdin } from "./cli.args.js";
 
 export async function runCli(args: string[]): Promise<number> {
   const command = args[0] || "doctor";
@@ -14,6 +14,8 @@ export async function runCli(args: string[]): Promise<number> {
       return handleList(container.orchestrator);
     case "ask":
       return handleAsk(container.orchestrator, args.slice(1), transport);
+    case "compare":
+      return handleCompare(container.orchestrator, args.slice(1));
     case "tab":
       return handleTab(container.orchestrator, args.slice(1));
     case "back":
@@ -101,20 +103,14 @@ async function handleTab(orchestrator: ReturnType<typeof createContainer>["orche
 
 async function handleUndo(orchestrator: ReturnType<typeof createContainer>["orchestrator"], targetId?: string): Promise<number> {
   const restored = await orchestrator.undo(targetId);
-  if (!restored) {
-    console.log("No previous checkpoint found to restore.");
-    return 0;
-  }
-  console.log(`↩️ Restored previous conversation: ${restored.restoredUrl}`);
+  console.log(restored ? `↩️ Restored previous conversation: ${restored.restoredUrl}` : "No previous checkpoint found to restore.");
   return 0;
 }
 
 function handleHistory(container: ReturnType<typeof createContainer>, targetId?: string): number {
   const history = container.journalService.list(targetId);
   console.log(`Recent Checkpoints (${history.length}):`);
-  for (const c of history) {
-    console.log(`[${c.id}] [${c.action}] [${c.targetId}] ${c.url} (${c.timestamp})`);
-  }
+  for (const c of history) console.log(`[${c.id}] [${c.action}] [${c.targetId}] ${c.url} (${c.timestamp})`);
   return 0;
 }
 
@@ -171,10 +167,31 @@ async function handleAsk(
   }
 }
 
-async function readStdin(): Promise<string> {
-  if (process.stdin.isTTY) return "";
-  let data = "";
-  process.stdin.setEncoding("utf8");
-  for await (const chunk of process.stdin) data += chunk;
-  return data.trim();
+async function handleCompare(
+  orchestrator: ReturnType<typeof createContainer>["orchestrator"],
+  args: string[],
+): Promise<number> {
+  const parsed = parseCompareArgs(args);
+  let prompt = parsed.prompt || (await readStdin());
+
+  if (!prompt.trim()) {
+    console.error("Error: Prompt is required for comparison.");
+    return 1;
+  }
+
+  try {
+    const report = await orchestrator.compare({
+      prompt,
+      platforms: parsed.platforms,
+      mode: parsed.mode,
+      timeoutMs: parsed.timeoutMs,
+      outDir: parsed.outDir,
+    });
+
+    console.log(report.markdownReport);
+    return 0;
+  } catch (err: unknown) {
+    console.error(`❌ Comparison failed: ${err instanceof Error ? err.message : String(err)}`);
+    return 1;
+  }
 }

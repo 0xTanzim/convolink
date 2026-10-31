@@ -1,0 +1,86 @@
+import type { PlatformId } from "../ports/platform.port.js";
+import type { SessionOrchestrator } from "./orchestrator.js";
+import type { TabManagerService } from "./tab-manager.service.js";
+import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
+import type { DiscoveredTab } from "./orchestrator.types.js";
+import { ComparisonEngineService } from "./comparison-engine.service.js";
+import { ComparisonReportService } from "./comparison-report.service.js";
+import { TabNotFoundError } from "../errors/bridge-errors.js";
+
+export class ComparisonCoordinator {
+  private readonly orchestrator: SessionOrchestrator;
+  private readonly tabManager: TabManagerService;
+  private readonly fileSink?: WorkspaceFileSink;
+  private readonly engine: ComparisonEngineService;
+  private readonly reporter: ComparisonReportService;
+
+  public constructor(
+    orchestrator: SessionOrchestrator,
+    tabManager: TabManagerService,
+    fileSink?: WorkspaceFileSink,
+  ) {
+    this.orchestrator = orchestrator;
+    this.tabManager = tabManager;
+    this.fileSink = fileSink;
+    this.engine = new ComparisonEngineService((tab, prompt, timeoutMs) =>
+      this.orchestrator.ask({ prompt, targetId: tab.targetId, timeoutMs }),
+    );
+    this.reporter = new ComparisonReportService();
+  }
+
+  public async run(options: CompareOptions): Promise<ComparisonReport> {
+    const platforms: PlatformId[] = options.platforms && options.platforms.length > 0
+      ? options.platforms
+      : ["chatgpt", "deepseek", "gemini"];
+
+    const allTabs = await this.orchestrator.listTabs();
+    const targetTabs: DiscoveredTab[] = [];
+
+    for (const p of platforms) {
+      let tab = allTabs.find((t) => t.platformId === p);
+      if (!tab && options.autoSpawn !== false) {
+        tab = await this.tabManager.createTab(p);
+      }
+      if (!tab) throw new TabNotFoundError(`platform:${p}`);
+      targetTabs.push(tab);
+    }
+
+    const comparisonId = `cmp-${Date.now()}`;
+    const start = Date.now();
+    const mode = options.mode ?? "parallel";
+
+    const results = await this.engine.executeComparison({
+      prompt: options.prompt,
+      tabs: targetTabs,
+      mode,
+      timeoutMs: options.timeoutMs,
+      staggerMs: mode === "parallel" ? 250 : 0,
+    });
+
+    const totalDurationMs = Date.now() - start;
+    const metrics = this.reporter.computeMetrics(results);
+    const fastestPlatform = this.reporter.determineFastestPlatform(metrics);
+    const markdownReport = this.reporter.buildMarkdownReport(comparisonId, options.prompt, results, metrics, mode);
+
+    if (options.outDir && this.fileSink) {
+      await this.fileSink.persist(
+        [{ relativePath: "REPORT.md", language: "markdown", content: markdownReport, isExplicitPath: true }],
+        { outDir: options.outDir, overwrite: true },
+      );
+      await this.reporter.saveNamespacedArtifacts(results, `${options.outDir}/artifacts`, this.fileSink);
+    }
+
+    return {
+      comparisonId,
+      prompt: options.prompt,
+      scheduleMode: mode,
+      timestamp: new Date().toISOString(),
+      totalDurationMs,
+      results,
+      metrics,
+      fastestPlatform,
+      markdownReport,
+    };
+  }
+}

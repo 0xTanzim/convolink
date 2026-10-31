@@ -28,8 +28,9 @@ export class TabManagerService {
       throw new Error(`Transport ${this.browser.id} does not support createTab`);
     }
 
+    const isUrl = platformOrUrl.startsWith("http://") || platformOrUrl.startsWith("https://");
     const driver = this.drivers.find((d) => d.id === platformOrUrl || d.matchesUrl(platformOrUrl));
-    const url = driver ? driver.getBaseUrl() : platformOrUrl;
+    const url = isUrl ? platformOrUrl : (driver ? driver.getBaseUrl() : platformOrUrl);
     const tabDesc = await this.browser.createTab(url);
 
     const platform = driver?.id ?? null;

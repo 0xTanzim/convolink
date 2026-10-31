@@ -43,12 +43,56 @@ export function parseAskArgs(args: string[]): ParsedAskArgs {
   return { prompt, platform, targetId, timeoutMs, toggles, writeFiles, outDir, autoContinue, newChat, openTab, transport };
 }
 
+export interface ParsedCompareArgs {
+  prompt: string;
+  platforms?: PlatformId[];
+  timeoutMs?: number;
+  mode?: "parallel" | "sequential";
+  outDir?: string;
+  transport?: "raw-cdp" | "agent-browser";
+}
+
+export function parseCompareArgs(args: string[]): ParsedCompareArgs {
+  let prompt = "", timeoutMs: number | undefined, outDir: string | undefined;
+  let mode: "parallel" | "sequential" | undefined;
+  let platforms: PlatformId[] | undefined;
+  let transport: "raw-cdp" | "agent-browser" | undefined;
+
+  for (let i = 0; i < args.length; i++) {
+    const a = args[i]!;
+    if (a === "--platforms" && i + 1 < args.length) {
+      platforms = args[++i]!.split(",").map((p) => p.trim()) as PlatformId[];
+    } else if (a === "--timeout" && i + 1 < args.length) {
+      timeoutMs = Number(args[++i]);
+    } else if (a === "--out-dir" && i + 1 < args.length) {
+      outDir = args[++i];
+    } else if (a === "--mode" && i + 1 < args.length) {
+      mode = args[++i] as "parallel" | "sequential";
+    } else if (a === "--transport" && i + 1 < args.length) {
+      transport = args[++i] as "raw-cdp" | "agent-browser";
+    } else if (!a.startsWith("-")) {
+      prompt = prompt ? `${prompt} ${a}` : a;
+    }
+  }
+
+  return { prompt, platforms, timeoutMs, mode, outDir, transport };
+}
+
+export async function readStdin(): Promise<string> {
+  if (process.stdin.isTTY) return "";
+  let data = "";
+  process.stdin.setEncoding("utf8");
+  for await (const chunk of process.stdin) data += chunk;
+  return data.trim();
+}
+
 export function printHelp(): void {
   console.log(`ConvoLink CLI (convo)
 Usage:
   convo doctor [--launch]        Check CDP connection, open tabs, and selector health
   convo list                     List all currently open browser tabs
   convo ask "<prompt>"           Send prompt to active browser session and stream reply
+  convo compare "<prompt>"       Query multiple models in parallel and emit comparison matrix
   convo tab new <platform|url>   Spawn fresh tab for a platform (e.g. convo tab new deepseek)
   convo tab close <targetId>     Close a specific browser tab cleanly
   convo back [targetId]          Navigate active tab back in browser history

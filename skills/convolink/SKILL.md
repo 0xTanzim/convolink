@@ -130,6 +130,19 @@ convo ask "Refactor auth" --transport raw-cdp
 convo ask "Refactor auth" --transport agent-browser
 ```
 
+### 2.8 Multi-Model Comparison (`convo compare`)
+Query multiple models simultaneously with isolated execution and emit an automated comparison matrix:
+```bash
+# Compare across all open platform tabs
+convo compare "Design a production-ready rate limiter in Go"
+
+# Compare specific platforms with custom timeout and artifact saving
+convo compare "Implement distributed lock" \
+  --platforms chatgpt,deepseek,gemini \
+  --mode parallel \
+  --out-dir ./reports/dist-lock
+```
+
 ---
 
 ## 3. Best Practices for Prompts
