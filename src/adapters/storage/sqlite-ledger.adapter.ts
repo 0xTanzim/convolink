@@ -1,10 +1,11 @@
 import { Database } from "bun:sqlite";
 import fs from "node:fs";
 import path from "node:path";
-import type { ThreadStore, ThreadRecord } from "../../core/ports/storage.port.js";
+import type { ThreadStore, ThreadRecord, SearchResult } from "../../core/ports/storage.port.js";
 import type { ConversationTurn, PlatformId } from "../../core/ports/platform.port.js";
 import type { ContextPacket } from "../../core/ports/compiler.port.js";
 import { HostEnv } from "../../core/env/host-env.js";
+import { SqliteFtsHelper } from "./sqlite-fts.js";
 
 export class SqliteLedgerAdapter implements ThreadStore {
   private readonly db: Database;
@@ -20,40 +21,29 @@ export class SqliteLedgerAdapter implements ThreadStore {
 
   private initSchema(): void {
     this.db.exec(`
+      PRAGMA journal_mode = WAL;
+      PRAGMA foreign_keys = ON;
+      PRAGMA busy_timeout = 5000;
+
       CREATE TABLE IF NOT EXISTS threads (
-        thread_id TEXT PRIMARY KEY,
-        platform TEXT NOT NULL,
-        title TEXT NOT NULL,
-        url TEXT NOT NULL,
-        last_synced_turn_count INTEGER NOT NULL DEFAULT 0,
-        latest_packet_hash TEXT,
-        updated_at TEXT NOT NULL
+        thread_id TEXT PRIMARY KEY, platform TEXT NOT NULL, title TEXT NOT NULL,
+        url TEXT NOT NULL, last_synced_turn_count INTEGER NOT NULL DEFAULT 0,
+        latest_packet_hash TEXT, updated_at TEXT NOT NULL
       );
 
       CREATE TABLE IF NOT EXISTS turns (
-        thread_id TEXT NOT NULL,
-        turn_index INTEGER NOT NULL,
-        role TEXT NOT NULL,
-        markdown_content TEXT NOT NULL,
-        code_blocks TEXT NOT NULL,
-        content_hash TEXT NOT NULL,
-        created_at TEXT NOT NULL,
-        PRIMARY KEY (thread_id, turn_index)
+        thread_id TEXT NOT NULL, turn_index INTEGER NOT NULL, role TEXT NOT NULL,
+        markdown_content TEXT NOT NULL, code_blocks TEXT NOT NULL, content_hash TEXT NOT NULL,
+        created_at TEXT NOT NULL, PRIMARY KEY (thread_id, turn_index)
       );
 
       CREATE TABLE IF NOT EXISTS context_packets (
-        packet_hash TEXT PRIMARY KEY,
-        project_id TEXT NOT NULL,
-        source_thread_id TEXT NOT NULL,
-        platform TEXT NOT NULL,
-        source_turn_start INTEGER NOT NULL,
-        source_turn_end INTEGER NOT NULL,
-        layout_variant TEXT NOT NULL,
-        compiled_at TEXT NOT NULL,
-        markdown_body TEXT NOT NULL,
-        structured_json TEXT NOT NULL
+        packet_hash TEXT PRIMARY KEY, project_id TEXT NOT NULL, source_thread_id TEXT NOT NULL,
+        platform TEXT NOT NULL, source_turn_start INTEGER NOT NULL, source_turn_end INTEGER NOT NULL,
+        layout_variant TEXT NOT NULL, compiled_at TEXT NOT NULL, markdown_body TEXT NOT NULL, structured_json TEXT NOT NULL
       );
     `);
+    SqliteFtsHelper.initSchema(this.db);
   }
 
   public async upsertThread(record: ThreadRecord): Promise<void> {
@@ -93,31 +83,32 @@ export class SqliteLedgerAdapter implements ThreadStore {
     const now = new Date().toISOString();
     this.db.transaction(() => {
       for (const turn of turns) {
+        const codeBlocksJson = JSON.stringify(turn.codeBlocks ?? []);
         stmt.run({
           $threadId: threadId,
           $turnIndex: turn.turnIndex,
           $role: turn.role,
           $markdown: turn.markdownContent,
-          $codeBlocks: JSON.stringify(turn.codeBlocks ?? []),
+          $codeBlocks: codeBlocksJson,
           $contentHash: turn.contentHash,
           $createdAt: now,
         });
+        SqliteFtsHelper.indexTurn(this.db, threadId, turn.turnIndex, turn.role, turn.markdownContent, codeBlocksJson);
       }
     })();
+  }
+
+  public async searchTurns(query: string, limit: number = 20): Promise<SearchResult[]> {
+    return SqliteFtsHelper.search(this.db, query, limit);
   }
 
   public async getTurns(threadId: string, lastNTurns?: number): Promise<ConversationTurn[]> {
     const limitClause = lastNTurns && lastNTurns > 0 ? `LIMIT ${lastNTurns}` : "";
     const query = lastNTurns && lastNTurns > 0
-      ? `SELECT * FROM (
-           SELECT turn_index, role, markdown_content, code_blocks, content_hash
-           FROM turns WHERE thread_id = $threadId ORDER BY turn_index DESC ${limitClause}
-         ) ORDER BY turn_index ASC`
-      : `SELECT turn_index, role, markdown_content, code_blocks, content_hash
-         FROM turns WHERE thread_id = $threadId ORDER BY turn_index ASC`;
+      ? `SELECT * FROM (SELECT turn_index, role, markdown_content, code_blocks, content_hash FROM turns WHERE thread_id = $threadId ORDER BY turn_index DESC ${limitClause}) ORDER BY turn_index ASC`
+      : `SELECT turn_index, role, markdown_content, code_blocks, content_hash FROM turns WHERE thread_id = $threadId ORDER BY turn_index ASC`;
 
     const rows = this.db.query(query).all({ $threadId: threadId }) as any[];
-
     return rows.map((r) => ({
       turnIndex: r.turn_index, role: r.role, markdownContent: r.markdown_content,
       codeBlocks: JSON.parse(r.code_blocks || "[]"), contentHash: r.content_hash,

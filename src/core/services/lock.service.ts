@@ -92,11 +92,35 @@ export class LockService {
     ttlMs: number = LockService.DEFAULT_TTL_MS,
   ): Promise<T> {
     const handle = await this.acquireLock(targetId, ttlMs);
+    const intervalMs = Math.max(100, Math.floor(ttlMs / 3));
+    const timer = setInterval(() => {
+      this.renewLock(handle, ttlMs).catch(() => {});
+    }, intervalMs);
+
     try {
       return await action();
     } finally {
+      clearInterval(timer);
       await this.releaseLock(handle);
     }
+  }
+
+  /**
+   * Renews an active lock's lease TTL, preventing stale reclamation during long tasks.
+   */
+  public async renewLock(handle: LockHandle, extensionMs: number = LockService.DEFAULT_TTL_MS): Promise<void> {
+    if (!fs.existsSync(handle.lockPath)) return;
+    try {
+      const raw = fs.readFileSync(handle.lockPath, "utf8");
+      const payload: LockPayload = JSON.parse(raw);
+      if (payload.pid !== process.pid) return;
+
+      const updated: LockPayload = {
+        ...payload,
+        expiresAt: Date.now() + extensionMs,
+      };
+      fs.writeFileSync(handle.lockPath, JSON.stringify(updated, null, 2), "utf8");
+    } catch {}
   }
 
   /**

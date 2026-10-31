@@ -98,4 +98,20 @@ describe("LockService", () => {
     expect(result).toBe(42);
     expect(lockService.isLocked("target-wrap")).toBe(false);
   });
+
+  it("renews lock lease via renewLock to prevent expiry during long-running tasks", async () => {
+    const lockService = new LockService();
+    const handle = await lockService.acquireLock("target-heartbeat", 200);
+    const initialRaw = JSON.parse(fs.readFileSync(handle.lockPath, "utf8"));
+    const initialExpiresAt = initialRaw.expiresAt;
+
+    await new Promise((r) => setTimeout(r, 50));
+    await lockService.renewLock(handle, 1000);
+
+    const renewedRaw = JSON.parse(fs.readFileSync(handle.lockPath, "utf8"));
+    expect(renewedRaw.expiresAt).toBeGreaterThan(initialExpiresAt);
+    expect(lockService.isLocked("target-heartbeat")).toBe(true);
+
+    await lockService.releaseLock(handle);
+  });
 });

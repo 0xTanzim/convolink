@@ -107,3 +107,21 @@ export async function handleExport(orchestrator: Orchestrator, args: string[]): 
     return 1;
   }
 }
+
+export async function handleSearch(orchestrator: Orchestrator, query: string): Promise<number> {
+  if (!query || !query.trim()) {
+    console.error("Error: Search query is required (e.g. convo search <query>)");
+    return 1;
+  }
+  const results = await orchestrator.searchLedger(query);
+  if (results.length === 0) {
+    console.log(`No turns found matching "${query}".`);
+    return 0;
+  }
+  console.log(`🔍 Found ${results.length} turn match(es) for "${query}":\n`);
+  for (const r of results) {
+    console.log(`• [Thread: ${r.threadId}] Turn ${r.turnIndex} (${r.role}):`);
+    console.log(`  ${r.snippet}\n`);
+  }
+  return 0;
+}

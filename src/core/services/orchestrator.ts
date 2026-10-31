@@ -1,7 +1,7 @@
 import type { BrowserPort, SessionHandle, TabDescriptor } from "../ports/browser.port.js";
 import type { PlatformId, PlatformPort, ConversationTurn } from "../ports/platform.port.js";
 import type { PolicyGatePort } from "../ports/policy.port.js";
-import type { ThreadStore } from "../ports/storage.port.js";
+import type { ThreadStore, SearchResult } from "../ports/storage.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService } from "./artifact.service.js";
 import type { WorkspaceFileSink } from "./workspace-sink.service.js";
@@ -13,13 +13,7 @@ import { ThreadExportService } from "./thread-export.service.js";
 import { runDoctorAudit } from "./doctor.service.js";
 import { ComparisonCoordinator } from "./comparison-coordinator.service.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
-import type {
-  AskOptions,
-  AskResult,
-  DiscoveredTab,
-  DoctorReport,
-  OrchestratorDependencies,
-} from "./orchestrator.types.js";
+import type { AskOptions, AskResult, DiscoveredTab, DoctorReport, OrchestratorDependencies } from "./orchestrator.types.js";
 
 export * from "./orchestrator.types.js";
 
@@ -85,6 +79,11 @@ export class SessionOrchestrator {
 
   public async compare(options: CompareOptions): Promise<ComparisonReport> {
     return new ComparisonCoordinator(this, this.tabManager, this.fileSink).run(options);
+  }
+
+  public async searchLedger(query: string, limit?: number): Promise<SearchResult[]> {
+    if (!this.threadStore?.searchTurns) return [];
+    return this.threadStore.searchTurns(query, limit);
   }
 
   public async resumeThread(threadId: string): Promise<DiscoveredTab> {

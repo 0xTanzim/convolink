@@ -63,15 +63,21 @@ export class RawCdpAdapter implements BrowserPort {
 
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error("WebSocket handshake timed out")), 5000);
-      ws.onopen = () => {
-        clearTimeout(timer);
-        resolve();
-      };
-      ws.onerror = (e) => {
-        clearTimeout(timer);
-        reject(new Error(`WebSocket error on tab ${targetId}: ${e}`));
-      };
+      ws.onopen = () => { clearTimeout(timer); resolve(); };
+      ws.onerror = (e) => { clearTimeout(timer); reject(new Error(`WebSocket error on tab ${targetId}: ${e}`)); };
     });
+
+    const cleanup = (reason: string) => {
+      for (const req of pending.values()) {
+        req.reject(new BrowserConnectionError(`127.0.0.1:${this.port}`, `Tab ${targetId} closed: ${reason}`));
+      }
+      pending.clear();
+      this.activeSockets.delete(targetId);
+      this.pendingRequests.delete(targetId);
+    };
+
+    ws.onclose = () => cleanup("connection closed");
+    ws.onerror = (e) => cleanup(String(e));
 
     ws.onmessage = (event) => {
       try {
@@ -86,12 +92,7 @@ export class RawCdpAdapter implements BrowserPort {
     };
 
     this.activeSockets.set(targetId, ws);
-
-    return {
-      sessionId: `cdp-session-${targetId}-${Date.now()}`,
-      targetId,
-      adapterId: this.id,
-    };
+    return { sessionId: `cdp-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
   }
 
   public async detach(handle: SessionHandle): Promise<void> {
@@ -99,9 +100,7 @@ export class RawCdpAdapter implements BrowserPort {
     if (ws) {
       this.activeSockets.delete(handle.targetId);
       this.pendingRequests.delete(handle.targetId);
-      try {
-        ws.close();
-      } catch {}
+      try { ws.close(); } catch {}
     }
   }
 

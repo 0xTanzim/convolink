@@ -18,7 +18,7 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       type: "object",
       properties: {
         prompt: { type: "string", description: "Prompt text to send to the browser AI" },
-        platform: { type: "string", enum: ["chatgpt", "deepseek", "gemini"], description: "Target AI platform" },
+        platform: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Target AI platform" },
         newChat: { type: "boolean", description: "Whether to reset conversation to a fresh chat first" },
         openTab: { type: "boolean", description: "Whether to spawn a new background tab" },
         think: { type: "boolean", description: "Toggle deep thinking mode (e.g. DeepSeek R1)" },
@@ -81,6 +81,30 @@ export const MCP_TOOLS: McpToolDefinition[] = [
       },
     },
   },
+  {
+    name: "convo_search",
+    description: "Perform full-text search across historical conversation turns and code blocks in the SQLite ledger.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query or keywords" },
+        limit: { type: "number", description: "Maximum number of results (default: 10)" },
+      },
+      required: ["query"],
+    },
+  },
+  {
+    name: "convo_export",
+    description: "Export full conversation history and extracted code blocks for a thread ID as Markdown or JSON.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        threadId: { type: "string", description: "The thread ID to export" },
+        format: { type: "string", enum: ["markdown", "json"], description: "Export format (default: markdown)" },
+      },
+      required: ["threadId"],
+    },
+  },
 ];
 
 export async function executeMcpTool(
@@ -125,6 +149,16 @@ export async function executeMcpTool(
       case "convo_undo": {
         const res = await orchestrator.undo(args.targetId);
         return { text: res ? `Restored previous conversation: ${res.restoredUrl}` : "No previous checkpoint found to restore." };
+      }
+      case "convo_search": {
+        const results = await orchestrator.searchLedger(args.query, args.limit ?? 10);
+        if (results.length === 0) return { text: `No results matching "${args.query}".` };
+        const text = results.map((r) => `• [Thread ${r.threadId}] Turn ${r.turnIndex} (${r.role}):\n  ${r.snippet}`).join("\n\n");
+        return { text };
+      }
+      case "convo_export": {
+        const output = await orchestrator.exportThread(args.threadId, args.format ?? "markdown");
+        return { text: output };
       }
       default:
         return { text: `Unknown tool: ${name}`, isError: true };

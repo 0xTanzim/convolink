@@ -77,4 +77,24 @@ echo "hack"
     expect(artifacts[0]?.relativePath.startsWith("/")).toBe(false);
     expect(artifacts[0]?.relativePath).toBe("etc/passwd");
   });
+
+  it("does not produce duplicate artifacts when codeBlocks and markdown contain the same blocks", () => {
+    const markdown = `
+\`\`\`typescript
+export function one() { return 1; }
+\`\`\`
+\`\`\`python
+def two(): return 2
+\`\`\`
+`;
+    const codeBlocks = [
+      { language: "typescript", code: "export function one() { return 1; }" },
+      { language: "python", code: "def two(): return 2" },
+    ];
+
+    const artifacts = service.extractArtifacts(markdown, codeBlocks);
+    // Should extract exactly 2 artifacts, not 4 (no duplicates)
+    expect(artifacts.length).toBe(2);
+    expect(artifacts.map((a) => a.relativePath)).toEqual(["artifact-1.ts", "artifact-2.py"]);
+  });
 });

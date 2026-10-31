@@ -42,6 +42,7 @@ export class ArtifactService {
     const seenPaths = new Set<string>();
     let fallbackCounter = 1;
 
+    // 1. If structured DOM codeBlocks are provided, treat them as the authoritative source
     if (codeBlocks && codeBlocks.length > 0) {
       for (const block of codeBlocks) {
         const item = this.parseBlock(block.language, block.code, fallbackCounter);
@@ -51,8 +52,10 @@ export class ArtifactService {
           artifacts.push(item);
         }
       }
+      return artifacts;
     }
 
+    // 2. Otherwise fall back to regex scanning on the raw markdown string
     const matches = Array.from(markdown.matchAll(ArtifactService.CODE_BLOCK_REGEX));
     for (const match of matches) {
       const item = this.parseBlock(match[1] || "text", match[2] || "", fallbackCounter);

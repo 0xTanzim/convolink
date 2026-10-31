@@ -10,6 +10,7 @@ import {
   handleHistory,
   handleResume,
   handleExport,
+  handleSearch,
 } from "./cli.ops.js";
 
 export async function runCli(args: string[]): Promise<number> {
@@ -41,6 +42,8 @@ export async function runCli(args: string[]): Promise<number> {
       return handleResume(container.orchestrator, args[1]);
     case "export":
       return handleExport(container.orchestrator, args.slice(1));
+    case "search":
+      return handleSearch(container.orchestrator, args.slice(1).join(" "));
     case "mcp":
       await runMcpServer();
       return 0;

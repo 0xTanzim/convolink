@@ -11,6 +11,13 @@ export interface ThreadRecord {
   readonly updatedAt: string;
 }
 
+export interface SearchResult {
+  readonly threadId: string;
+  readonly turnIndex: number;
+  readonly role: "user" | "assistant";
+  readonly snippet: string;
+}
+
 export interface ThreadStore {
   upsertThread(record: ThreadRecord): Promise<void>;
   appendTurns(threadId: string, turns: readonly ConversationTurn[]): Promise<void>;
@@ -18,4 +25,5 @@ export interface ThreadStore {
   savePacket(packet: ContextPacket): Promise<void>;
   getLatestPacket(threadIdOrProjectId: string): Promise<ContextPacket | null>;
   listThreads(platform?: PlatformId): Promise<ThreadRecord[]>;
+  searchTurns?(query: string, limit?: number): Promise<SearchResult[]>;
 }

@@ -98,6 +98,34 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(content[0]?.text).toContain("MCP Assistant reply");
   });
 
+  it("handles tools/call for convo_search and convo_export", async () => {
+    const server = createTestServer();
+    const searchRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 5,
+      method: "tools/call",
+      params: {
+        name: "convo_search",
+        arguments: { query: "nonexistent-query-123" },
+      },
+    });
+    expect(searchRes?.id).toBe(5);
+    const searchContent = searchRes?.result.content as Array<{ type: string; text: string }>;
+    expect(searchContent[0]?.text).toContain("No results matching");
+
+    const exportRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 6,
+      method: "tools/call",
+      params: {
+        name: "convo_export",
+        arguments: { threadId: "nonexistent-thread" },
+      },
+    });
+    expect(exportRes?.id).toBe(6);
+    expect(exportRes?.result.isError).toBe(true);
+  });
+
   it("returns an error for unknown tool calls", async () => {
     const server = createTestServer();
     const response = await server.handleMessage({

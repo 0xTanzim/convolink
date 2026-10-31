@@ -97,4 +97,43 @@ describe("SqliteLedgerAdapter", () => {
 
     store.close();
   });
+
+  it("indexes turns and performs full-text search with ranking and snippets", async () => {
+    const store = new SqliteLedgerAdapter(":memory:");
+
+    await store.appendTurns("thread-search", [
+      {
+        turnIndex: 0,
+        role: "user",
+        markdownContent: "How do we implement Hexagonal Architecture?",
+        codeBlocks: [],
+        contentHash: "h1",
+      },
+      {
+        turnIndex: 1,
+        role: "assistant",
+        markdownContent: "Hexagonal architecture uses ports and adapters to isolate core domain logic from external side effects.",
+        codeBlocks: [{ language: "ts", code: "export interface StoragePort {}" }],
+        contentHash: "h2",
+      },
+      {
+        turnIndex: 2,
+        role: "user",
+        markdownContent: "What is an event loop in Node.js?",
+        codeBlocks: [],
+        contentHash: "h3",
+      },
+    ]);
+
+    const results = await store.searchTurns("Hexagonal");
+    expect(results.length).toBe(2);
+    expect(results[0]?.threadId).toBe("thread-search");
+    expect(results[0]?.snippet.toLowerCase()).toContain("hexagonal");
+
+    const codeResults = await store.searchTurns("StoragePort");
+    expect(codeResults.length).toBe(1);
+    expect(codeResults[0]?.turnIndex).toBe(1);
+
+    store.close();
+  });
 });

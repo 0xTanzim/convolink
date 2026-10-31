@@ -1,9 +1,11 @@
 import { RawCdpAdapter } from "./adapters/browsers/raw-cdp.adapter.js";
 import { AgentBrowserAdapter } from "./adapters/browsers/agent-browser.adapter.js";
 import { FirefoxBidiAdapter } from "./adapters/browsers/firefox-bidi.adapter.js";
+import { PlaywrightAdapter } from "./adapters/browsers/playwright.adapter.js";
 import { DeepSeekDriver } from "./adapters/platforms/deepseek.driver.js";
 import { ChatGPTDriver } from "./adapters/platforms/chatgpt.driver.js";
 import { GeminiDriver } from "./adapters/platforms/gemini.driver.js";
+import { ClaudeDriver } from "./adapters/platforms/claude.driver.js";
 import { LockService } from "./core/services/lock.service.js";
 import { PolicyService } from "./core/services/policy.service.js";
 import { ArtifactService } from "./core/services/artifact.service.js";
@@ -45,13 +47,16 @@ export function createContainer(options?: ContainerOptions): AppContainer {
       ? new AgentBrowserAdapter(port)
       : transport === "firefox-bidi"
         ? new FirefoxBidiAdapter(port)
-        : new RawCdpAdapter(endpoint)
+        : transport === "playwright"
+          ? new PlaywrightAdapter(port)
+          : new RawCdpAdapter(endpoint)
   );
 
   const drivers: readonly PlatformPort[] = [
     new DeepSeekDriver(),
     new ChatGPTDriver(),
     new GeminiDriver(),
+    new ClaudeDriver(),
   ];
 
   const lockService = new LockService();

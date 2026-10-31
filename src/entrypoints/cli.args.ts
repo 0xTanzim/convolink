@@ -110,12 +110,13 @@ Usage:
   convo history [targetId]       Show recent session checkpoints and thread URLs
   convo resume <threadId>        Rehydrate and re-open saved thread from persistent SQLite ledger
   convo export <threadId>        Export structured conversation ledger (Markdown or JSON)
+  convo search <query>           Full-text search across historical conversation turns and code
   convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio
 
 Options for ask:
   --new, -n                      Reset active tab to fresh chat before submitting prompt
   --open-tab                     Spawn brand new tab in background before submitting
-  --platform <id>                Target specific platform (deepseek | chatgpt | gemini)
+  --platform <id>                Target specific platform (deepseek | chatgpt | gemini | claude)
   --target <targetId>            Target specific browser tab targetId
   --transport <name>             Transport engine: raw-cdp (default) | agent-browser | firefox-bidi
   --think / --no-think           Enable or disable deep thinking mode

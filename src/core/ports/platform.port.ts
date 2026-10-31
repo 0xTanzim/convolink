@@ -1,6 +1,6 @@
 import type { BrowserPort, SessionHandle } from "./browser.port.js";
 
-export type PlatformId = "deepseek" | "chatgpt" | "gemini";
+export type PlatformId = "deepseek" | "chatgpt" | "gemini" | "claude";
 
 export interface CodeBlock {
   readonly language: string;
