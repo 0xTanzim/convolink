@@ -11,18 +11,14 @@ import type {
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { StreamSettlingDetector } from "./settling-detector.js";
 import { GEMINI_RESOLVE_SELECTORS_EXPR, getGeminiReadThreadExpr } from "./gemini.scripts.js";
 
 export class GeminiDriver implements PlatformPort {
   public readonly id: PlatformId = "gemini";
 
-  public getBaseUrl(): string {
-    return "https://gemini.google.com/app";
-  }
-
-  public matchesUrl(url: string): boolean {
-    return url.includes("gemini.google.com");
-  }
+  public getBaseUrl(): string { return "https://gemini.google.com/app"; }
+  public matchesUrl(url: string): boolean { return url.includes("gemini.google.com"); }
 
   public extractThreadId(url: string): string {
     const match = url.match(/\/(app|share\/continue)\/([a-zA-Z0-9_-]+)/);
@@ -93,23 +89,40 @@ export class GeminiDriver implements PlatformPort {
     browser: BrowserPort,
     before: TurnFingerprint,
     timeoutMs: number,
+    quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
-    const pollIntervalMs = 500;
+    const detector = new StreamSettlingDetector(quiescenceMs);
+    const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
     while (Date.now() - start < timeoutMs) {
       const status = await browser.evaluate<{
         turnsCount: number;
         hasNewTurn: boolean;
         isGenerating: boolean;
+        isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
       }>(
         handle,
         `(() => {
           /* awaitCompletion */
-          const spinner = document.querySelector('mat-mdc-progress-spinner, mat-progress-spinner, button[aria-label="Stop response"], button[aria-label*="Stop"], .sparkle-thinking');
-          const isGenerating = Boolean(spinner && (spinner.offsetParent !== null || spinner.tagName.toLowerCase().includes('spinner')));
+          const stop = document.querySelector('button[aria-label="Stop response"], button[aria-label*="Stop"]');
+          const spinner = document.querySelector('mat-mdc-progress-spinner, mat-progress-spinner');
+          const isGenerating = Boolean(
+            (stop && stop.offsetParent !== null) ||
+            (spinner && (spinner.offsetParent !== null || spinner.tagName.toLowerCase().includes('spinner')))
+          );
+
+          const thoughtEl = document.querySelector('.sparkle-thinking, div[data-testid*="thought"], div[class*="thought"], button[aria-label*="Thinking"], button[aria-label*="thought"]');
+          const isThinking = Boolean(
+            thoughtEl && (
+              thoughtEl.classList.contains('sparkle-thinking') ||
+              thoughtEl.querySelector('mat-progress-spinner, mat-mdc-progress-spinner, [class*="spin"]') ||
+              (thoughtEl.innerText || '').includes('Thinking...')
+            )
+          );
+
           const models = Array.from(document.querySelectorAll('model-response'));
           const turns = Array.from(document.querySelectorAll('user-query, model-response'));
           const hasNewTurn = turns.length > ${before.turnCount};
@@ -121,19 +134,28 @@ export class GeminiDriver implements PlatformPort {
             code: c.textContent || '',
           })) : [];
 
-          return { turnsCount: turns.length, hasNewTurn, isGenerating, assistantText, codeBlocks };
+          return { turnsCount: turns.length, hasNewTurn, isGenerating, isThinking, assistantText, codeBlocks };
         })()`,
       );
 
-      if (status.hasNewTurn && !status.isGenerating && status.assistantText.length > 0) {
+      const text = status.assistantText || (status as any).text || "";
+      const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+      const settled = hasNewTurn && detector.isSettled({
+        isGenerating: status.isGenerating,
+        isThinking: status.isThinking,
+        contentLength: text.length,
+        quiescenceMs,
+      });
+
+      if (settled) {
         return {
           status: "complete",
           turn: {
-            turnIndex: status.turnsCount - 1,
+            turnIndex: status.turnsCount !== undefined ? status.turnsCount - 1 : (status as any).turnIndex ?? 0,
             role: "assistant",
-            markdownContent: status.assistantText,
-            codeBlocks: status.codeBlocks,
-            contentHash: String(status.assistantText.length),
+            markdownContent: text,
+            codeBlocks: status.codeBlocks ?? [],
+            contentHash: String(text.length),
           },
           elapsedMs: Date.now() - start,
         };

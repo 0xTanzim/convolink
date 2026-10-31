@@ -1,10 +1,9 @@
-import type { BrowserPort, SessionHandle, TabDescriptor } from "../ports/browser.port.js";
+import type { BrowserPort, SessionHandle } from "../ports/browser.port.js";
 import type { PlatformId, PlatformPort, ConversationTurn } from "../ports/platform.port.js";
 import type { PolicyGatePort } from "../ports/policy.port.js";
-import type { ThreadStore, SearchResult } from "../ports/storage.port.js";
-import type { LockService } from "./lock.service.js";
+import type { ThreadStore, SearchResult, WorkspaceSinkPort } from "../ports/storage.port.js";
+import type { LockHandle, LockService } from "./lock.service.js";
 import type { ArtifactService } from "./artifact.service.js";
-import type { WorkspaceFileSink } from "./workspace-sink.service.js";
 import type { StateJournalService } from "./journal.service.js";
 import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import { TabManagerService } from "./tab-manager.service.js";
@@ -23,10 +22,11 @@ export class SessionOrchestrator {
   private readonly lockService: LockService;
   private readonly policyGate: PolicyGatePort;
   private readonly artifactService?: ArtifactService;
-  private readonly fileSink?: WorkspaceFileSink;
+  private readonly fileSink?: WorkspaceSinkPort;
   private readonly journalService?: StateJournalService;
   private readonly threadStore?: ThreadStore;
   private readonly tabManager: TabManagerService;
+  private readonly comparisonCoordinator: ComparisonCoordinator;
 
   public constructor(deps: OrchestratorDependencies) {
     this.browser = deps.browser;
@@ -37,7 +37,9 @@ export class SessionOrchestrator {
     this.fileSink = deps.fileSink;
     this.journalService = deps.journalService;
     this.threadStore = deps.threadStore;
-    this.tabManager = new TabManagerService(this.browser, this.drivers, this.lockService, deps.journalService);
+    this.tabManager = deps.tabManager ?? new TabManagerService(this.browser, this.drivers, this.lockService, deps.journalService);
+    this.comparisonCoordinator = deps.comparisonCoordinator ?? new ComparisonCoordinator(this, this.tabManager, this.fileSink);
+    deps.comparisonCoordinator?.bindOrchestrator(this);
   }
 
   public async listTabs(): Promise<DiscoveredTab[]> {
@@ -53,10 +55,7 @@ export class SessionOrchestrator {
   public createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
     return this.tabManager.createTab(platformOrUrl);
   }
-
-  public closeTab(targetId: string): Promise<void> {
-    return this.tabManager.closeTab(targetId);
-  }
+  public closeTab(targetId: string): Promise<void> { return this.tabManager.closeTab(targetId); }
 
   public async startNewChat(targetId?: string, platform?: PlatformId): Promise<DiscoveredTab> {
     const tabs = await this.listTabs();
@@ -68,22 +67,16 @@ export class SessionOrchestrator {
   }
 
   public async undo(targetId?: string): Promise<{ restoredUrl: string } | null> {
-    const tabs = await this.listTabs();
-    return this.tabManager.undo(TabResolver.resolveTargetTab({ targetId, prompt: "" }, tabs));
+    return this.tabManager.undo(TabResolver.resolveTargetTab({ targetId, prompt: "" }, await this.listTabs()));
   }
 
   public async goBack(targetId?: string): Promise<void> {
-    const tabs = await this.listTabs();
-    return this.tabManager.goBack(TabResolver.resolveTargetTab({ targetId, prompt: "" }, tabs).targetId);
+    return this.tabManager.goBack(TabResolver.resolveTargetTab({ targetId, prompt: "" }, await this.listTabs()).targetId);
   }
 
-  public async compare(options: CompareOptions): Promise<ComparisonReport> {
-    return new ComparisonCoordinator(this, this.tabManager, this.fileSink).run(options);
-  }
-
+  public async compare(options: CompareOptions): Promise<ComparisonReport> { return this.comparisonCoordinator.run(options); }
   public async searchLedger(query: string, limit?: number): Promise<SearchResult[]> {
-    if (!this.threadStore?.searchTurns) return [];
-    return this.threadStore.searchTurns(query, limit);
+    return this.threadStore?.searchTurns ? this.threadStore.searchTurns(query, limit) : [];
   }
 
   public async resumeThread(threadId: string): Promise<DiscoveredTab> {
@@ -115,79 +108,82 @@ export class SessionOrchestrator {
     }
 
     const sanitized = this.policyGate.sanitizeOutboundPrompt(options.prompt);
-    const lockHandle = await this.lockService.acquireLock(targetTab.targetId);
-    let sessionHandle: SessionHandle | null = null;
+    return this.lockService.withLock(targetTab.targetId, async (lockHandle) => {
+      let sessionHandle: SessionHandle | null = null;
+      try {
+        sessionHandle = await this.browser.attach(targetTab.targetId);
+        await this.browser.keepAliveInBackground(sessionHandle);
 
-    try {
-      sessionHandle = await this.browser.attach(targetTab.targetId);
-      await this.browser.keepAliveInBackground(sessionHandle);
+        if (options.toggles) {
+          await driver.applyToggles(sessionHandle, this.browser, options.toggles);
+        }
 
-      if (options.toggles) {
-        await driver.applyToggles(sessionHandle, this.browser, options.toggles);
-      }
+        const timeoutMs = options.timeoutMs ?? 120_000;
+        const fingerprint = await driver.submitPrompt(sessionHandle, this.browser, sanitized.cleanText, options.files);
+        const completion = await driver.awaitCompletion(sessionHandle, this.browser, fingerprint, timeoutMs);
+        const currentTurn = options.autoContinue !== false
+          ? await this.autoContinueTurn(sessionHandle, driver, completion.turn, timeoutMs, lockHandle)
+          : completion.turn;
 
-      const timeoutMs = options.timeoutMs ?? 120_000;
-      const fingerprint = await driver.submitPrompt(sessionHandle, this.browser, sanitized.cleanText, options.files);
-      const completion = await driver.awaitCompletion(sessionHandle, this.browser, fingerprint, timeoutMs);
-      const currentTurn = options.autoContinue !== false
-        ? await this.autoContinueTurn(sessionHandle, driver, completion.turn, timeoutMs)
-        : completion.turn;
+        const canvasDocument = driver.inspectCanvas ? await driver.inspectCanvas(sessionHandle, this.browser) : null;
+        const artifacts = this.artifactService ? this.artifactService.extractArtifacts(currentTurn.markdownContent, currentTurn.codeBlocks) : [];
+        let writtenFiles: string[] = [];
 
-      const canvasDocument = driver.inspectCanvas ? await driver.inspectCanvas(sessionHandle, this.browser) : null;
-      const artifacts = this.artifactService ? this.artifactService.extractArtifacts(currentTurn.markdownContent, currentTurn.codeBlocks) : [];
-      let writtenFiles: string[] = [];
+        if (options.writeFiles && this.fileSink && artifacts.length > 0) {
+          const res = await this.fileSink.persist(artifacts, { outDir: options.outDir ?? "./artifacts", overwrite: true });
+          writtenFiles = res.writtenFiles.map((f) => f.path);
+        }
 
-      if (options.writeFiles && this.fileSink && artifacts.length > 0) {
-        const res = await this.fileSink.persist(artifacts, { outDir: options.outDir ?? "./artifacts", overwrite: true });
-        writtenFiles = res.writtenFiles.map((f) => f.path);
-      }
-
-      this.journalService?.record({
-        targetId: targetTab.targetId, platformId: targetTab.platformId,
-        url: targetTab.url, threadId: targetTab.threadId, action: "ask",
-      });
-
-      if (this.threadStore && targetTab.platformId) {
-        const key = targetTab.threadId ?? targetTab.targetId;
-        await this.threadStore.upsertThread({
-          threadId: key, platform: targetTab.platformId, title: targetTab.title,
-          url: targetTab.url, lastSyncedTurnCount: currentTurn.turnIndex + 1, updatedAt: new Date().toISOString(),
+        this.journalService?.record({
+          targetId: targetTab.targetId, platformId: targetTab.platformId,
+          url: targetTab.url, threadId: targetTab.threadId, action: "ask",
         });
-        await this.threadStore.appendTurns(key, [currentTurn]);
-      }
 
-      return {
-        tab: targetTab, turn: currentTurn, elapsedMs: completion.elapsedMs,
-        riskLabels: this.policyGate.classifyInboundResponse(currentTurn.markdownContent),
-        redactedSecretsCount: sanitized.redactedCount,
-        artifacts: artifacts.length > 0 ? artifacts : undefined,
-        writtenFiles: writtenFiles.length > 0 ? writtenFiles : undefined,
-        canvasDocument,
-      };
-    } finally {
-      if (sessionHandle) await this.browser.detach(sessionHandle);
-      this.lockService.releaseLock(lockHandle);
-    }
+        if (this.threadStore && targetTab.platformId) {
+          const key = targetTab.threadId ?? targetTab.targetId;
+          const prevTurns = await this.threadStore.getTurns(key);
+          const userTurn: ConversationTurn = {
+            turnIndex: prevTurns.length, role: "user", markdownContent: sanitized.cleanText,
+            codeBlocks: [], contentHash: String(sanitized.cleanText.length),
+          };
+          const assistantTurn: ConversationTurn = { ...currentTurn, turnIndex: prevTurns.length + 1 };
+          await this.threadStore.upsertThread({
+            threadId: key, platform: targetTab.platformId, title: targetTab.title,
+            url: targetTab.url, lastSyncedTurnCount: prevTurns.length + 2, updatedAt: new Date().toISOString(),
+          });
+          await this.threadStore.appendTurns(key, [userTurn, assistantTurn]);
+        }
+
+        return {
+          tab: targetTab, turn: currentTurn, elapsedMs: completion.elapsedMs,
+          riskLabels: this.policyGate.classifyInboundResponse(currentTurn.markdownContent),
+          redactedSecretsCount: sanitized.redactedCount,
+          artifacts: artifacts.length > 0 ? artifacts : undefined,
+          writtenFiles: writtenFiles.length > 0 ? writtenFiles : undefined,
+          canvasDocument,
+        };
+      } finally {
+        if (sessionHandle) await this.browser.detach(sessionHandle);
+      }
+    });
   }
 
   private async autoContinueTurn(
-    handle: SessionHandle, driver: PlatformPort, initial: ConversationTurn, timeoutMs: number,
+    handle: SessionHandle, driver: PlatformPort, initial: ConversationTurn, timeoutMs: number, lockHandle?: LockHandle,
   ): Promise<ConversationTurn> {
     let current = initial;
     let count = 0;
     while (count < 5 && driver.findContinuationTrigger && driver.triggerContinuation) {
+      if (lockHandle) await this.lockService.renewLock(lockHandle);
       const trigger = await driver.findContinuationTrigger(handle, this.browser);
       if (!trigger.hasContinuation) break;
       count++;
       await driver.triggerContinuation(handle, this.browser);
       const next = await driver.awaitCompletion(
-        handle, this.browser,
-        { turnCount: current.turnIndex + 1, lastTurnHash: String(current.turnIndex) },
-        timeoutMs,
+        handle, this.browser, { turnCount: current.turnIndex + 1, lastTurnHash: String(current.turnIndex) }, timeoutMs,
       );
       current = {
-        ...current,
-        markdownContent: `${current.markdownContent}\n${next.turn.markdownContent}`,
+        ...current, markdownContent: `${current.markdownContent}\n${next.turn.markdownContent}`,
         codeBlocks: [...current.codeBlocks, ...next.turn.codeBlocks],
       };
     }

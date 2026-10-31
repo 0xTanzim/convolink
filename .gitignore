@@ -4,9 +4,11 @@ node_modules/
 .pnp.js
 
 # Runtime & Application Caches
-.omni/
+.convolink/
+.convo/
 artifacts/
-/tmp/omni-*
+/tmp/convolink-*
+/tmp/convo-*
 *.tmp
 
 # Lock files (allow bun.lock / pnpm-lock.yaml)

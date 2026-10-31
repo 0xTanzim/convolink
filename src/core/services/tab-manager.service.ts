@@ -80,7 +80,7 @@ export class TabManagerService {
       }
     } finally {
       if (sessionHandle) await this.browser.detach(sessionHandle);
-      this.lockService.releaseLock(lockHandle);
+      await this.lockService.releaseLock(lockHandle);
     }
   }
 
@@ -97,7 +97,7 @@ export class TabManagerService {
       return { restoredUrl: previous.url };
     } finally {
       if (sessionHandle) await this.browser.detach(sessionHandle);
-      this.lockService.releaseLock(lockHandle);
+      await this.lockService.releaseLock(lockHandle);
     }
   }
 
@@ -110,7 +110,7 @@ export class TabManagerService {
       await this.browser.goBack(sessionHandle);
     } finally {
       if (sessionHandle) await this.browser.detach(sessionHandle);
-      this.lockService.releaseLock(lockHandle);
+      await this.lockService.releaseLock(lockHandle);
     }
   }
 }

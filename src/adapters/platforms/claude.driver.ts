@@ -11,24 +11,18 @@ import type {
   DownloadLinkDescriptor,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { StreamSettlingDetector } from "./settling-detector.js";
 import { getClaudeResolveSelectorsExpr, getClaudeReadThreadExpr } from "./claude.scripts.js";
 
 export class ClaudeDriver implements PlatformPort {
   public readonly id: PlatformId = "claude";
 
-  public matchesUrl(url: string): boolean {
-    return url.includes("claude.ai");
-  }
-
-  public getBaseUrl(): string {
-    return "https://claude.ai/new";
-  }
-
+  public matchesUrl(url: string): boolean { return url.includes("claude.ai"); }
+  public getBaseUrl(): string { return "https://claude.ai/new"; }
   public extractThreadId(url: string): string {
     const match = url.match(/claude\.ai\/chat\/([a-zA-Z0-9_-]+)/);
     return match && match[1] ? match[1] : "";
   }
-
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
     return browser.evaluate<SelectorResolution>(handle, getClaudeResolveSelectorsExpr());
   }
@@ -95,20 +89,36 @@ export class ClaudeDriver implements PlatformPort {
     browser: BrowserPort,
     before: TurnFingerprint,
     timeoutMs: number,
+    quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
-    const pollIntervalMs = 500;
+    const detector = new StreamSettlingDetector(quiescenceMs);
+    const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
     while (Date.now() - start < timeoutMs) {
       const status = await browser.evaluate<{
-        turnsCount: number; hasNewTurn: boolean; isGenerating: boolean; assistantText: string; codeBlocks: Array<{ language: string; code: string }>;
+        turnsCount: number;
+        hasNewTurn: boolean;
+        isGenerating: boolean;
+        isThinking?: boolean;
+        assistantText: string;
+        codeBlocks: Array<{ language: string; code: string }>;
       }>(
         handle,
         `(() => {
           /* awaitCompletion */
           const stop = document.querySelector('button[aria-label="Stop Response"], button[aria-label*="Stop"]');
           const streamingEl = document.querySelector('div[data-is-streaming="true"]');
-          const isGenerating = Boolean(stop || streamingEl);
+          const isGenerating = Boolean((stop && stop.offsetParent !== null) || streamingEl);
+
+          const thinkingEl = document.querySelector('div[data-testid*="thought"], div[data-testid*="thinking"], div[class*="thinking"], button[aria-label*="Thinking"]');
+          const isThinking = Boolean(
+            thinkingEl && (
+              thinkingEl.querySelector('[class*="spin"], svg.animate-spin, .animate-pulse') ||
+              (thinkingEl.innerText || '').includes('Thinking...') ||
+              document.querySelector('div[data-is-streaming="true"] [class*="thinking"]')
+            )
+          );
 
           const turns = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]'));
           const last = turns.length > 0 ? turns[turns.length - 1] : null;
@@ -124,21 +134,35 @@ export class ClaudeDriver implements PlatformPort {
             });
           }
 
-          return { turnsCount: turns.length, hasNewTurn: turns.length > ${before.turnCount}, isGenerating, assistantText, codeBlocks };
+          return {
+            turnsCount: turns.length,
+            hasNewTurn: turns.length > ${before.turnCount},
+            isGenerating,
+            isThinking,
+            assistantText,
+            codeBlocks,
+          };
         })()`,
       );
 
-      const hasNewTurn = Boolean(status.hasNewTurn || (status.assistantText && status.assistantText.length > 0 && status.assistantText !== before.lastTurnHash));
+      const text = status.assistantText || (status as any).text || "";
+      const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+      const settled = hasNewTurn && detector.isSettled({
+        isGenerating: status.isGenerating,
+        isThinking: status.isThinking,
+        contentLength: text.length,
+        quiescenceMs,
+      });
 
-      if (hasNewTurn && !status.isGenerating && status.assistantText && status.assistantText.length > 0) {
+      if (settled) {
         return {
           status: "complete",
           turn: {
-            turnIndex: status.turnsCount - 1,
+            turnIndex: status.turnsCount !== undefined ? status.turnsCount - 1 : (status as any).turnIndex ?? 0,
             role: "assistant",
-            markdownContent: status.assistantText,
-            codeBlocks: status.codeBlocks,
-            contentHash: String(status.assistantText.length),
+            markdownContent: text,
+            codeBlocks: status.codeBlocks ?? [],
+            contentHash: String(text.length),
           },
           elapsedMs: Date.now() - start,
         };

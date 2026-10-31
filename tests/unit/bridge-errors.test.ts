@@ -4,6 +4,7 @@ import {
   BridgeError,
   BrowserConnectionError,
   LockAcquisitionError,
+  PlatformDriverNotFoundError,
   SelectorResolutionError,
   TabNotFoundError,
   TimeoutError,
@@ -39,7 +40,7 @@ describe("Domain Errors", () => {
   });
 
   it("handles LockAcquisitionError with owning PID", () => {
-    const err = new LockAcquisitionError("tab-123", 4567, "/run/user/1000/omni-bridge/tab-123.lock");
+    const err = new LockAcquisitionError("tab-123", 4567, "/run/user/1000/convolink/tab-123.lock");
     expect(err.code).toBe("ERR_LOCK_ACQUISITION");
     expect(err.holdingPid).toBe(4567);
   });
@@ -48,5 +49,13 @@ describe("Domain Errors", () => {
     const err = new AuthChallengeError("cloudflare", "https://chatgpt.com");
     expect(err.code).toBe("ERR_AUTH_CHALLENGE");
     expect(err.challengeType).toBe("cloudflare");
+  });
+
+  it("handles PlatformDriverNotFoundError with URL and ERR_PLATFORM_NOT_FOUND code", () => {
+    const err = new PlatformDriverNotFoundError("https://unknown-service.com");
+    expect(err.code).toBe("ERR_PLATFORM_NOT_FOUND");
+    expect(err.url).toBe("https://unknown-service.com");
+    expect(err.message).toContain("https://unknown-service.com");
+    expect(err.details).toEqual({ url: "https://unknown-service.com" });
   });
 });

@@ -27,3 +27,36 @@ export interface ThreadStore {
   listThreads(platform?: PlatformId): Promise<ThreadRecord[]>;
   searchTurns?(query: string, limit?: number): Promise<SearchResult[]>;
 }
+
+export interface CodeArtifact {
+  readonly relativePath: string;
+  readonly content: string;
+  readonly language?: string;
+  readonly isExplicitPath?: boolean;
+}
+
+export interface PersistOptions {
+  readonly outDir: string;
+  readonly overwrite?: boolean;
+}
+
+export interface WrittenFileRecord {
+  readonly path: string;
+  readonly relativePath: string;
+  readonly bytes: number;
+}
+
+export interface SkippedFileRecord {
+  readonly path: string;
+  readonly relativePath: string;
+  readonly reason: string;
+}
+
+export interface PersistResult {
+  readonly writtenFiles: readonly WrittenFileRecord[];
+  readonly skippedFiles: readonly SkippedFileRecord[];
+}
+
+export interface WorkspaceSinkPort {
+  persist(artifacts: readonly CodeArtifact[], options: PersistOptions): Promise<PersistResult>;
+}

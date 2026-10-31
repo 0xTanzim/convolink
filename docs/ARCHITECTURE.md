@@ -41,8 +41,9 @@
 ├─────────────────────────┤  ├──────────────────────┤  ├─────────────────────┤
 │ • DeepSeekDriver        │  │ • SqliteLedgerAdapter│  │ • RawCdpAdapter     │
 │ • ChatGPTDriver         │  │   ($XDG_DATA_HOME/   │  │ • FirefoxBidiAdapter│
-│ • GeminiDriver          │  │    ledger.sqlite)    │  │ • PlaywrightAdapter │
-│                         │  │ • WorkspaceSink      │  │ • AgentBrowserAdapter
+│ • ClaudeDriver          │  │    ledger.sqlite)    │  │ • AgentBrowserAdapter
+│ • GeminiDriver          │  │ • WorkspaceSinkAdapter│ │ (playwright pruned) │
+│ • SettlingDetector      │  │                      │  │                     │
 └─────────────────────────┘  └──────────────────────┘  └─────────────────────┘
 ```
 
@@ -64,29 +65,27 @@ No file within `src/core/` may import any browser automation framework, WebSocke
 
 ---
 
-## 3. Core Subsystems
+## 3. Core Subsystems & The Three Pillars
 
-### 3.1 Session Orchestrator (`src/core/services/orchestrator.ts`)
-The central coordinator that:
-1. Detects available platform tabs via `TabResolver`.
-2. Acquires tab mutex locks via `LockService`.
-3. Auto-provisions background tabs if requested via `TabManagerService`.
-4. Sanitizes outbound prompts via `PolicyService`.
-5. Dispatches execution to the corresponding `PlatformDriver`.
-6. Handles multi-chunk stream continuations and artifact extraction.
-7. Persists completed turns to `ThreadStore`.
-8. Safely detaches session handles without terminating user tabs.
+### 3.1 Pillar 1: Context Bridge Subsystems
+- **Durable Turn Ledger (`src/adapters/storage/sqlite-ledger.adapter.ts`):** Implements `ThreadStore` backed by `bun:sqlite` in WAL mode with FTS5 BM25 search. Durably records symmetric conversation turns (user prompt at turn N, assistant response at N+1) at `$XDG_DATA_HOME/convolink/ledger.sqlite`.
+- **Thread Serialization & Export (`src/core/services/thread-export.service.ts`):** Converts historical conversation threads and extracted code blocks into formatted Markdown or JSON context packets (`convo export <threadId>`).
+- **Session Resumption:** Restores context and navigates browser tabs to active thread URLs via `convo resume <threadId>`.
 
-### 3.2 Multi-Model Comparison & Technical Arbiter (`src/core/services/comparison-engine.ts`)
-- **Staggered Dispatch:** Dispatches parallel queries with a 250ms offset to avoid CDP frame saturation.
-- **Failure Domain Isolation:** Wraps individual queries in `Promise.allSettled`, allowing healthy models to finish even if one times out or triggers a CAPTCHA.
-- **Stage 2 Technical Arbiter:** Gathers candidate outputs and prompts an arbiter reasoning model (e.g. DeepSeek R1) to critique flaws and deliver a synthesized consensus solution.
+### 3.2 Pillar 2: Intelligence Bridge Subsystems
+- **Multi-Model Comparison Engine (`src/core/services/comparison-engine.ts`):** Dispatches parallel queries across ChatGPT, Claude, DeepSeek, and Gemini with staggered 250ms offsets to prevent CDP frame congestion. Uses `Promise.allSettled` for isolated failure domains.
+- **Stage 2 Technical Arbiter (`src/core/services/comparison-coordinator.service.ts`):** Gathers candidate outputs and prompts an arbiter reasoning model (e.g. DeepSeek R1) to critique flaws and deliver a synthesized consensus solution (`convo compare --arbitrate`).
+- **Asymmetric Delegation & Thinking Toggles:** Allows local agents to query frontier models via `convo ask` with `--think` and live web search grounding.
 
-### 3.3 Storage Subsystem (`src/adapters/storage/sqlite-ledger.adapter.ts`)
-- Implements `ThreadStore` backed by `bun:sqlite`.
-- Stores immutable turns, extracted code blocks, and context packets in `$XDG_DATA_HOME/convolink/ledger.sqlite`.
-- Enables CLI `convo export` and `convo resume`.
+### 3.3 Pillar 3: Capability Bridge Subsystems
+- **Session Orchestrator (`src/core/services/orchestrator.ts`):** Central coordinator handling tab discovery (`TabResolver`), mutual exclusion (`LockService`), outbound security sanitization (`PolicyService`), prompt submission, and stream continuation loops.
+- **3-Signal Streaming Settling (`src/adapters/platforms/settling-detector.ts`):** Ensures complete responses by conjoining:
+  1. Action container state (stop button / loading spinner absent).
+  2. Thinking container transition (collapsible details closed / static).
+  3. Quiescence window: zero DOM mutations or length changes for >= 400ms.
+- **Artifact Extraction & Storage Sink (`src/core/services/artifact.service.ts` & `src/adapters/storage/workspace-sink.adapter.ts`):** Parses `// filepath:` directives and persists multi-file code trees directly to the workspace with path-traversal containment.
+- **PID-Aware `tmpfs` Mutex Locking (`src/core/services/lock.service.ts`):** Enforces single-agent access to tabs with 180s TTL, active heartbeat lease renewal, and automatic reclamation of stale dead-PID locks with console warnings.
 
 ### 3.4 Inbound Entrypoints
-- **CLI (`src/entrypoints/cli.ts`):** High-speed terminal commands (`ask`, `compare`, `doctor`, `export`, `resume`, `undo`, `tab`, `mcp`).
-- **MCP Server (`src/entrypoints/mcp.server.ts`):** Standard JSON-RPC 2.0 stdio server exposing `convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, and `convo_undo`.
+- **CLI (`src/entrypoints/cli.ts`):** High-speed terminal commands (`doctor`, `list`, `ask`, `compare`, `tab`, `back`, `undo`, `history`, `resume`, `export`, `search`, `mcp`).
+- **MCP Server (`src/entrypoints/mcp.server.ts`):** Standard JSON-RPC 2.0 stdio server exposing 8 tools: `convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`, `convo_search`, and `convo_export`.

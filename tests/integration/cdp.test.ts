@@ -1,7 +1,20 @@
 import { describe, expect, it } from "bun:test";
 import { RawCdpAdapter } from "../../src/adapters/browsers/raw-cdp.adapter.js";
 
-describe("RawCdpAdapter Integration (Port 9222)", () => {
+async function isCdpAvailable(port = 9222): Promise<boolean> {
+  try {
+    const res = await fetch(`http://127.0.0.1:${port}/json/version`, {
+      signal: AbortSignal.timeout(500),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+const cdpAvailable = await isCdpAvailable(9222);
+
+describe.skipIf(!cdpAvailable)("RawCdpAdapter Integration (Port 9222)", () => {
   it("queries transport health against running Chrome instance", async () => {
     const adapter = new RawCdpAdapter(9222);
     const health = await adapter.health();

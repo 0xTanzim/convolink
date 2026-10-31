@@ -2,13 +2,15 @@ import readline from "node:readline";
 import { createContainer } from "../container.js";
 import { McpServer, type JsonRpcRequest } from "./mcp.server.js";
 
-export async function runMcpServer(): Promise<void> {
-  const container = createContainer();
-  const server = new McpServer(container.orchestrator);
+export async function runMcpServer(
+  input: NodeJS.ReadableStream = process.stdin,
+  output: NodeJS.WritableStream = process.stdout,
+  server?: McpServer,
+): Promise<void> {
+  const mcpServer = server ?? new McpServer(createContainer().orchestrator);
 
   const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout,
+    input,
     terminal: false,
   });
 
@@ -18,9 +20,9 @@ export async function runMcpServer(): Promise<void> {
 
     try {
       const request = JSON.parse(trimmed) as JsonRpcRequest;
-      const response = await server.handleMessage(request);
+      const response = await mcpServer.handleMessage(request);
       if (response) {
-        process.stdout.write(JSON.stringify(response) + "\n");
+        output.write(JSON.stringify(response) + "\n");
       }
     } catch (err: unknown) {
       const errorResponse = {
@@ -32,7 +34,7 @@ export async function runMcpServer(): Promise<void> {
           data: err instanceof Error ? err.message : String(err),
         },
       };
-      process.stdout.write(JSON.stringify(errorResponse) + "\n");
+      output.write(JSON.stringify(errorResponse) + "\n");
     }
   }
 }

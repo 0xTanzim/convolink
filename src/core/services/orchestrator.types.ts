@@ -10,9 +10,10 @@ import type { BrowserPort } from "../ports/browser.port.js";
 import type { PolicyGatePort, RiskLabel } from "../ports/policy.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService, ExtractedArtifact } from "./artifact.service.js";
-import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { WorkspaceSinkPort, ThreadStore } from "../ports/storage.port.js";
 import type { StateJournalService } from "./journal.service.js";
-import type { ThreadStore } from "../ports/storage.port.js";
+import type { TabManagerService } from "./tab-manager.service.js";
+import type { ComparisonCoordinator } from "./comparison-coordinator.service.js";
 
 export interface DiscoveredTab {
   readonly targetId: string;
@@ -71,7 +72,9 @@ export interface OrchestratorDependencies {
   readonly lockService: LockService;
   readonly policyGate: PolicyGatePort;
   readonly artifactService?: ArtifactService;
-  readonly fileSink?: WorkspaceFileSink;
+  readonly fileSink?: WorkspaceSinkPort;
   readonly journalService?: StateJournalService;
   readonly threadStore?: ThreadStore;
+  readonly tabManager?: TabManagerService;
+  readonly comparisonCoordinator?: ComparisonCoordinator;
 }

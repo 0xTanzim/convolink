@@ -10,13 +10,20 @@ The system SHALL persist all conversation prompts and assistant completions in a
 
 #### Scenario: Appending turn during ask
 - **WHEN** client executes `convo ask` to a platform tab
-- **THEN** system upserts the thread entry and records the user prompt and assistant response with exact code blocks preserved in `$XDG_DATA_HOME/convolink/ledger.sqlite`
+- **THEN** system upserts the thread entry and records both user prompt and assistant response with exact code blocks preserved in `$XDG_DATA_HOME/convolink/ledger.sqlite`
+
+### Requirement: Full-Text Ledger Search
+The system SHALL provide high-speed full-text search across historical conversation turns and extracted code blocks using SQLite FTS5.
+
+#### Scenario: Searching ledger turns
+- **WHEN** client runs `convo search <query>`
+- **THEN** system queries the FTS5 virtual table and returns ranked matching snippets with thread ID and turn index
 
 ### Requirement: Thread Exporting
 The system SHALL export recorded conversation turns as formatted Markdown or structured JSON context packets.
 
 #### Scenario: Exporting thread as Markdown
-- **WHEN** client runs `convo export <threadId> --format md`
+- **WHEN** client runs `convo export <threadId> --format markdown`
 - **THEN** system queries all recorded turns in ascending order and emits a formatted conversation ledger
 
 ### Requirement: Thread Resumption

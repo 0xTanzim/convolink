@@ -6,7 +6,8 @@ export type BridgeErrorCode =
   | "ERR_TIMEOUT"
   | "ERR_LOCK_ACQUISITION"
   | "ERR_AUTH_CHALLENGE"
-  | "ERR_POLICY_VIOLATION";
+  | "ERR_POLICY_VIOLATION"
+  | "ERR_PLATFORM_NOT_FOUND";
 
 export class BridgeError extends Error {
   public readonly code: BridgeErrorCode;
@@ -109,7 +110,7 @@ export class PlatformDriverNotFoundError extends BridgeError {
   public readonly url: string;
 
   constructor(url: string) {
-    super(`No platform driver registered matching URL: ${url}`, "ERR_GENERAL", { url });
+    super(`No platform driver registered matching URL: ${url}`, "ERR_PLATFORM_NOT_FOUND", { url });
     this.url = url;
   }
 }

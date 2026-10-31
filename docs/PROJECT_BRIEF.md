@@ -23,13 +23,22 @@ Existing automation tools fall short because they:
 
 ---
 
-## 3. Product Vision & Solutions
+## 3. Product Vision & The Three Pillars
 
-ConvoLink transforms authenticated browser tabs into an active, stateful intelligence layer for local workflows:
+ConvoLink transforms authenticated browser tabs into an active, stateful intelligence layer for local workflows through Three Core Pillars:
 
-1. **Direct Session Connection:** Connects via Chrome DevTools Protocol (CDP) or W3C WebDriver BiDi to the developer's live browser tabs without spawning new profiles or stealing window focus.
-2. **Multi-Model Comparison & Arbitration:** Broadcasts prompts simultaneously across ChatGPT, DeepSeek, and Gemini, benchmarks response latency and code volume, and synthesizes a unified consensus solution via a Technical Arbiter.
-3. **Automated Multi-File Artifact Extraction:** Automatically parses `// filepath:` directives and writes structured files directly to the local filesystem.
-4. **Autonomous Stream Continuation:** Clicks "Continue generating" and stitches multi-chunk stream completions seamlessly without human intervention.
-5. **Durable Local Ledger:** Persists conversation turns, extracted code blocks, and context packets in a local SQLite database for instant resumption and documentation export.
-6. **Unified Agent Access:** Exposes capabilities both as a sub-second terminal CLI (`convo`) and as a native Model Context Protocol (MCP) server over standard I/O.
+### 3.1 Pillar 1: Context Bridge
+1. **Durable Local Ledger:** Persists conversation turns, extracted code blocks, and context packets in a local SQLite database (`bun:sqlite` with WAL mode and FTS5 search) for instant resumption and documentation export.
+2. **Symmetric Turn Capture:** Records user prompt turns alongside assistant responses to ensure faithful transcript recreation and cache-stable context packets (`.convo/CONTEXT.md`).
+3. **Session Continuity & Portability:** Enables instant thread export (`convo export`) and browser session resumption (`convo resume`) across restarts.
+
+### 3.2 Pillar 2: Intelligence Bridge
+4. **Direct Session Connection:** Connects via Chrome DevTools Protocol (CDP) or W3C WebDriver BiDi to the developer's live browser tabs without spawning new profiles or stealing window focus.
+5. **Multi-Model Comparison & Arbitration:** Broadcasts prompts simultaneously across ChatGPT, Claude, DeepSeek, and Gemini, benchmarks response latency and code volume, and synthesizes a unified consensus solution via a Technical Arbiter (`convo compare --arbitrate`).
+6. **Asymmetric Intelligence Delegation:** Allows cost-effective local agents to borrow upstream reasoning (DeepSeek R1, ChatGPT Think) and live web search grounding on demand.
+
+### 3.3 Pillar 3: Capability Bridge
+7. **Automated Multi-File Artifact Extraction:** Automatically parses `// filepath:` directives and writes structured code files directly to the local filesystem with path-traversal protection.
+8. **Autonomous Stream Continuation:** Clicks "Continue generating" and stitches multi-chunk stream completions seamlessly without human intervention.
+9. **Non-Blocking Security Gating:** Scrubs outbound secrets (API keys, JWTs, AWS credentials, `.env` variables) and tags destructive inbound shell commands without deadlocking agent `stdio`.
+10. **Zero Window-Focus Theft & tmpfs Mutexes:** Uses background CDP lifecycle commands and RAM-backed mutex locks (`$XDG_RUNTIME_DIR/convolink/`) to guarantee developer desktop focus is never interrupted.

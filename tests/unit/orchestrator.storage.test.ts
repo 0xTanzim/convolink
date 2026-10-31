@@ -34,8 +34,13 @@ describe("SessionOrchestrator Durable Ledger (Resume & Export)", () => {
     expect(threads[0]?.title).toBe("DeepSeek");
 
     const turns = await store.getTurns(threads[0]!.threadId);
-    expect(turns.length).toBe(1);
-    expect(turns[0]?.markdownContent).toContain("Persisted turn output");
+    expect(turns.length).toBe(2);
+    expect(turns[0]?.role).toBe("user");
+    expect(turns[0]?.markdownContent).toBe("Hello persistence");
+    expect(turns[0]?.turnIndex).toBe(0);
+    expect(turns[1]?.role).toBe("assistant");
+    expect(turns[1]?.markdownContent).toContain("Persisted turn output");
+    expect(turns[1]?.turnIndex).toBe(1);
 
     store.close();
   });

@@ -7,6 +7,15 @@
 
 ---
 
+## 0. The Three Architectural Pillars
+
+ConvoLink is architected around Three Core Pillars connecting upstream web AI conversations to local autonomous agents:
+1. **Context Bridge:** Durable conversation ledger (`ThreadStore` over SQLite FTS5 in WAL mode), symmetric turn persistence (user prompts + assistant responses), thread portability (`convo export`), full-text search (`convo search`), and compiled snapshots (`.convo/CONTEXT.md`).
+2. **Intelligence Bridge:** Real-time web AI tab interaction (`convo ask`), parallel multi-model comparison (`convo compare`), Stage 2 Technical Arbiter consensus synthesis (`--arbitrate`), deep thinking toggles (`--think`), and live web search grounding borrowing.
+3. **Capability Bridge:** Native browser automation (`RawCdpAdapter`, `FirefoxBidiAdapter`), multi-file code artifact extraction (`// filepath:` via `ArtifactService` and `WorkspaceFileSink`), automated multi-chunk stream continuation, PID-aware `tmpfs` mutex locking (`$XDG_RUNTIME_DIR/convolink/`), and non-blocking security gating (`PolicyGatePort`).
+
+---
+
 ## 1. Architectural Core Principles
 
 Every contributor and AI agent operating in this repository MUST abide by the following foundational architectural mandates. Violations will result in rejected pull requests.
@@ -23,7 +32,7 @@ Every contributor and AI agent operating in this repository MUST abide by the fo
 
 ### 1.3 State Decoupling & Thread Portability
 - The browser tab is **elastic, transient compute**, NOT the durable source of truth.
-- Durable state resides in the append-only ledger (`ThreadStore`) and compiled snapshots (`.omni/CONTEXT.md`). If a browser tab crashes or is closed, the session state MUST survive and be rehydratable into a new tab via `rollover()`.
+- Durable state resides in the append-only ledger (`ThreadStore`) and compiled snapshots (`.convo/CONTEXT.md`). If a browser tab crashes or is closed, the session state MUST survive and be rehydratable into a new tab via `rollover()`.
 
 ---
 
@@ -56,7 +65,7 @@ No production code may be authored unless preceded by an automated test that fai
 ### 3.2 Testing Boundaries
 - **Unit Tests (`tests/unit/`):** Test `src/core/` entities, services, and compilation logic using pure in-memory test doubles (`FakeBrowserPort`, `FakeThreadStore`). Unit test suites must execute in `< 100ms` and require zero external daemons or network listeners.
 - **Integration Tests (`tests/integration/`):** Test adapters against either deterministic CDP mock WebSocket servers or an active local Chrome session on `127.0.0.1:9222`.
-- **E2E / CLI Tests (`tests/e2e/`):** Validate end-to-end CLI commands (`omni doctor`, `omni sync`, `omni ask`) via subprocess execution under controlled environments.
+- **E2E / CLI Tests (`tests/e2e/`):** Validate end-to-end CLI commands (`convo doctor`, `convo ask`, `convo compare`, `convo export`, `convo search`) via subprocess execution under controlled environments.
 
 ---
 
@@ -126,18 +135,19 @@ convolink/
 │   │   └── errors/                # Strongly-typed domain error classes
 │   │       └── bridge-errors.ts
 │   ├── adapters/                  # INFRASTRUCTURE IMPLEMENTATIONS
-│   │   ├── browsers/              # Transports (Raw CDP, Firefox BiDi, Playwright, agent-browser)
+│   │   ├── browsers/              # Transports (Raw CDP, Firefox BiDi, agent-browser)
 │   │   │   ├── raw-cdp.adapter.ts
 │   │   │   ├── firefox-bidi.adapter.ts
-│   │   │   ├── playwright.adapter.ts
 │   │   │   └── agent-browser.adapter.ts
-│   │   ├── platforms/             # Platform drivers (DeepSeek, ChatGPT, Gemini)
-│   │   │   ├── deepseek.driver.ts
+│   │   ├── platforms/             # Platform drivers (ChatGPT, Claude, DeepSeek, Gemini)
 │   │   │   ├── chatgpt.driver.ts
-│   │   │   └── gemini.driver.ts
+│   │   │   ├── claude.driver.ts
+│   │   │   ├── deepseek.driver.ts
+│   │   │   ├── gemini.driver.ts
+│   │   │   └── settling-detector.ts
 │   │   └── storage/               # Persistence adapters
 │   │       ├── sqlite-ledger.adapter.ts
-│   │       └── workspace-md.adapter.ts
+│   │       └── workspace-sink.adapter.ts
 │   ├── entrypoints/               # INBOUND INTERFACES
 │   │   ├── cli.ts                 # CLI commands (doctor, ask, compare, export, resume, mcp)
 │   │   ├── mcp.server.ts          # Model Context Protocol stdio server

@@ -5,13 +5,13 @@ import { ChatGPTDriver } from "../../src/adapters/platforms/chatgpt.driver.js";
 import { LockService } from "../../src/core/services/lock.service.js";
 import { PolicyService } from "../../src/core/services/policy.service.js";
 import { ArtifactService } from "../../src/core/services/artifact.service.js";
-import { WorkspaceFileSink } from "../../src/core/services/workspace-sink.service.js";
+import { WorkspaceFileSinkAdapter } from "../../src/adapters/storage/workspace-sink.adapter.js";
 import os from "node:os";
 import path from "node:path";
 import fs from "node:fs";
 
 describe("SessionOrchestrator Artifacts & Continuation", () => {
-  const tmpOutDir = path.join(os.tmpdir(), `omni-orch-test-${Date.now()}`);
+  const tmpOutDir = path.join(os.tmpdir(), `convo-orch-test-${Date.now()}`);
 
   it("extracts code artifacts and writes them to workspace when writeFiles: true", async () => {
     const browser = new FakeBrowserPort();
@@ -37,7 +37,7 @@ describe("SessionOrchestrator Artifacts & Continuation", () => {
       lockService: new LockService(),
       policyGate: new PolicyService(),
       artifactService: new ArtifactService(),
-      fileSink: new WorkspaceFileSink(),
+      fileSink: new WorkspaceFileSinkAdapter(),
     });
 
     const result = await orchestrator.ask({

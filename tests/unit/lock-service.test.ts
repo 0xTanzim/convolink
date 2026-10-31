@@ -2,11 +2,12 @@ import { afterEach, beforeEach, describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { HostEnv } from "../../src/core/env/host-env.js";
 import { LockAcquisitionError } from "../../src/core/errors/bridge-errors.js";
 import { LockService } from "../../src/core/services/lock.service.js";
 
 describe("LockService", () => {
-  const testDir = path.join(os.tmpdir(), "omni-bridge-test-locks-" + Math.random().toString(36).slice(2));
+  const testDir = path.join(os.tmpdir(), "convolink-test-locks-" + Math.random().toString(36).slice(2));
   const originalXdg = process.env.XDG_RUNTIME_DIR;
 
   beforeEach(() => {
@@ -23,6 +24,10 @@ describe("LockService", () => {
     } else {
       process.env.XDG_RUNTIME_DIR = originalXdg;
     }
+  });
+
+  it("has default TTL of 180 seconds per AGENTS.md §4.2", () => {
+    expect(LockService.DEFAULT_TTL_MS).toBe(180_000);
   });
 
   it("acquires and releases an uncontested lock", async () => {
@@ -46,8 +51,8 @@ describe("LockService", () => {
 
   it("reclaims stale lock when holding PID is dead", async () => {
     const lockService = new LockService();
-    const lockPath = path.join(testDir, "omni-bridge", "tab-target-dead.lock");
-    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    HostEnv.ensureDirs();
+    const lockPath = HostEnv.getTabLockPath("target-dead");
 
     // Use a PID that is virtually guaranteed to not exist (e.g. 9999999)
     const deadPayload = {
@@ -66,10 +71,36 @@ describe("LockService", () => {
     await lockService.releaseLock(handle);
   });
 
+  it("logs a warning when reclaiming a stale lock", async () => {
+    const lockService = new LockService();
+    HostEnv.ensureDirs();
+    const lockPath = HostEnv.getTabLockPath("target-stale-warn");
+    const deadPayload = {
+      pid: 9999999,
+      targetId: "target-stale-warn",
+      acquiredAt: new Date(Date.now() - 5000).toISOString(),
+      expiresAt: Date.now() + 60000,
+    };
+    fs.writeFileSync(lockPath, JSON.stringify(deadPayload), "utf8");
+
+    const originalWarn = console.warn;
+    let warned = false;
+    console.warn = (..._args: unknown[]) => {
+      warned = true;
+    };
+    try {
+      const handle = await lockService.acquireLock("target-stale-warn");
+      expect(warned).toBe(true);
+      await lockService.releaseLock(handle);
+    } finally {
+      console.warn = originalWarn;
+    }
+  });
+
   it("reclaims expired lock even if PID check is inconclusive", async () => {
     const lockService = new LockService();
-    const lockPath = path.join(testDir, "omni-bridge", "tab-target-expired.lock");
-    fs.mkdirSync(path.dirname(lockPath), { recursive: true });
+    HostEnv.ensureDirs();
+    const lockPath = HostEnv.getTabLockPath("target-expired");
 
     const expiredPayload = {
       pid: process.pid,
@@ -97,6 +128,16 @@ describe("LockService", () => {
     expect(executed).toBe(true);
     expect(result).toBe(42);
     expect(lockService.isLocked("target-wrap")).toBe(false);
+  });
+
+  it("passes LockHandle to withLock callback", async () => {
+    const lockService = new LockService();
+    let receivedHandle: unknown = null;
+    await lockService.withLock("target-cb", async (handle) => {
+      receivedHandle = handle;
+    });
+    expect(receivedHandle).not.toBeNull();
+    expect((receivedHandle as any).targetId).toBe("target-cb");
   });
 
   it("renews lock lease via renewLock to prevent expiry during long-running tasks", async () => {

@@ -1,7 +1,7 @@
 import type { PlatformId } from "../ports/platform.port.js";
 import type { SessionOrchestrator } from "./orchestrator.js";
 import type { TabManagerService } from "./tab-manager.service.js";
-import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { WorkspaceSinkPort } from "../ports/storage.port.js";
 import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
 import { ComparisonEngineService } from "./comparison-engine.service.js";
@@ -9,27 +9,37 @@ import { ComparisonReportService } from "./comparison-report.service.js";
 import { TabNotFoundError } from "../errors/bridge-errors.js";
 
 export class ComparisonCoordinator {
-  private readonly orchestrator: SessionOrchestrator;
+  private orchestrator?: SessionOrchestrator;
   private readonly tabManager: TabManagerService;
-  private readonly fileSink?: WorkspaceFileSink;
-  private readonly engine: ComparisonEngineService;
+  private readonly fileSink?: WorkspaceSinkPort;
+  private engine?: ComparisonEngineService;
   private readonly reporter: ComparisonReportService;
 
   public constructor(
-    orchestrator: SessionOrchestrator,
-    tabManager: TabManagerService,
-    fileSink?: WorkspaceFileSink,
+    orchestrator?: SessionOrchestrator,
+    tabManager?: TabManagerService,
+    fileSink?: WorkspaceSinkPort,
   ) {
-    this.orchestrator = orchestrator;
-    this.tabManager = tabManager;
+    this.tabManager = tabManager!;
     this.fileSink = fileSink;
-    this.engine = new ComparisonEngineService((tab, prompt, timeoutMs) =>
-      this.orchestrator.ask({ prompt, targetId: tab.targetId, timeoutMs }),
-    );
     this.reporter = new ComparisonReportService();
+    if (orchestrator) {
+      this.bindOrchestrator(orchestrator);
+    }
+  }
+
+  public bindOrchestrator(orchestrator: SessionOrchestrator): void {
+    this.orchestrator = orchestrator;
+    this.engine = new ComparisonEngineService((tab, prompt, timeoutMs) =>
+      orchestrator.ask({ prompt, targetId: tab.targetId, timeoutMs }),
+    );
   }
 
   public async run(options: CompareOptions): Promise<ComparisonReport> {
+    if (!this.orchestrator || !this.engine) {
+      throw new Error("ComparisonCoordinator has not been bound to an orchestrator instance");
+    }
+
     const platforms: PlatformId[] = options.platforms && options.platforms.length > 0
       ? options.platforms
       : ["chatgpt", "deepseek", "gemini"];

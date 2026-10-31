@@ -42,17 +42,30 @@ Submit a prompt to an active or background AI browser tab (`chatgpt`, `claude`, 
 **Parameters:**
 - `prompt` (*string, required*): The prompt or instructions to send.
 - `platform` (*string, optional*): Target platform (`"chatgpt"` | `"claude"` | `"deepseek"` | `"gemini"`). If omitted, ConvoLink matches the first ready tab.
+- `targetId` (*string, optional*): Target specific browser tab by CDP target ID.
+- `writeFiles` (*boolean, optional*): Automatically extract and persist code blocks to local workspace (default: `false`).
+- `outDir` (*string, optional*): Destination directory for extracted code blocks (default: `"./artifacts"`).
 - `newChat` (*boolean, optional*): When `true`, resets the session to a fresh chat before submitting.
 - `openTab` (*boolean, optional*): When `true`, automatically spawns a new background tab if none is open.
 - `think` (*boolean, optional*): Toggles deep thinking / reasoning models (e.g. DeepSeek R1, ChatGPT Think).
 - `search` (*boolean, optional*): Toggles web search grounding.
+
+**Return Payload Schema:**
+```json
+{
+  "text": "Generated response markdown...",
+  "writtenFiles": ["/path/to/artifacts/file1.ts"],
+  "riskLabels": ["contains_shell_execution"],
+  "redactedSecretsCount": 0
+}
+```
 
 ### `convo_compare`
 Broadcast a prompt across ChatGPT, Claude, DeepSeek, and Gemini in parallel with staggered dispatch, benchmark their outputs, and optionally synthesize a consensus solution via Technical Arbiter.
 
 **Parameters:**
 - `prompt` (*string, required*): The prompt or problem to evaluate.
-- `platforms` (*array of strings, optional*): Platforms to compare (defaults to `["chatgpt", "claude", "deepseek", "gemini"]`).
+- `platforms` (*array of strings, optional*): Platforms to compare (defaults to `["chatgpt", "deepseek", "gemini"]`).
 - `arbitrate` (*boolean, optional*): Execute stage 2 consensus synthesis via Technical Arbiter.
 - `arbiter` (*string, optional*): Designate the arbiter platform (e.g. `"deepseek"`).
 
@@ -61,7 +74,7 @@ Query the local SQLite FTS5 conversation ledger to find relevant turns, architec
 
 **Parameters:**
 - `query` (*string, required*): Search query or keywords.
-- `limit` (*number, optional*): Maximum number of search results to return (default: 5).
+- `limit` (*number, optional*): Maximum number of search results to return (default: 10).
 
 ### `convo_export`
 Export the full turn-by-turn conversation history and extracted code blocks for a specific thread ID as Markdown or JSON.

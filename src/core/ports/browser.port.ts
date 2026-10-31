@@ -1,4 +1,4 @@
-export type BrowserAdapterId = "raw-cdp" | "playwright" | "agent-browser" | "firefox-bidi";
+export type BrowserAdapterId = "raw-cdp" | "agent-browser" | "firefox-bidi";
 export type BrowserProtocol = "cdp" | "webdriver-bidi";
 export type BrowserFamily = "chromium" | "firefox" | "webkit" | "unknown";
 
@@ -36,9 +36,6 @@ export interface TransportHealth {
 export interface BrowserPort {
   readonly id: BrowserAdapterId;
   readonly capabilities?: BrowserCapabilities;
-
-  health(): Promise<TransportHealth>;
-  listTabs(): Promise<TabDescriptor[]>;
 
   health(): Promise<TransportHealth>;
   listTabs(): Promise<TabDescriptor[]>;

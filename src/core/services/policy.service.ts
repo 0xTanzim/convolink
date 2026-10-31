@@ -3,6 +3,11 @@ import type { PolicyGatePort, RiskLabel, SanitizedPayload } from "../ports/polic
 export class PolicyService implements PolicyGatePort {
   // Regex rules for sensitive secrets
   private static readonly SECRET_PATTERNS: Array<{ regex: RegExp; replace: (match: string, ...args: string[]) => string }> = [
+    // Generic .env assignments (unquoted, double-quoted, single-quoted): KEY_NAME=secret_val
+    {
+      regex: /\b([A-Z0-9_]*(?:KEY|SECRET|PASSWORD|TOKEN|AUTH)[A-Z0-9_]*)=(?:"([^"]+)"|'([^']+)'|([^\s"'`]+))/gi,
+      replace: (_m, key: string) => `${key}=[REDACTED_SECRET]`,
+    },
     // OpenAI / general API keys (e.g. sk-proj-...)
     {
       regex: /\bsk-[a-zA-Z0-9_-]{20,}\b/g,
@@ -13,15 +18,20 @@ export class PolicyService implements PolicyGatePort {
       regex: /\bghp_[a-zA-Z0-9]{36}\b/g,
       replace: () => "[REDACTED_SECRET]",
     },
-    // AWS Secret Access Keys
+    // Generic JWT tokens (eyJ...)
     {
-      regex: /\b(?<![A-Za-z0-9/+=])[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])\b/g,
+      regex: /\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}\b/g,
       replace: () => "[REDACTED_SECRET]",
     },
-    // Generic .env assignments: KEY_NAME=secret_val
+    // AWS Access Key ID (AKIA...)
     {
-      regex: /\b([A-Z0-9_]*(?:KEY|SECRET|PASSWORD|TOKEN|AUTH)[A-Z0-9_]*)=([^\s"'`]+)/gi,
-      replace: (_m, key: string) => `${key}=[REDACTED_SECRET]`,
+      regex: /\bAKIA[0-9A-Z]{16}\b/g,
+      replace: () => "[REDACTED_SECRET]",
+    },
+    // AWS Secret Access Keys (40 base64 characters, excluding 40-character lowercase hex git commit hashes)
+    {
+      regex: /(?<![A-Za-z0-9/+=])(?![0-9a-f]{40}(?![A-Za-z0-9/+=]))[A-Za-z0-9/+=]{40}(?![A-Za-z0-9/+=])/g,
+      replace: () => "[REDACTED_SECRET]",
     },
   ];
 

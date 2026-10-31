@@ -2,12 +2,12 @@ import { describe, expect, it } from "bun:test";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { WorkspaceFileSink } from "../../src/core/services/workspace-sink.service.js";
+import { WorkspaceFileSinkAdapter } from "../../src/adapters/storage/workspace-sink.adapter.js";
 import type { ExtractedArtifact } from "../../src/core/services/artifact.service.js";
 
-describe("WorkspaceFileSink", () => {
-  const tmpDir = path.join(os.tmpdir(), `omni-sink-test-${Date.now()}`);
-  const sink = new WorkspaceFileSink();
+describe("WorkspaceFileSinkAdapter", () => {
+  const tmpDir = path.join(os.tmpdir(), `convo-sink-test-${Date.now()}`);
+  const sink = new WorkspaceFileSinkAdapter();
 
   it("writes artifacts to disk creating nested parent directories", async () => {
     const artifacts: ExtractedArtifact[] = [
@@ -48,5 +48,36 @@ describe("WorkspaceFileSink", () => {
     expect(result.skippedFiles.length).toBe(1);
     expect(result.skippedFiles[0]?.reason).toContain("already exists");
     expect(fs.readFileSync(path.join(tmpDir, "README.md"), "utf8")).toBe("# Test Project");
+  });
+
+  it("rejects path traversal attempts outside target directory", async () => {
+    const artifacts: ExtractedArtifact[] = [
+      {
+        relativePath: "../../etc/evil.sh",
+        language: "bash",
+        content: "rm -rf /",
+        isExplicitPath: true,
+      },
+      {
+        relativePath: "/etc/passwd",
+        language: "text",
+        content: "root:x:0:0",
+        isExplicitPath: true,
+      },
+      {
+        relativePath: "safe/child.ts",
+        language: "typescript",
+        content: "export const safe = true;",
+        isExplicitPath: true,
+      },
+    ];
+
+    const result = await sink.persist(artifacts, { outDir: tmpDir, overwrite: true });
+
+    expect(result.skippedFiles.length).toBe(2);
+    expect(result.skippedFiles[0]?.reason).toContain("Path traversal detected");
+    expect(result.skippedFiles[1]?.reason).toContain("Path traversal detected");
+    expect(result.writtenFiles.length).toBe(1);
+    expect(fs.existsSync(path.join(tmpDir, "safe/child.ts"))).toBe(true);
   });
 });

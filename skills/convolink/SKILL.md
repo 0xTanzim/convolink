@@ -13,14 +13,21 @@ metadata:
 
 ConvoLink (`convolink` / `convo`) connects AI coding agents directly to existing, authenticated web sessions of ChatGPT, Claude, DeepSeek, and Google Gemini via Chrome DevTools Protocol (CDP).
 
-Use this skill whenever you need to:
+Use this skill across Three Core Pillars:
+
+### Pillar 1: Context Bridge
 1. **Bridge Upstream Architectural Context:** Ingest project specifications, design invariants, and mental models from upstream web conversations without manual human relays.
-2. **Delegate Complex Reasoning (Intelligence Bridge):** Let cost-effective local models consult frontier web AI models for difficult architectural judgment, debugging, or complex edge cases.
-3. **Borrow Upstream Web Capabilities:** Leverage extended thinking, live web search grounding, and deep research without metered API token charges.
-4. **Cross-Validate Decisions (`convo compare`):** Fan out architectural trade-offs across ChatGPT, Claude, DeepSeek, and Gemini simultaneously for consensus.
-5. **Generate Multi-File Artifacts:** Automatically extract source code blocks into files using `// filepath:` directives.
-6. **Handle Truncated Streams:** Automatically click "Continue generating" and stitch multi-chunk outputs seamlessly.
-7. **Coordinate Concurrent Queries:** Safely run multiple agents against browser tabs using PID-aware `tmpfs` mutex locks.
+2. **Durable Ledger & Session Resumption:** Record symmetric conversation turns in SQLite with FTS5 search (`convo search`), export structured transcripts (`convo export`), and resume sessions (`convo resume`).
+
+### Pillar 2: Intelligence Bridge
+3. **Delegate Complex Reasoning:** Let cost-effective local models consult frontier web AI models (ChatGPT, Claude, DeepSeek, Gemini) for difficult architectural judgment, debugging, or complex edge cases.
+4. **Cross-Validate Decisions (`convo compare`):** Fan out architectural trade-offs across ChatGPT, Claude, DeepSeek, and Gemini simultaneously with Stage 2 Technical Arbiter consensus synthesis (`--arbitrate`).
+5. **Borrow Upstream Web Capabilities:** Leverage extended thinking (`--think`), live web search grounding (`--search`), and deep research without metered API token charges.
+
+### Pillar 3: Capability Bridge
+6. **Generate Multi-File Artifacts:** Automatically extract source code blocks into workspace files using `// filepath:` directives.
+7. **Handle Truncated Streams:** Automatically click "Continue generating" and stitch multi-chunk outputs seamlessly.
+8. **Coordinate Concurrent Queries & Safety:** Safely run multiple agents against browser tabs using PID-aware `tmpfs` mutex locks and non-blocking secret scrubbing.
 
 ---
 
@@ -135,10 +142,7 @@ convo ask "Refactor auth" --transport raw-cdp
 # Firefox WebDriver BiDi: Connects directly to Firefox on port 9222 via W3C WebDriver BiDi
 convo ask "Refactor auth" --transport firefox-bidi
 
-# Playwright: Cross-browser automation engine
-convo ask "Refactor auth" --transport playwright
-
-# Agent-browser: Leverages installed agent-browser 0.39.2 CLI
+# Agent-browser: Leverages installed agent-browser CLI
 convo ask "Refactor auth" --transport agent-browser
 ```
 
@@ -168,7 +172,7 @@ Every conversation turn is durably persisted in `$XDG_DATA_HOME/convolink/ledger
 convo search "JWT refresh token rotation" --limit 5
 
 # Export full conversation turns and code blocks as structured Markdown
-convo export <threadId> --format md
+convo export <threadId> --format markdown
 
 # Export as JSON context packet
 convo export <threadId> --format json
@@ -187,6 +191,11 @@ convo mcp
 bun run bin/convolink-mcp.ts
 ```
 Exposed tools: `convo_ask`, `convo_compare`, `convo_search`, `convo_export`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`.  
+Tool responses return content text blocks alongside structured metadata:
+- `writtenFiles`: list of workspace files extracted and persisted to disk.
+- `riskLabels`: non-blocking classification tags (e.g. `contains_destructive_command`).
+- `redactedSecretsCount`: number of sensitive keys sanitized before execution.
+
 See [references/mcp.md](references/mcp.md) for IDE integration snippets and parameter schemas.
 
 ---

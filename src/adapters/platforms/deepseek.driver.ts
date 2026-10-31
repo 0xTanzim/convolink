@@ -11,19 +11,14 @@ import type {
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { StreamSettlingDetector } from "./settling-detector.js";
 import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr } from "./deepseek.scripts.js";
 
 export class DeepSeekDriver implements PlatformPort {
   public readonly id: PlatformId = "deepseek";
 
-  public getBaseUrl(): string {
-    return "https://chat.deepseek.com/";
-  }
-
-  public matchesUrl(url: string): boolean {
-    return url.includes("chat.deepseek.com");
-  }
-
+  public getBaseUrl(): string { return "https://chat.deepseek.com/"; }
+  public matchesUrl(url: string): boolean { return url.includes("chat.deepseek.com"); }
   public extractThreadId(url: string): string {
     const match = url.match(/\/s\/([a-zA-Z0-9-]+)/);
     return match && match[1] ? match[1] : "default";
@@ -100,15 +95,18 @@ export class DeepSeekDriver implements PlatformPort {
     browser: BrowserPort,
     before: TurnFingerprint,
     timeoutMs: number,
+    quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
-    const pollIntervalMs = 500;
+    const detector = new StreamSettlingDetector(quiescenceMs);
+    const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
     while (Date.now() - start < timeoutMs) {
       const status = await browser.evaluate<{
         mdCount: number;
         hasNewTurn?: boolean;
         isGenerating: boolean;
+        isThinking?: boolean;
         turnIndex: number;
         text: string;
         codeBlocks: Array<{ language: string; code: string }>;
@@ -118,10 +116,21 @@ export class DeepSeekDriver implements PlatformPort {
           /* awaitCompletion */
           const circleBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button');
           const svg = circleBtn ? circleBtn.querySelector('svg') : null;
+          const stopBtn = document.querySelector('button[aria-label*="Stop"]');
           const isGenerating = Boolean(
+            (stopBtn && stopBtn.offsetParent !== null) ||
             (svg && (svg.innerHTML.includes('linearGradient') || svg.classList.toString().includes('spin'))) ||
             (circleBtn && (circleBtn.querySelector('.ds-icon-spinning') || circleBtn.className.includes('loading')))
           );
+
+          const thought = document.querySelector('div.ds-thought, div[class*="ds-thought"], div[class*="thought"]');
+          const isThinking = Boolean(
+            thought && (
+              thought.querySelector('.ds-icon-spinning, .spinner, [class*="spin"]') ||
+              (thought.innerText || '').includes('Thinking...')
+            )
+          );
+
           const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
           const last = mdList.length > 0 ? mdList[mdList.length - 1] : null;
           const codeBlocks = last ? Array.from(last.querySelectorAll('pre')).map(p => {
@@ -129,16 +138,36 @@ export class DeepSeekDriver implements PlatformPort {
             const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
             return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
           }) : [];
-          return { mdCount: mdList.length, hasNewTurn: mdList.length > ${before.turnCount}, isGenerating, turnIndex: mdList.length - 1, text: last ? (last.innerText || '').trim() : '', codeBlocks };
+
+          const text = last ? (last.innerText || '').trim() : '';
+          return {
+            mdCount: mdList.length,
+            hasNewTurn: mdList.length > ${before.turnCount},
+            isGenerating,
+            isThinking,
+            turnIndex: mdList.length - 1,
+            text,
+            codeBlocks,
+          };
         })()`,
       );
 
-      const hasNewTurn = Boolean(status.hasNewTurn || (status.text && status.text.length > 0 && status.text !== before.lastTurnHash));
+      const text = status.text || (status as any).assistantText || "";
+      const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+      const settled = hasNewTurn && detector.isSettled({
+        isGenerating: status.isGenerating,
+        isThinking: status.isThinking,
+        contentLength: text.length,
+        quiescenceMs,
+      });
 
-      if (hasNewTurn && !status.isGenerating && status.text && status.text.length > 0) {
+      if (settled) {
         return {
           status: "complete",
-          turn: { turnIndex: status.turnIndex, role: "assistant", markdownContent: status.text, codeBlocks: status.codeBlocks, contentHash: String(status.text.length) },
+          turn: {
+            turnIndex: status.turnIndex, role: "assistant", markdownContent: text,
+            codeBlocks: status.codeBlocks, contentHash: String(text.length),
+          },
           elapsedMs: Date.now() - start,
         };
       }
@@ -150,12 +179,11 @@ export class DeepSeekDriver implements PlatformPort {
   }
 
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
-    const expr = `(() => {
+    return browser.evaluate<ContinuationTrigger>(handle, `(() => {
       /* findContinuationTrigger */
       const btn = document.querySelector('button.ds-button--continue, button[aria-label*="Continue"]');
       return { hasContinuation: Boolean(btn && btn.offsetParent !== null), triggerSelector: "button.ds-button--continue" };
-    })()`;
-    return browser.evaluate<ContinuationTrigger>(handle, expr);
+    })()`);
   }
 
   public async triggerContinuation(handle: SessionHandle, browser: BrowserPort): Promise<void> {
@@ -163,11 +191,9 @@ export class DeepSeekDriver implements PlatformPort {
   }
 
   public async findDownloadLinks(handle: SessionHandle, browser: BrowserPort): Promise<DownloadLinkDescriptor[]> {
-    const expr = `(() => {
+    return browser.evaluate<DownloadLinkDescriptor[]>(handle, `(() => {
       /* findDownloadLinks */
-      const anchors = Array.from(document.querySelectorAll('a[download], a[href^="blob:"]'));
-      return anchors.map(a => ({ url: a.href, filename: a.getAttribute('download') || undefined }));
-    })()`;
-    return browser.evaluate<DownloadLinkDescriptor[]>(handle, expr);
+      return Array.from(document.querySelectorAll('a[download], a[href^="blob:"]')).map(a => ({ url: a.href, filename: a.getAttribute('download') || undefined }));
+    })()`);
   }
 }

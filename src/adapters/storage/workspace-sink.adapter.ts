@@ -1,41 +1,39 @@
 import fs from "node:fs";
 import path from "node:path";
-import type { ExtractedArtifact } from "./artifact.service.js";
+import type {
+  CodeArtifact,
+  PersistOptions,
+  PersistResult,
+  SkippedFileRecord,
+  WorkspaceSinkPort,
+  WrittenFileRecord,
+} from "../../core/ports/storage.port.js";
 
-export interface PersistOptions {
-  readonly outDir: string;
-  readonly overwrite?: boolean;
-}
-
-export interface WrittenFileRecord {
-  readonly path: string;
-  readonly relativePath: string;
-  readonly bytes: number;
-}
-
-export interface SkippedFileRecord {
-  readonly path: string;
-  readonly relativePath: string;
-  readonly reason: string;
-}
-
-export interface PersistResult {
-  readonly writtenFiles: WrittenFileRecord[];
-  readonly skippedFiles: SkippedFileRecord[];
-}
-
-export class WorkspaceFileSink {
+export class WorkspaceFileSinkAdapter implements WorkspaceSinkPort {
   public async persist(
-    artifacts: readonly ExtractedArtifact[],
+    artifacts: readonly CodeArtifact[],
     options: PersistOptions,
   ): Promise<PersistResult> {
     const writtenFiles: WrittenFileRecord[] = [];
     const skippedFiles: SkippedFileRecord[] = [];
 
     const targetBaseDir = path.resolve(options.outDir);
+    const targetBasePrefix = targetBaseDir.endsWith(path.sep)
+      ? targetBaseDir
+      : `${targetBaseDir}${path.sep}`;
 
     for (const artifact of artifacts) {
-      const fullPath = path.join(targetBaseDir, artifact.relativePath);
+      const fullPath = path.resolve(targetBaseDir, artifact.relativePath);
+
+      // Path traversal containment check (F01 / MAT-02)
+      if (!fullPath.startsWith(targetBasePrefix)) {
+        skippedFiles.push({
+          path: fullPath,
+          relativePath: artifact.relativePath,
+          reason: "Security violation: Path traversal detected outside target base directory",
+        });
+        continue;
+      }
 
       if (fs.existsSync(fullPath) && !options.overwrite) {
         skippedFiles.push({
@@ -67,3 +65,5 @@ export class WorkspaceFileSink {
     };
   }
 }
+
+export { WorkspaceFileSinkAdapter as WorkspaceFileSink };

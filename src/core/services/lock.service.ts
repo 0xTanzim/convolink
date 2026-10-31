@@ -17,7 +17,7 @@ interface LockPayload {
 }
 
 export class LockService {
-  private static readonly DEFAULT_TTL_MS = 120_000; // 2 minutes
+  public static readonly DEFAULT_TTL_MS = 180_000; // 180 seconds (3 minutes) per AGENTS.md §4.2
 
   /**
    * Acquires an exclusive mutex lock on a target browser tab.
@@ -88,7 +88,7 @@ export class LockService {
    */
   public async withLock<T>(
     targetId: string,
-    action: () => Promise<T>,
+    action: (handle: LockHandle) => Promise<T>,
     ttlMs: number = LockService.DEFAULT_TTL_MS,
   ): Promise<T> {
     const handle = await this.acquireLock(targetId, ttlMs);
@@ -98,7 +98,7 @@ export class LockService {
     }, intervalMs);
 
     try {
-      return await action();
+      return await action(handle);
     } finally {
       clearInterval(timer);
       await this.releaseLock(handle);
@@ -132,8 +132,10 @@ export class LockService {
       const content = fs.readFileSync(lockPath, "utf8");
       payload = JSON.parse(content);
     } catch {
-      // Corrupt lock file -> safe to remove
-      fs.unlinkSync(lockPath);
+      console.warn(`[LockService] Reclaimed corrupt tab lock for target '${targetId}' at '${lockPath}'`);
+      try {
+        fs.unlinkSync(lockPath);
+      } catch {}
       return;
     }
 
@@ -143,7 +145,9 @@ export class LockService {
     const isOwnerAlive = this.isProcessAlive(payload.pid);
 
     if (isExpired || !isOwnerAlive) {
-      // Reclaim stale or dead process lock
+      console.warn(
+        `[LockService] Reclaimed stale tab lock for target '${targetId}' (held by pid ${payload.pid}, expired=${isExpired}, pidAlive=${isOwnerAlive})`,
+      );
       try {
         fs.unlinkSync(lockPath);
       } catch {}

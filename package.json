@@ -6,12 +6,10 @@
   "main": "src/index.ts",
   "bin": {
     "convolink": "./bin/convolink.ts",
-    "convo": "./bin/convo.ts",
-    "omni": "./bin/convolink.ts",
-    "omni-bridge": "./bin/convolink.ts"
+    "convo": "./bin/convo.ts"
   },
   "scripts": {
-    "test": "bun test",
+    "test": "bun test --parallel=1",
     "test:unit": "bun test tests/unit",
     "test:integration": "bun test tests/integration",
     "test:e2e": "bun test tests/e2e",
@@ -20,9 +18,7 @@
     "bridge": "bun run bin/convolink.ts",
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "playwright": "^1.50.0"
-  },
+  "dependencies": {},
   "devDependencies": {
     "@types/bun": "^1.4.4",
     "@types/node": "^22.13.0",

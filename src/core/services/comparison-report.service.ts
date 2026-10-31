@@ -5,7 +5,7 @@ import type {
   PlatformMetric,
   ArbitrationResult,
 } from "./comparison.types.js";
-import type { WorkspaceFileSink } from "./workspace-sink.service.js";
+import type { WorkspaceSinkPort } from "../ports/storage.port.js";
 
 export class ComparisonReportService {
   public computeMetrics(results: readonly ModelExecutionResult[]): PlatformMetric[] {
@@ -117,7 +117,7 @@ ${rawSections}
   public async saveNamespacedArtifacts(
     results: readonly ModelExecutionResult[],
     baseOutDir: string,
-    fileSink: WorkspaceFileSink,
+    fileSink: WorkspaceSinkPort,
   ): Promise<string[]> {
     const saved: string[] = [];
     for (const r of results) {

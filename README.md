@@ -5,7 +5,7 @@
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-137%20passing%20(bun:test)-success)](https://bun.sh)
+[![Tests](https://img.shields.io/badge/Tests-219%20passing%20(bun:test)-success)](https://bun.sh)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#-architecture)
 [![License](https://img.shields.io/badge/License-MIT-green)](#-license)
 
@@ -322,10 +322,10 @@ Supported environments include **Claude Code**, **Antigravity / Gemini CLI**, **
 - `--think`: Enable reasoning / deep-thinking mode (e.g. DeepSeek R1).
 - `--no-continue`: Disable automated multi-chunk continuation.
 - `--timeout <ms>`: Request timeout in milliseconds (default: `120000`).
-- `--transport <name>`: Transport engine: `raw-cdp` (default), `playwright`, `agent-browser`, or `firefox-bidi`.
+- `--transport <name>`: Transport engine: `raw-cdp` (default), `firefox-bidi`, or `agent-browser`.
 
 ### `convo compare` Flags
-- `--platforms <p1,p2>`: Comma-separated list of platforms (default: `chatgpt,claude,deepseek,gemini`).
+- `--platforms <p1,p2>`: Comma-separated list of platforms (default: `chatgpt,deepseek,gemini`).
 - `--arbitrate`: Trigger Stage 2 Technical Arbiter consensus synthesis.
 - `--arbiter <platform>`: Designate Arbiter judge (default: `deepseek`).
 - `--mode <parallel|sequential>`: Execution schedule (default: `parallel` with staggered 250ms dispatch).
@@ -364,7 +364,6 @@ flowchart TD
     subgraph Outbound ["Outbound Infrastructure Adapters (src/adapters/)"]
         subgraph Transports ["Browser Transports"]
             CDP["RawCdpAdapter (:9222 Native WebSocket)"]
-            PW["PlaywrightAdapter (connectOverCDP)"]
             BiDi["FirefoxBidiAdapter (W3C WebDriver BiDi)"]
             AB["AgentBrowserAdapter (agent-browser CLI)"]
         end
@@ -373,9 +372,11 @@ flowchart TD
             ClaudeDriver["ClaudeDriver (ProseMirror DOM)"]
             DeepSeekDriver["DeepSeekDriver (Vue Microtasks & R1)"]
             GeminiDriver["GeminiDriver (Quill DOM & Markdown)"]
+            SettlingDetector["StreamSettlingDetector (3-Signal Settling)"]
         end
         subgraph Storage ["Durable Persistence"]
             SqliteLedger["SqliteLedgerAdapter (bun:sqlite WAL & FTS5)"]
+            WorkspaceSink["WorkspaceSinkAdapter (Path-Traversed File Sink)"]
         end
     end
 
@@ -418,10 +419,10 @@ bun run typecheck
 
 ```text
 bun test v1.4.4
- 137 pass
+ 219 pass
  0 fail
- 430 expect() calls
-Ran 137 tests across 32 files. [1455.00ms]
+ 1325 expect() calls
+Ran 219 tests across 40 files. [7.89s]
 
 $ tsc --noEmit
 (0 errors)

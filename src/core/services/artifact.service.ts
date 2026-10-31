@@ -1,4 +1,3 @@
-import path from "node:path";
 import type { CodeBlock } from "../ports/platform.port.js";
 
 export interface ExtractedArtifact {
