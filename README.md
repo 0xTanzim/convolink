@@ -1,7 +1,7 @@
 # ConvoLink (`convolink` / `convo`)
 
 > **Your AI Architect and Coding Agent. Finally Connected.**  
-> *Connect your local autonomous coding agents (Cursor, Claude Code, Antigravity) directly to the upstream web AI conversations that hold your project's architectural knowledge, technical specifications, and engineering intent. Stop being the manual messenger between your AIs.*
+> *Your project has a brain in your web chat. Your coding agent has hands in your IDE. ConvoLink connects them. Programmatically link local autonomous coding agents (Cursor, Claude Code, Antigravity) directly to your live upstream web AI sessions (ChatGPT, Claude, DeepSeek, Gemini) for bidirectional specifications, doubt resolution, and multi-model consensus.*
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
@@ -398,6 +398,16 @@ Ran 137 tests across 32 files. [1455.00ms]
 $ tsc --noEmit
 (0 errors)
 ```
+
+---
+
+## 🧭 The Vision
+
+Software development is rapidly evolving toward autonomous agent execution. However, execution without architectural continuity produces code that compiles locally but drifts from the overarching engineering design.
+
+> **"Your project has a brain. Your coding agent has hands. ConvoLink connects them."**
+
+Stop acting as a manual messenger between your AIs. Let them communicate directly.
 
 ---
 
