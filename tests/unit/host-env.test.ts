@@ -11,7 +11,11 @@ describe("HostEnv", () => {
       const lockDir = HostEnv.getLockDir();
       expect(lockDir).toBe("/run/user/1000/convolink");
     } finally {
-      process.env.XDG_RUNTIME_DIR = originalXdg;
+      if (originalXdg === undefined) {
+        delete process.env.XDG_RUNTIME_DIR;
+      } else {
+        process.env.XDG_RUNTIME_DIR = originalXdg;
+      }
     }
   });
 
@@ -22,7 +26,11 @@ describe("HostEnv", () => {
       const lockDir = HostEnv.getLockDir();
       expect(lockDir).toBe(path.join(os.tmpdir(), "convolink"));
     } finally {
-      process.env.XDG_RUNTIME_DIR = originalXdg;
+      if (originalXdg === undefined) {
+        delete process.env.XDG_RUNTIME_DIR;
+      } else {
+        process.env.XDG_RUNTIME_DIR = originalXdg;
+      }
     }
   });
 
@@ -33,7 +41,11 @@ describe("HostEnv", () => {
       const dataDir = HostEnv.getDataDir();
       expect(dataDir).toBe("/home/test/.local/share/convolink");
     } finally {
-      process.env.XDG_DATA_HOME = originalXdgData;
+      if (originalXdgData === undefined) {
+        delete process.env.XDG_DATA_HOME;
+      } else {
+        process.env.XDG_DATA_HOME = originalXdgData;
+      }
     }
   });
 
@@ -44,7 +56,11 @@ describe("HostEnv", () => {
       const lockPath = HostEnv.getTabLockPath("tab-uuid-123");
       expect(lockPath).toBe("/run/user/1000/convolink/tab-tab-uuid-123.lock");
     } finally {
-      process.env.XDG_RUNTIME_DIR = originalXdg;
+      if (originalXdg === undefined) {
+        delete process.env.XDG_RUNTIME_DIR;
+      } else {
+        process.env.XDG_RUNTIME_DIR = originalXdg;
+      }
     }
   });
 

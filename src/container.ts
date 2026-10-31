@@ -9,9 +9,11 @@ import { PolicyService } from "./core/services/policy.service.js";
 import { ArtifactService } from "./core/services/artifact.service.js";
 import { WorkspaceFileSink } from "./core/services/workspace-sink.service.js";
 import { StateJournalService } from "./core/services/journal.service.js";
+import { SqliteLedgerAdapter } from "./adapters/storage/sqlite-ledger.adapter.js";
 import { SessionOrchestrator } from "./core/services/orchestrator.js";
 import type { BrowserPort, BrowserAdapterId } from "./core/ports/browser.port.js";
 import type { PlatformPort } from "./core/ports/platform.port.js";
+import type { ThreadStore } from "./core/ports/storage.port.js";
 
 export interface AppContainer {
   readonly browser: BrowserPort;
@@ -21,6 +23,7 @@ export interface AppContainer {
   readonly artifactService: ArtifactService;
   readonly fileSink: WorkspaceFileSink;
   readonly journalService: StateJournalService;
+  readonly threadStore: ThreadStore;
   readonly orchestrator: SessionOrchestrator;
 }
 
@@ -28,6 +31,7 @@ export interface ContainerOptions {
   readonly cdpEndpoint?: string;
   readonly browser?: BrowserPort;
   readonly transport?: BrowserAdapterId;
+  readonly threadStore?: ThreadStore;
 }
 
 export function createContainer(options?: ContainerOptions): AppContainer {
@@ -55,6 +59,7 @@ export function createContainer(options?: ContainerOptions): AppContainer {
   const artifactService = new ArtifactService();
   const fileSink = new WorkspaceFileSink();
   const journalService = new StateJournalService();
+  const threadStore = options?.threadStore ?? new SqliteLedgerAdapter();
 
   const orchestrator = new SessionOrchestrator({
     browser,
@@ -64,6 +69,7 @@ export function createContainer(options?: ContainerOptions): AppContainer {
     artifactService,
     fileSink,
     journalService,
+    threadStore,
   });
 
   return {
@@ -74,6 +80,7 @@ export function createContainer(options?: ContainerOptions): AppContainer {
     artifactService,
     fileSink,
     journalService,
+    threadStore,
     orchestrator,
   };
 }

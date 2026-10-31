@@ -46,7 +46,7 @@ export class DeepSeekDriver implements PlatformPort {
     const expr = `(() => {
       /* startNewChat */
       const btn = document.querySelector('div.ds-button, button[class*="new-chat"], a[href="/"]');
-      if (btn) (btn as HTMLElement).click();
+      if (btn) btn.click();
       else window.location.href = "https://chat.deepseek.com/";
     })()`;
     await browser.evaluate(handle, expr);
@@ -82,12 +82,12 @@ export class DeepSeekDriver implements PlatformPort {
 
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
       if (setter) setter.call(ta, ${JSON.stringify(prompt)});
-      else (ta as HTMLTextAreaElement).value = ${JSON.stringify(prompt)};
+      else ta.value = ${JSON.stringify(prompt)};
       ta.dispatchEvent(new Event('input', { bubbles: true }));
 
       await new Promise(r => setTimeout(r, 60));
       const sendBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button, button[class*="send"]');
-      if (sendBtn && !sendBtn.className.includes('disabled')) (sendBtn as HTMLElement).click();
+      if (sendBtn && !sendBtn.className.includes('disabled')) sendBtn.click();
       else ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 
       return { turnCount: beforeCount, lastTurnHash, submittedPromptHash: String(${prompt.length}) };

@@ -26,7 +26,7 @@ export class HostEnv {
    */
   public static getDataDir(): string {
     const xdgData = process.env.XDG_DATA_HOME;
-    if (xdgData && xdgData.trim().length > 0) {
+    if (xdgData && xdgData.trim().length > 0 && xdgData.trim() !== "undefined") {
       return path.join(xdgData.trim(), this.APP_NAME);
     }
     return path.join(os.homedir(), ".local", "share", this.APP_NAME);

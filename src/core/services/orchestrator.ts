@@ -1,15 +1,17 @@
-import type { SessionHandle, TabDescriptor } from "../ports/browser.port.js";
-import type { PlatformId, PlatformPort } from "../ports/platform.port.js";
-import type { BrowserPort } from "../ports/browser.port.js";
+import type { BrowserPort, SessionHandle, TabDescriptor } from "../ports/browser.port.js";
+import type { PlatformId, PlatformPort, ConversationTurn } from "../ports/platform.port.js";
 import type { PolicyGatePort } from "../ports/policy.port.js";
+import type { ThreadStore } from "../ports/storage.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService } from "./artifact.service.js";
 import type { WorkspaceFileSink } from "./workspace-sink.service.js";
 import type { StateJournalService } from "./journal.service.js";
+import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import { TabManagerService } from "./tab-manager.service.js";
+import { TabResolver } from "./tab-resolver.js";
+import { ThreadExportService } from "./thread-export.service.js";
 import { runDoctorAudit } from "./doctor.service.js";
 import { ComparisonCoordinator } from "./comparison-coordinator.service.js";
-import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
 import type {
   AskOptions,
@@ -29,6 +31,7 @@ export class SessionOrchestrator {
   private readonly artifactService?: ArtifactService;
   private readonly fileSink?: WorkspaceFileSink;
   private readonly journalService?: StateJournalService;
+  private readonly threadStore?: ThreadStore;
   private readonly tabManager: TabManagerService;
 
   public constructor(deps: OrchestratorDependencies) {
@@ -39,31 +42,32 @@ export class SessionOrchestrator {
     this.artifactService = deps.artifactService;
     this.fileSink = deps.fileSink;
     this.journalService = deps.journalService;
+    this.threadStore = deps.threadStore;
     this.tabManager = new TabManagerService(this.browser, this.drivers, this.lockService, deps.journalService);
   }
 
   public async listTabs(): Promise<DiscoveredTab[]> {
     const rawTabs = await this.browser.listTabs();
-    return rawTabs.map((t) => this.toDiscoveredTab(t));
+    return rawTabs.map((t) => TabResolver.toDiscoveredTab(t, this.drivers));
   }
 
   public async doctor(): Promise<DoctorReport> {
     const tabs = await this.listTabs();
-    return runDoctorAudit(this.browser, tabs, (url) => this.findDriver(url), this.lockService);
+    return runDoctorAudit(this.browser, tabs, (url) => TabResolver.findDriver(url, this.drivers), this.lockService);
   }
 
-  public async createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
+  public createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
     return this.tabManager.createTab(platformOrUrl);
   }
 
-  public async closeTab(targetId: string): Promise<void> {
+  public closeTab(targetId: string): Promise<void> {
     return this.tabManager.closeTab(targetId);
   }
 
   public async startNewChat(targetId?: string, platform?: PlatformId): Promise<DiscoveredTab> {
     const tabs = await this.listTabs();
-    const tab = this.resolveTargetTab({ targetId, platform, prompt: "" }, tabs);
-    const driver = this.findDriver(tab.url);
+    const tab = TabResolver.resolveTargetTab({ targetId, platform, prompt: "" }, tabs);
+    const driver = TabResolver.findDriver(tab.url, this.drivers);
     if (!driver) throw new PlatformDriverNotFoundError(tab.url);
     await this.tabManager.startNewChat(tab, driver);
     return tab;
@@ -71,28 +75,40 @@ export class SessionOrchestrator {
 
   public async undo(targetId?: string): Promise<{ restoredUrl: string } | null> {
     const tabs = await this.listTabs();
-    const tab = this.resolveTargetTab({ targetId, prompt: "" }, tabs);
-    return this.tabManager.undo(tab);
+    return this.tabManager.undo(TabResolver.resolveTargetTab({ targetId, prompt: "" }, tabs));
   }
 
   public async goBack(targetId?: string): Promise<void> {
     const tabs = await this.listTabs();
-    const tab = this.resolveTargetTab({ targetId, prompt: "" }, tabs);
-    return this.tabManager.goBack(tab.targetId);
+    return this.tabManager.goBack(TabResolver.resolveTargetTab({ targetId, prompt: "" }, tabs).targetId);
   }
 
   public async compare(options: CompareOptions): Promise<ComparisonReport> {
-    const coordinator = new ComparisonCoordinator(this, this.tabManager, this.fileSink);
-    return coordinator.run(options);
+    return new ComparisonCoordinator(this, this.tabManager, this.fileSink).run(options);
+  }
+
+  public async resumeThread(threadId: string): Promise<DiscoveredTab> {
+    if (!this.threadStore) throw new Error("No ThreadStore configured");
+    const thread = (await this.threadStore.listThreads()).find((t) => t.threadId === threadId);
+    if (!thread) throw new TabNotFoundError(`thread:${threadId}`);
+    return this.createTab(thread.url);
+  }
+
+  public async exportThread(threadId: string, format: "json" | "markdown" = "markdown"): Promise<string> {
+    if (!this.threadStore) throw new Error("No ThreadStore configured");
+    const thread = (await this.threadStore.listThreads()).find((t) => t.threadId === threadId);
+    if (!thread) throw new TabNotFoundError(`thread:${threadId}`);
+    const turns = await this.threadStore.getTurns(threadId);
+    return format === "json" ? ThreadExportService.formatJson(thread, turns) : ThreadExportService.formatMarkdown(thread, turns);
   }
 
   public async ask(options: AskOptions): Promise<AskResult> {
     const tabs = await this.listTabs();
     const targetTab = options.openTab
       ? await this.createTab(options.platform ?? "chatgpt")
-      : this.resolveTargetTab(options, tabs);
+      : TabResolver.resolveTargetTab(options, tabs);
 
-    const driver = this.findDriver(targetTab.url);
+    const driver = TabResolver.findDriver(targetTab.url, this.drivers);
     if (!driver) throw new PlatformDriverNotFoundError(targetTab.url);
 
     if (options.newChat) {
@@ -114,26 +130,9 @@ export class SessionOrchestrator {
       const timeoutMs = options.timeoutMs ?? 120_000;
       const fingerprint = await driver.submitPrompt(sessionHandle, this.browser, sanitized.cleanText, options.files);
       const completion = await driver.awaitCompletion(sessionHandle, this.browser, fingerprint, timeoutMs);
-
-      let currentTurn = completion.turn;
-      let contCount = 0;
-      while (options.autoContinue !== false && contCount < 5 && driver.findContinuationTrigger) {
-        const trigger = await driver.findContinuationTrigger(sessionHandle, this.browser);
-        if (!trigger.hasContinuation || !driver.triggerContinuation) break;
-        contCount++;
-        await driver.triggerContinuation(sessionHandle, this.browser);
-        const nextComp = await driver.awaitCompletion(
-          sessionHandle,
-          this.browser,
-          { turnCount: currentTurn.turnIndex + 1, lastTurnHash: String(currentTurn.turnIndex) },
-          timeoutMs,
-        );
-        currentTurn = {
-          ...currentTurn,
-          markdownContent: `${currentTurn.markdownContent}\n${nextComp.turn.markdownContent}`,
-          codeBlocks: [...currentTurn.codeBlocks, ...nextComp.turn.codeBlocks],
-        };
-      }
+      const currentTurn = options.autoContinue !== false
+        ? await this.autoContinueTurn(sessionHandle, driver, completion.turn, timeoutMs)
+        : completion.turn;
 
       const canvasDocument = driver.inspectCanvas ? await driver.inspectCanvas(sessionHandle, this.browser) : null;
       const artifacts = this.artifactService ? this.artifactService.extractArtifacts(currentTurn.markdownContent, currentTurn.codeBlocks) : [];
@@ -145,17 +144,21 @@ export class SessionOrchestrator {
       }
 
       this.journalService?.record({
-        targetId: targetTab.targetId,
-        platformId: targetTab.platformId,
-        url: targetTab.url,
-        threadId: targetTab.threadId,
-        action: "ask",
+        targetId: targetTab.targetId, platformId: targetTab.platformId,
+        url: targetTab.url, threadId: targetTab.threadId, action: "ask",
       });
 
+      if (this.threadStore && targetTab.platformId) {
+        const key = targetTab.threadId ?? targetTab.targetId;
+        await this.threadStore.upsertThread({
+          threadId: key, platform: targetTab.platformId, title: targetTab.title,
+          url: targetTab.url, lastSyncedTurnCount: currentTurn.turnIndex + 1, updatedAt: new Date().toISOString(),
+        });
+        await this.threadStore.appendTurns(key, [currentTurn]);
+      }
+
       return {
-        tab: targetTab,
-        turn: currentTurn,
-        elapsedMs: completion.elapsedMs,
+        tab: targetTab, turn: currentTurn, elapsedMs: completion.elapsedMs,
         riskLabels: this.policyGate.classifyInboundResponse(currentTurn.markdownContent),
         redactedSecretsCount: sanitized.redactedCount,
         artifacts: artifacts.length > 0 ? artifacts : undefined,
@@ -168,31 +171,27 @@ export class SessionOrchestrator {
     }
   }
 
-  private toDiscoveredTab(raw: TabDescriptor): DiscoveredTab {
-    const driver = this.findDriver(raw.url);
-    return {
-      targetId: raw.targetId, title: raw.title, url: raw.url,
-      platformId: driver?.id ?? null, threadId: driver ? driver.extractThreadId(raw.url) : null,
-    };
-  }
-
-  private findDriver(url: string): PlatformPort | undefined {
-    return this.drivers.find((d) => d.matchesUrl(url));
-  }
-
-  private resolveTargetTab(options: { targetId?: string; platform?: PlatformId; prompt?: string }, tabs: DiscoveredTab[]): DiscoveredTab {
-    if (options.targetId) {
-      const found = tabs.find((t) => t.targetId === options.targetId);
-      if (!found) throw new TabNotFoundError(`targetId:${options.targetId}`);
-      return found;
+  private async autoContinueTurn(
+    handle: SessionHandle, driver: PlatformPort, initial: ConversationTurn, timeoutMs: number,
+  ): Promise<ConversationTurn> {
+    let current = initial;
+    let count = 0;
+    while (count < 5 && driver.findContinuationTrigger && driver.triggerContinuation) {
+      const trigger = await driver.findContinuationTrigger(handle, this.browser);
+      if (!trigger.hasContinuation) break;
+      count++;
+      await driver.triggerContinuation(handle, this.browser);
+      const next = await driver.awaitCompletion(
+        handle, this.browser,
+        { turnCount: current.turnIndex + 1, lastTurnHash: String(current.turnIndex) },
+        timeoutMs,
+      );
+      current = {
+        ...current,
+        markdownContent: `${current.markdownContent}\n${next.turn.markdownContent}`,
+        codeBlocks: [...current.codeBlocks, ...next.turn.codeBlocks],
+      };
     }
-    if (options.platform) {
-      const found = tabs.find((t) => t.platformId === options.platform);
-      if (!found) throw new TabNotFoundError(`platform:${options.platform}`);
-      return found;
-    }
-    const supported = tabs.find((t) => t.platformId !== null);
-    if (!supported) throw new TabNotFoundError("No active tabs with supported AI platform found");
-    return supported;
+    return current;
   }
 }

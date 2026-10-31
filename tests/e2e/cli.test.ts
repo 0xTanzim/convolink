@@ -33,6 +33,9 @@ describe("CLI Entrypoint", () => {
       expect(output).toContain("convo tab new");
       expect(output).toContain("convo undo");
       expect(output).toContain("convo history");
+      expect(output).toContain("convo resume");
+      expect(output).toContain("convo export");
+      expect(output).toContain("convo mcp");
       expect(output).toContain("--transport");
       expect(output).toContain("firefox-bidi");
       expect(output).toContain("--new, -n");
@@ -71,6 +74,38 @@ describe("CLI Entrypoint", () => {
       expect(output).toContain("No previous checkpoint found");
     } finally {
       console.log = origLog;
+    }
+  });
+
+  it("handles resume requiring threadId argument", async () => {
+    let errOutput = "";
+    const origErr = console.error;
+    console.error = (...args: unknown[]) => {
+      errOutput += args.join(" ") + "\n";
+    };
+
+    try {
+      const code = await runCli(["resume"]);
+      expect(code).toBe(1);
+      expect(errOutput).toContain("threadId is required");
+    } finally {
+      console.error = origErr;
+    }
+  });
+
+  it("handles export requiring threadId argument", async () => {
+    let errOutput = "";
+    const origErr = console.error;
+    console.error = (...args: unknown[]) => {
+      errOutput += args.join(" ") + "\n";
+    };
+
+    try {
+      const code = await runCli(["export"]);
+      expect(code).toBe(1);
+      expect(errOutput).toContain("threadId is required");
+    } finally {
+      console.error = origErr;
     }
   });
 });

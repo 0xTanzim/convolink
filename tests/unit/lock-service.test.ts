@@ -7,6 +7,7 @@ import { LockService } from "../../src/core/services/lock.service.js";
 
 describe("LockService", () => {
   const testDir = path.join(os.tmpdir(), "omni-bridge-test-locks-" + Math.random().toString(36).slice(2));
+  const originalXdg = process.env.XDG_RUNTIME_DIR;
 
   beforeEach(() => {
     process.env.XDG_RUNTIME_DIR = testDir;
@@ -17,7 +18,11 @@ describe("LockService", () => {
     try {
       fs.rmSync(testDir, { recursive: true, force: true });
     } catch {}
-    delete process.env.XDG_RUNTIME_DIR;
+    if (originalXdg === undefined) {
+      delete process.env.XDG_RUNTIME_DIR;
+    } else {
+      process.env.XDG_RUNTIME_DIR = originalXdg;
+    }
   });
 
   it("acquires and releases an uncontested lock", async () => {

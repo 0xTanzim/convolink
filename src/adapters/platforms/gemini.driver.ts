@@ -46,7 +46,7 @@ export class GeminiDriver implements PlatformPort {
     const expr = `(() => {
       /* startNewChat */
       const btn = document.querySelector('button[aria-label="New chat"], a[href="/app"]');
-      if (btn) (btn as HTMLElement).click();
+      if (btn) btn.click();
       else window.location.href = "https://gemini.google.com/app";
     })()`;
     await browser.evaluate(handle, expr);

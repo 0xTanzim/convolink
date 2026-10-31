@@ -38,7 +38,7 @@ export class ChatGPTDriver implements PlatformPort {
     const expr = `(() => {
       /* startNewChat */
       const btn = document.querySelector('button[aria-label="New chat"], a[href="/"], button[data-testid="new-chat-button"]');
-      if (btn) (btn as HTMLElement).click();
+      if (btn) btn.click();
       else window.location.href = "https://chatgpt.com/";
     })()`;
     await browser.evaluate(handle, expr);

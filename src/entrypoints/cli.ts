@@ -1,6 +1,16 @@
 import { createContainer } from "../container.js";
 import { parseAskArgs, parseCompareArgs, printHelp, readStdin } from "./cli.args.js";
+import { runMcpServer } from "./mcp.js";
 import type { BrowserAdapterId } from "../core/ports/browser.port.js";
+import {
+  handleDoctor,
+  handleList,
+  handleTab,
+  handleUndo,
+  handleHistory,
+  handleResume,
+  handleExport,
+} from "./cli.ops.js";
 
 export async function runCli(args: string[]): Promise<number> {
   const command = args[0] || "doctor";
@@ -27,6 +37,13 @@ export async function runCli(args: string[]): Promise<number> {
       return handleUndo(container.orchestrator, args[1]);
     case "history":
       return handleHistory(container, args[1]);
+    case "resume":
+      return handleResume(container.orchestrator, args[1]);
+    case "export":
+      return handleExport(container.orchestrator, args.slice(1));
+    case "mcp":
+      await runMcpServer();
+      return 0;
     case "help":
     case "--help":
     case "-h":
@@ -37,82 +54,6 @@ export async function runCli(args: string[]): Promise<number> {
       printHelp();
       return 1;
   }
-}
-
-async function handleDoctor(orchestrator: ReturnType<typeof createContainer>["orchestrator"], args: string[]): Promise<number> {
-  if (args.includes("--launch")) {
-    console.log("🚀 Attempting to auto-launch Chrome with remote debugging on port 9222...");
-    try {
-      Bun.spawn(["bash", "scripts/fedora-chrome-debug.sh"], { stdout: "inherit", stderr: "inherit" });
-    } catch {}
-  }
-
-  console.log("🔍 Running ConvoLink Doctor...\n");
-  try {
-    const report = await orchestrator.doctor();
-    console.log(`[CDP Transport] Status: ${report.transportHealth.ok ? "ONLINE" : "OFFLINE"} (Latency: ${report.transportHealth.latencyMs}ms)`);
-    console.log(`[Tabs] Found ${report.totalTabs} total open tab(s), ${report.supportedTabs} supported AI tab(s).\n`);
-
-    for (const tab of report.tabs) {
-      const platformBadge = tab.platformId ? `[${tab.platformId.toUpperCase()}]` : "[UNSUPPORTED]";
-      const statusBadge = tab.selectorsOk ? "✅ READY" : (tab.platformId ? "⚠️ SELECTOR MISMATCH" : "⚪ IGNORED");
-      const lockBadge = tab.isLocked ? "🔒 LOCKED" : "🔓 UNLOCKED";
-
-      console.log(`• ${platformBadge} ${tab.title}`);
-      console.log(`  TargetId: ${tab.targetId} | ${statusBadge} | ${lockBadge}`);
-      console.log(`  URL: ${tab.url}`);
-      if (tab.layoutVariant) console.log(`  Layout: ${tab.layoutVariant}`);
-      if (tab.error) console.log(`  Error: ${tab.error}`);
-      console.log("");
-    }
-
-    return report.supportedTabs > 0 ? 0 : 1;
-  } catch (err: unknown) {
-    console.error(`❌ Doctor diagnostic failed: ${err instanceof Error ? err.message : String(err)}`);
-    return 1;
-  }
-}
-
-async function handleList(orchestrator: ReturnType<typeof createContainer>["orchestrator"]): Promise<number> {
-  const tabs = await orchestrator.listTabs();
-  console.log(`Open Tabs (${tabs.length}):`);
-  for (const t of tabs) {
-    const platform = t.platformId ?? "unsupported";
-    console.log(`[${t.targetId}] [${platform}] ${t.title} (${t.url})`);
-  }
-  return 0;
-}
-
-async function handleTab(orchestrator: ReturnType<typeof createContainer>["orchestrator"], args: string[]): Promise<number> {
-  const sub = args[0] || "list";
-  if (sub === "list") return handleList(orchestrator);
-  if (sub === "new") {
-    const target = args[1] || "chatgpt";
-    const tab = await orchestrator.createTab(target);
-    console.log(`✨ Created tab [${tab.targetId}] for ${tab.url}`);
-    return 0;
-  }
-  if (sub === "close") {
-    if (!args[1]) { console.error("Error: Target ID is required to close tab."); return 1; }
-    await orchestrator.closeTab(args[1]);
-    console.log(`🗑️ Closed tab [${args[1]}]`);
-    return 0;
-  }
-  console.error(`Unknown tab subcommand: ${sub}`);
-  return 1;
-}
-
-async function handleUndo(orchestrator: ReturnType<typeof createContainer>["orchestrator"], targetId?: string): Promise<number> {
-  const restored = await orchestrator.undo(targetId);
-  console.log(restored ? `↩️ Restored previous conversation: ${restored.restoredUrl}` : "No previous checkpoint found to restore.");
-  return 0;
-}
-
-function handleHistory(container: ReturnType<typeof createContainer>, targetId?: string): number {
-  const history = container.journalService.list(targetId);
-  console.log(`Recent Checkpoints (${history.length}):`);
-  for (const c of history) console.log(`[${c.id}] [${c.action}] [${c.targetId}] ${c.url} (${c.timestamp})`);
-  return 0;
 }
 
 async function handleAsk(

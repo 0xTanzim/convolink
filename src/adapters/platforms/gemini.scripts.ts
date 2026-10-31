@@ -1,11 +1,11 @@
 export const GEMINI_RESOLVE_SELECTORS_EXPR = `(() => {
   /* resolveSelectors */
   const quill = document.querySelector('rich-textarea div.ql-editor, rich-textarea [contenteditable="true"], p[data-placeholder], div[contenteditable="true"].ql-editor');
-  const send = document.querySelector('button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"]');
+  const send = document.querySelector('button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"], button[aria-label*="Dictate"]');
   const stop = document.querySelector('button[aria-label="Stop response"], button[aria-label*="Stop"], mat-mdc-progress-spinner, mat-progress-spinner, .sparkle-thinking');
   const turns = document.querySelectorAll('user-query, model-response');
   return {
-    ok: Boolean(quill && send),
+    ok: Boolean(quill && (send || quill.closest('rich-textarea, .input-area-container'))),
     layoutVariant: "gemini-quill-2026",
     composerSelector: "rich-textarea div.ql-editor, rich-textarea [contenteditable='true']",
     sendButtonSelector: send ? 'button[aria-label="Send message"], button.send-button' : null,

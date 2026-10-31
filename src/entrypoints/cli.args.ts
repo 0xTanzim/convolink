@@ -108,6 +108,9 @@ Usage:
   convo back [targetId]          Navigate active tab back in browser history
   convo undo [targetId]          Revert mistake by restoring previous conversation URL
   convo history [targetId]       Show recent session checkpoints and thread URLs
+  convo resume <threadId>        Rehydrate and re-open saved thread from persistent SQLite ledger
+  convo export <threadId>        Export structured conversation ledger (Markdown or JSON)
+  convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio
 
 Options for ask:
   --new, -n                      Reset active tab to fresh chat before submitting prompt
