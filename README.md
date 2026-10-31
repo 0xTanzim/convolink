@@ -1,7 +1,7 @@
 # ConvoLink (`convolink` / `convo`)
 
-> **Autonomous AI Conversation Runtime Linking Web Models to Local Codebases**  
-> *Connect your terminal and AI coding agents directly to authenticated web sessions of ChatGPT, Claude, DeepSeek, and Google Gemini. Query your live conversations, compare 4 models in parallel, search past chats with full-text search, and extract code directly into your project files.*
+> **Autonomous Neural Bridge Linking Upstream Web AI Knowledge to Local Coding Agents**  
+> *Connect local coding agents (Cursor, Claude Code, Antigravity) directly to your live, research-heavy web sessions in ChatGPT, Claude, DeepSeek, and Gemini. Stream architectural guidance, specifications, and project context directly to your editor, report progress upstream, and cross-validate critical decisions across multiple models at zero token cost.*
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
@@ -11,58 +11,76 @@
 
 ---
 
-## ⚡ The Problem: The Web-to-IDE Memory Wall
+## ⚡ The Problem: The Context & Intent Bottleneck (The Human Relay Trap)
 
-Every developer experiences this workflow friction daily:
+In modern software engineering, autonomous coding models (such as **Claude Opus 5.5 / Sonnet 5.5**, **Gemini 4 Carbon / Argon**, **OpenAI GPT-6.1 Sol / Astra**, and **DeepSeek V4.1 Flash / R1**) possess world-class reasoning and implementation capabilities—topping benchmarks like the [Artificial Analysis Engineering Index](https://artificialanalysis.ai/indexes/engineering) and FrontierCode. **Generating raw code syntax is no longer the developer's primary bottleneck.**
 
-1. **You brainstorm in web chats:** You spend an hour in **ChatGPT Plus/Pro**, **Claude Pro**, **DeepSeek R1**, or **Gemini Advanced** planning system architecture, debugging complex edge cases, and reasoning through deep algorithms.
-2. **You switch to your IDE:** You open your editor or launch an autonomous coding agent (**Cursor**, **Claude Code**, **Antigravity**, **VS Code**).
-3. **Total Agent Amnesia:** Your local agent has **zero memory** of the architectural decisions or solutions you just developed in the browser.
-4. **The "Human Clipboard" Trap:** When your local agent gets stuck or introduces a bug, you are forced to copy-paste terminal compiler errors into your browser tabs, wait for an answer, and copy code blocks back into your project files.
+**The true bottleneck is Architectural Context, Specifications, Flow, and Doubt Resolution:**
+
+1. **The Upstream R&D Reservoir:**  
+   You spend hours or days in web AI chats conducting deep research, analyzing requirements, modeling edge cases, designing database schemas, and formulating system specifications. That web conversation thread becomes the **living project architect and knowledge base**—holding the full mental model of *why* decisions were made.
+2. **The Local Agent Amnesia:**  
+   When you switch to your IDE or terminal to execute with an autonomous agent (**Cursor**, **Claude Code**, **Antigravity**, **Windsurf**), that agent starts with **zero connection to the upstream R&D**. It has no idea what trade-offs were chosen, what invariants must be maintained, or what the overall masterplan looks like.
+3. **The "Human Relay" Bottleneck:**  
+   The developer is trapped acting as an exhausted **human context courier**:
+   - The local agent finishes a task, hits an ambiguous design boundary, or has a doubt: *"Which caching strategy did we agree on? What is the expected event schema for Step 3?"*
+   - The developer copies the agent's progress, confusion, or doubt into the web chat.
+   - The upstream web AI (which holds the whole masterplan) thinks, reviews the project history, and outputs the architectural guidance, flow instructions, and specifications.
+   - The developer copies those specs back to the local agent so it knows what to build.
+   - When the local agent finishes a milestone, the developer manually summarizes the progress back to the upstream chat to keep the brain updated.
+   - If the developer steps away or fails to relay the doubt, the local agent makes assumptions, drifts from the architecture, and writes conflicting code.
 
 ```mermaid
-flowchart LR
-    subgraph Problem ["The Broken Workflow: Developer as Human Clipboard"]
-        WebAI["Browser AI (ChatGPT / Claude / DeepSeek / Gemini)<br/>Deep architectural context, reasoning & subscriptions"]
-        Human["Developer (Copy-Paste Relay)<br/>Manual snippet transfer & context loss"]
-        LocalAgent["Local Coding Agent (Cursor / Claude Code / CLI)<br/>Total amnesia: blind to web conversations"]
-        WebAI <-->|Manual Copy / Paste| Human <-->|Manual Copy / Paste| LocalAgent
+flowchart TD
+    subgraph Problem ["The Broken Workflow: Developer as Human Context Courier"]
+        UpstreamAI["Upstream Web AI (ChatGPT / Claude / DeepSeek / Gemini)<br/>Holds days of R&D, architecture decisions, trade-offs & masterplan"]
+        HumanRelay["Developer (Manual Human Relay)<br/>• Copies local agent doubts & progress to browser<br/>• Waits for web AI to formulate next spec & flow<br/>• Copies architectural guidance back to IDE"]
+        LocalAgent["Downstream Coding Agent (Cursor / Claude Code / Antigravity)<br/>Generates code, but lacks context, gets confused, and drifts off architecture"]
+
+        UpstreamAI <-->|"Manual Copy / Paste of Specs & Flow"| HumanRelay <-->|"Manual Copy / Paste of Progress & Doubts"| LocalAgent
     end
 ```
 
 ```mermaid
-flowchart LR
-    subgraph Solution ["The ConvoLink Solution: Direct Browser-to-IDE Bridge"]
-        BrowserSession["Authenticated Browser Tabs<br/>(ChatGPT, Claude, DeepSeek, Gemini)"]
-        ConvoLinkRuntime["ConvoLink Runtime & MCP Server<br/>• Non-invasive CDP / WebDriver BiDi<br/>• Zero focus theft & tmpfs mutex locks<br/>• Parallel comparison & arbiter consensus<br/>• SQLite FTS5 conversation ledger"]
-        AgentIDE["Local AI Agents & Terminal<br/>(Cursor, Claude Code, Antigravity, Shell)"]
-        BrowserSession <-->|Zero-Token CDP Bridge| ConvoLinkRuntime <-->|MCP / CLI / JSON-RPC| AgentIDE
+flowchart TD
+    subgraph Solution ["The ConvoLink Solution: Autonomous Upstream-Downstream Neural Link"]
+        UpstreamSession["Upstream Web AI Knowledge Base<br/>(Live ChatGPT, Claude, DeepSeek, Gemini Tabs)"]
+        ConvoLink["ConvoLink Bridge & MCP Server<br/>• Autonomous context, spec & flow retrieval<br/>• Bidirectional doubt resolution & progress reporting<br/>• Zero-cost multi-model consensus validation<br/>• SQLite FTS5 conversation ledger"]
+        LocalIDEAgent["Downstream Coding Agent & IDE<br/>(Cursor, Claude Code, Antigravity, Shell)"]
+
+        UpstreamSession <-->|"Real-Time Architectural Guidance & Progress Sync"| ConvoLink <-->|"Native MCP Tools & Context Streaming"| LocalIDEAgent
     end
 ```
 
-**ConvoLink solves this permanently.** It turns your open, authenticated browser tabs into an active, queryable knowledge oracle for your terminal and local AI agents.
+**ConvoLink solves this permanently.** It turns your open, authenticated browser tabs into an active, two-way architectural guidance oracle for your local AI coding agents.
 
 ---
 
 ## 🌟 Core Superpowers
 
-### 1. 🧠 Zero Amnesia & Zero Token Cost
-Tap into the rich reasoning power of **ChatGPT Plus/Pro**, **Claude 3.7**, **DeepSeek R1**, and **Google Gemini Advanced** directly from your terminal or IDE agent. Use your existing subscriptions without managing API keys, paying metered token fees, or losing web-exclusive features like Deep Research, Canvas, and live search.
+### 1. 🧠 Upstream Brain Link: Direct Specs, Architecture & Doubt Resolution
+Your local coding agent can directly query your upstream browser conversation to retrieve specifications, clarify design invariants, or ask: *"I am implementing Step 2 and hit an ambiguous boundary between the auth service and session store. What was our agreed architecture?"* The upstream model answers with full context of prior R&D, guiding the local agent accurately without human intervention.
 
-### 2. ⚖️ Multi-Model Comparison & Arbiter Consensus (`convo compare`)
-Broadcast any coding challenge or architectural question to **ChatGPT, Claude, DeepSeek, and Gemini simultaneously**. Review a side-by-side benchmark table comparing execution speeds and code quality. Enable `--arbitrate` to have a designated reasoning Arbiter (e.g., DeepSeek R1) evaluate all candidate solutions, identify logic flaws, and synthesize the single best production implementation.
+### 2. ⚖️ Zero-Cost Multi-Model Consensus Validation (`convo compare`)
+When facing a high-stakes architectural fork, concurrency design, or security-sensitive refactor, your agent can broadcast the decision across **ChatGPT, Claude, DeepSeek, and Gemini simultaneously** at zero API token cost. It acts as an instant **Multi-Model Engineering Council**:
+- Compares design proposals and trade-offs side by side.
+- Synthesizes consensus via a designated Technical Arbiter (e.g. DeepSeek R1).
+- Detects architectural violations and hallucinations before writing a single line of code.
 
-### 3. 🔍 Instant Full-Text Conversation Search (`convo search`)
-All conversation turns and generated code blocks are automatically indexed into a local, high-performance **SQLite FTS5 ledger** with WAL mode. Instantly recall prior discussions, snippets, and decisions across all sessions:
+### 3. 🔄 Autonomous Progress Sync & Stream Continuation
+When local agents complete milestones or generate large outputs, ConvoLink keeps the upstream session synchronized and automatically stitches multi-chunk truncated responses (e.g. "Continue generating" buttons) seamlessly up to 5 iterations.
+
+### 4. 🔍 Instant Full-Text Conversation Search (`convo search`)
+All conversation turns, architectural decisions, and code snippets are automatically indexed into a local, high-performance **SQLite FTS5 ledger** with WAL mode. Your agent can instantly search across all past discussions to recall why a specific decision was made:
 ```bash
-convo search "JWT refresh token rotation"
+convo search "JWT refresh token rotation invariants"
 ```
 
-### 4. 📁 Zero-Touch Multi-File Extraction (`-w`)
-No more copying code block by block. When models output code tagged with `// filepath: src/auth.ts`, ConvoLink automatically parses the directives, creates parent directories recursively, sanitizes path traversal attacks, and writes the source files directly to your workspace.
+### 5. 📁 Zero-Touch Multi-File Extraction (`-w`)
+When the upstream architect outputs concrete implementation files tagged with `// filepath: src/auth.ts`, ConvoLink automatically parses the directives, creates parent directories recursively, sanitizes path traversal attacks, and writes the source files directly to your workspace.
 
-### 5. 🔌 Turnkey Model Context Protocol (MCP) Server (`convo mcp`)
-Connect ConvoLink to **Cursor**, **Claude Desktop**, **Antigravity**, or any MCP-compliant agent in 30 seconds. Your coding agent gains native tools to list open AI tabs, query active discussions, compare multiple models, and search conversation history.
+### 6. 🔌 Turnkey Model Context Protocol (MCP) Server (`convo mcp`)
+Connect ConvoLink to **Cursor**, **Claude Desktop**, **Antigravity**, or any MCP-compliant agent in 30 seconds. Your agent gains native cognitive tools to list open AI tabs, query active discussions, compare multiple models, and search conversation history.
 
 ---
 
@@ -130,42 +148,50 @@ convo doctor
 
 ## 🛠️ Common Workflows & Examples
 
-### Ask a Live Model & Write Code Directly to Workspace
-Query your open Claude tab and write the generated files directly into `./src`:
+### 1. Ingest Upstream Architectural Specifications
+When the local coding agent is ready to start a new phase, it queries the upstream project conversation for the agreed design specifications, data models, and flow invariants:
 ```bash
 convo ask --platform claude \
-  "Refactor our JWT validator to use subtle crypto. Use // filepath: src/auth/crypto.ts and // filepath: tests/auth/crypto.test.ts" \
-  -w --out-dir .
+  "We are ready to implement Milestone 2 (State Machine & Event Sourcing). Please provide the exact transition table, invariant list, and error codes we decided on during research."
 ```
 
-### Multi-Model Comparison & Arbiter Consensus
-Query ChatGPT, Claude, and DeepSeek in parallel, then have DeepSeek R1 synthesize the consensus answer:
+### 2. Resolve Agent Doubts & Report Progress (Bidirectional Sync)
+When the local agent finishes a task or encounters an architectural ambiguity, it syncs its state and requests direction directly from the upstream brain:
+```bash
+convo ask --platform chatgpt \
+  "Milestone 1 is complete and all unit tests pass. During implementation of the lock service, we noticed potential contention under high write volume. Should we invalidate stale leases immediately or let the 180s TTL expire? What was our architectural consensus?"
+```
+
+### 3. Multi-Model Engineering Council & Validation (`convo compare`)
+Before executing a high-risk or irreversible architectural change, broadcast the proposal across multiple frontier models (**Claude, ChatGPT, DeepSeek, Gemini**) in parallel. Use `--arbitrate` to have an Arbiter synthesize the consensus:
 ```bash
 convo compare \
-  "Design a lock-free ring buffer in TypeScript with zero garbage collection allocations." \
-  --platforms chatgpt,claude,deepseek \
+  "Evaluate trade-offs between distributed SQLite (Litestream/LiteFS) vs PostgreSQL for a multi-tenant event ledger under high write concurrency. Identify edge cases, single points of failure, and write amplification risks." \
+  --platforms chatgpt,claude,deepseek,gemini \
   --arbitrate \
   --arbiter deepseek \
   --out-dir ./comparison-results
 ```
 
-### Search Past Conversations in the Local Ledger
-Find every turn across all past browser conversations discussing WebSockets:
+### 4. Search Past R&D Decisions in Local Ledger (`convo search`)
+Recall why a specific technical trade-off was made days ago across any open browser chat:
 ```bash
-convo search "WebSocket reconnection backoff" --limit 5
+convo search "SQLite WAL mode busy_timeout pragma" --limit 5
 ```
 
-### Export a Thread as Clean Markdown
-Export full turn-by-turn conversation logs for archival or documentation:
+### 5. Write Generated Implementation Files Directly to Workspace (`-w`)
+When the upstream model generates production code tagged with `// filepath:` directives, extract them directly into your file tree:
 ```bash
-convo export 6ae56dbc-63fc-83ec-bc20-00b69ce6cc33 --format markdown > THREAD.md
+convo ask --platform claude \
+  "Provide the implementation for the ring buffer according to our spec. Use // filepath: src/ring-buffer.ts and // filepath: tests/ring-buffer.test.ts" \
+  -w --out-dir .
 ```
 
-### Reset Conversation or Open a Fresh Background Tab
-Start a fresh chat in the active tab, or spawn a clean tab without stealing OS focus:
+### 6. Reset Conversation or Spawn Background Tabs
+Start a fresh conversation thread, or spawn a clean tab in the background without stealing OS focus:
 ```bash
-# Reset the active tab to a new conversation
-convo ask --platform deepseek "Explain Raft consensus" --new
+# Reset active tab to a new conversation
+convo ask --platform deepseek "Let's begin a new architecture spike" --new
 
 # Or spawn a new background tab
 convo tab new claude

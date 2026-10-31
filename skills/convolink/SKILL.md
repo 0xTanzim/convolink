@@ -58,10 +58,14 @@ convolink doctor
 
 ## 2. Core Agent Workflows
 
-### 2.1 Querying an AI Model (`convo ask`)
-Send a prompt to the first available platform tab:
+### 2.1 Ingesting Specifications & Resolving Doubts (`convo ask`)
+Query the upstream project conversation for architectural specs, flow instructions, or to resolve ambiguous implementation decisions:
 ```bash
-convo ask --platform deepseek "Explain hexagonal architecture in 3 bullet points"
+# Ingest next milestone specifications from the active architecture thread
+convo ask --platform claude "What are the exact transition rules and event schemas for Milestone 2?"
+
+# Resolve agent doubt or ambiguous boundary condition
+convo ask --platform chatgpt "During implementation of auth, should we reject expired tokens immediately or issue a grace period? What was our agreed architecture?"
 ```
 Or target a specific tab by its unique CDP `targetId`:
 ```bash
