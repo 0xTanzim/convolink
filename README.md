@@ -1,7 +1,7 @@
 # ConvoLink (`convolink` / `convo`)
 
-> **Autonomous Neural Bridge Linking Upstream Web AI Knowledge to Local Coding Agents**  
-> *Connect local coding agents (Cursor, Claude Code, Antigravity) directly to your live, research-heavy web sessions in ChatGPT, Claude, DeepSeek, and Gemini. Stream architectural guidance, specifications, and project context directly to your editor, report progress upstream, and cross-validate critical decisions across multiple models at zero token cost.*
+> **Your AI Architect and Coding Agent. Finally Connected.**  
+> *Connect your local autonomous coding agents (Cursor, Claude Code, Antigravity) directly to the upstream web AI conversations that hold your project's architectural knowledge, technical specifications, and engineering intent. Stop being the manual messenger between your AIs.*
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
@@ -11,24 +11,29 @@
 
 ---
 
-## ⚡ The Problem: The Context & Intent Bottleneck (The Human Relay Trap)
+## ⚡ The Problem: The Context & Intent Bottleneck
 
-In modern software engineering, autonomous coding models (such as **Claude Opus 5.5 / Sonnet 5.5**, **Gemini 4 Carbon / Argon**, **OpenAI GPT-6.1 Sol / Astra**, and **DeepSeek V4.1 Flash / R1**) possess world-class reasoning and implementation capabilities—topping benchmarks like the [Artificial Analysis Engineering Index](https://artificialanalysis.ai/indexes/engineering) and FrontierCode. **Generating raw code syntax is no longer the developer's primary bottleneck.**
+Modern autonomous coding agents are already highly proficient at generating code, running terminal commands, navigating repositories, and modifying files. **Raw code generation is no longer the primary bottleneck in software engineering.**
 
-**The true bottleneck is Architectural Context, Specifications, Flow, and Doubt Resolution:**
+The real bottleneck is the separation between **where a project is understood** and **where a project is executed**.
 
-1. **The Upstream R&D Reservoir:**  
-   You spend hours or days in web AI chats conducting deep research, analyzing requirements, modeling edge cases, designing database schemas, and formulating system specifications. That web conversation thread becomes the **living project architect and knowledge base**—holding the full mental model of *why* decisions were made.
-2. **The Local Agent Amnesia:**  
-   When you switch to your IDE or terminal to execute with an autonomous agent (**Cursor**, **Claude Code**, **Antigravity**, **Windsurf**), that agent starts with **zero connection to the upstream R&D**. It has no idea what trade-offs were chosen, what invariants must be maintained, or what the overall masterplan looks like.
-3. **The "Human Relay" Bottleneck:**  
-   The developer is trapped acting as an exhausted **human context courier**:
-   - The local agent finishes a task, hits an ambiguous design boundary, or has a doubt: *"Which caching strategy did we agree on? What is the expected event schema for Step 3?"*
-   - The developer copies the agent's progress, confusion, or doubt into the web chat.
-   - The upstream web AI (which holds the whole masterplan) thinks, reviews the project history, and outputs the architectural guidance, flow instructions, and specifications.
-   - The developer copies those specs back to the local agent so it knows what to build.
-   - When the local agent finishes a milestone, the developer manually summarizes the progress back to the upstream chat to keep the brain updated.
-   - If the developer steps away or fails to relay the doubt, the local agent makes assumptions, drifts from the architecture, and writes conflicting code.
+### 1. The Upstream AI Conversation is the Project's Living Architect
+Before writing substantial code, developers often spend hours or days in web-based AI conversations (**ChatGPT**, **Claude**, **DeepSeek**, **Gemini**) conducting technical research, selecting technology stacks, designing database schemas, identifying edge cases, and establishing architectural invariants.
+
+Over time, this conversation accumulates something far more valuable than isolated answers: **the project's evolving mental model**. It knows not only *what* needs to be built, but *why* it needs to be built that way, which approaches were rejected, and what trade-offs were made.
+
+### 2. The Local Coding Agent Starts with Architectural Amnesia
+When the developer switches to an autonomous coding agent inside their IDE or terminal, that agent starts with zero connection to the upstream R&D. Despite having repository access, it lacks the broader context, reasoning, and architectural intent behind the project.
+
+### 3. The Developer Becomes an Exhausted Human Relay
+This creates a severe manual communication bottleneck. The developer is trapped acting as a human protocol between two isolated AI systems:
+- The local agent finishes a task or reaches an ambiguous design boundary.
+- The developer manually copies the agent's doubts, questions, or logs into the browser chat.
+- The upstream AI (which holds the whole masterplan) analyzes the context and generates the architectural specifications and next steps.
+- The developer copies those instructions back into the terminal so the agent knows what to do.
+- When the local agent finishes a milestone, the developer manually reports the progress back to the upstream AI to get the next milestone instructions.
+
+When this relay breaks—if the developer steps away or fails to relay a doubt—the local agent makes assumptions, drifts from the architecture, and writes conflicting code.
 
 ```mermaid
 flowchart TD
@@ -41,45 +46,61 @@ flowchart TD
     end
 ```
 
+---
+
+## 💡 The Solution: ConvoLink
+
+ConvoLink eliminates the manual relay by establishing an **autonomous, bidirectional neural bridge** between authenticated upstream web AI sessions and local autonomous coding agents through **Chrome DevTools Protocol (CDP)** and the **Model Context Protocol (MCP)**.
+
 ```mermaid
 flowchart TD
     subgraph Solution ["The ConvoLink Solution: Autonomous Upstream-Downstream Neural Link"]
-        UpstreamSession["Upstream Web AI Knowledge Base<br/>(Live ChatGPT, Claude, DeepSeek, Gemini Tabs)"]
-        ConvoLink["ConvoLink Bridge & MCP Server<br/>• Autonomous context, spec & flow retrieval<br/>• Bidirectional doubt resolution & progress reporting<br/>• Zero-cost multi-model consensus validation<br/>• SQLite FTS5 conversation ledger"]
+        UpstreamSession["Upstream Web AI Knowledge Reservoir<br/>(Live ChatGPT, Claude, DeepSeek, Gemini Tabs)"]
+        ConvoLink["ConvoLink Bridge & MCP Server<br/>• Bidirectional context, spec & flow retrieval<br/>• Doubt resolution & milestone progress sync<br/>• Multi-model consensus validation<br/>• SQLite FTS5 conversation ledger"]
         LocalIDEAgent["Downstream Coding Agent & IDE<br/>(Cursor, Claude Code, Antigravity, Shell)"]
 
         UpstreamSession <-->|"Real-Time Architectural Guidance & Progress Sync"| ConvoLink <-->|"Native MCP Tools & Context Streaming"| LocalIDEAgent
     end
 ```
 
-**ConvoLink solves this permanently.** It turns your open, authenticated browser tabs into an active, two-way architectural guidance oracle for your local AI coding agents.
+### The Connected Engineering Loop
+
+| Ecosystem Role | Primary Responsibility |
+| :--- | :--- |
+| **Web AI Architect** | Technical research, requirements modeling, system design, and architectural guidance. |
+| **Local Coding Agent** | Repository-level implementation, terminal commands, test execution, and file edits. |
+| **ConvoLink** | Programmatic communication and bidirectional context bridge between them. |
+
+### How It Changes the Development Workflow
+
+| Traditional Disconnected Coding Agent | ConvoLink-Connected Coding Agent |
+| :--- | :--- |
+| Operates in isolation, blind to upstream R&D | Directly communicates with the upstream architectural conversation |
+| Requires the developer to manually relay questions & doubts | Autonomously queries the upstream architect for specifications |
+| Requires manual progress reporting after every milestone | Continuously reports execution progress and findings upstream |
+| High risk of architectural drift and conflicting assumptions | Maintains continuous architectural alignment throughout the build |
+| Relies on a single model's isolated reasoning | Fans out cross-validation across multiple authenticated models |
 
 ---
 
 ## 🌟 Core Superpowers
 
-### 1. 🧠 Upstream Brain Link: Direct Specs, Architecture & Doubt Resolution
-Your local coding agent can directly query your upstream browser conversation to retrieve specifications, clarify design invariants, or ask: *"I am implementing Step 2 and hit an ambiguous boundary between the auth service and session store. What was our agreed architecture?"* The upstream model answers with full context of prior R&D, guiding the local agent accurately without human intervention.
+### 1. 🧠 Bidirectional Context & Architectural Guidance
+Local coding agents can directly query the upstream conversation for specifications (*"What is the event schema for Milestone 2?"*) and resolve doubts (*"Should we invalidate stale leases immediately or rely on TTL?"*). Conversely, agents report milestone completions and discovered constraints back upstream so guidance adapts as code evolves.
 
-### 2. ⚖️ Zero-Cost Multi-Model Consensus Validation (`convo compare`)
-When facing a high-stakes architectural fork, concurrency design, or security-sensitive refactor, your agent can broadcast the decision across **ChatGPT, Claude, DeepSeek, and Gemini simultaneously** at zero API token cost. It acts as an instant **Multi-Model Engineering Council**:
-- Compares design proposals and trade-offs side by side.
-- Synthesizes consensus via a designated Technical Arbiter (e.g. DeepSeek R1).
-- Detects architectural violations and hallucinations before writing a single line of code.
+### 2. ⚖️ Multi-Model Architectural Cross-Validation (`convo compare`)
+Leverage your existing authenticated web subscriptions (**ChatGPT, Claude, DeepSeek, Gemini**) to independently evaluate system architecture, concurrency models, and security trade-offs without incurring additional per-token API charges. Enable `--arbitrate` to have an Arbiter synthesize the consensus.
 
-### 3. 🔄 Autonomous Progress Sync & Stream Continuation
-When local agents complete milestones or generate large outputs, ConvoLink keeps the upstream session synchronized and automatically stitches multi-chunk truncated responses (e.g. "Continue generating" buttons) seamlessly up to 5 iterations.
-
-### 4. 🔍 Instant Full-Text Conversation Search (`convo search`)
-All conversation turns, architectural decisions, and code snippets are automatically indexed into a local, high-performance **SQLite FTS5 ledger** with WAL mode. Your agent can instantly search across all past discussions to recall why a specific decision was made:
+### 3. 🔍 Instant Full-Text Architectural Search (`convo search`)
+All conversation turns, design trade-offs, and decisions are indexed into a local, high-performance **SQLite FTS5 ledger** with WAL mode. Your agent can instantly search across all past discussions:
 ```bash
 convo search "JWT refresh token rotation invariants"
 ```
 
-### 5. 📁 Zero-Touch Multi-File Extraction (`-w`)
-When the upstream architect outputs concrete implementation files tagged with `// filepath: src/auth.ts`, ConvoLink automatically parses the directives, creates parent directories recursively, sanitizes path traversal attacks, and writes the source files directly to your workspace.
+### 4. 📁 Automated File Tree Extraction (`-w`)
+When the upstream architect outputs production implementation files tagged with `// filepath: src/auth.ts`, ConvoLink automatically parses the directives, creates parent directories recursively, sanitizes path traversal attacks, and writes the source files directly to your workspace.
 
-### 6. 🔌 Turnkey Model Context Protocol (MCP) Server (`convo mcp`)
+### 5. 🔌 Native Model Context Protocol (MCP) Server (`convo mcp`)
 Connect ConvoLink to **Cursor**, **Claude Desktop**, **Antigravity**, or any MCP-compliant agent in 30 seconds. Your agent gains native cognitive tools to list open AI tabs, query active discussions, compare multiple models, and search conversation history.
 
 ---
