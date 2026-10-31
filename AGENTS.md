@@ -2,7 +2,7 @@
 
 **Project:** ConvoLink (`agent-conversation` continuity runtime)  
 **Target Environment:** Fedora Linux (primary, `XDG` + `tmpfs`), macOS, Windows  
-**Runtime & Tooling:** TypeScript (Strict ESM), Bun runtime, `bun:test` native runner, Biome / ESLint  
+**Runtime & Tooling:** TypeScript 7+ (Strict ESM), Bun runtime, `bun:test` native runner, Biome / ESLint  
 **Architectural Paradigm:** Hexagonal Architecture (Ports and Adapters) with Strict Inversion of Control (IoC)
 
 ---

@@ -4,7 +4,7 @@
 > *Link your terminal and AI coding agents directly to authenticated web sessions of ChatGPT, DeepSeek, and Google Gemini with automated artifact extraction, stream continuation, and non-blocking security gating.*
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
-[![TypeScript](https://img.shields.io/badge/TypeScript-Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
+[![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
 [![Tests](https://img.shields.io/badge/Tests-93%20passing%20(bun:test)-success)](https://bun.sh)
 [![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#architecture)
 [![License](https://img.shields.io/badge/License-MIT-green)](#license)
