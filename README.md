@@ -11,22 +11,18 @@
 
 ---
 
-## ⚡ The Problem: The Context & Intent Bottleneck
+## ⚡ The Dual Problem: Disconnected Context & Asymmetric Intelligence
 
 Modern autonomous coding agents are already highly proficient at generating code, running terminal commands, navigating repositories, and modifying files. **Raw code generation is no longer the primary bottleneck in software engineering.**
 
-The real bottleneck is the separation between **where a project is understood** and **where a project is executed**.
+Software development requires understanding intent, researching technologies, evaluating trade-offs, validating decisions, and refining architecture. Developers face two fundamental structural bottlenecks:
 
-### 1. The Upstream AI Conversation is the Project's Living Architect
+### 1. The Context Bottleneck: The Human Context-Relay Trap
 Before writing substantial code, developers often spend hours or days in web-based AI conversations (**ChatGPT**, **Claude**, **DeepSeek**, **Gemini**) conducting technical research, selecting technology stacks, designing database schemas, identifying edge cases, and establishing architectural invariants.
 
 Over time, this conversation accumulates something far more valuable than isolated answers: **the project's evolving mental model**. It knows not only *what* needs to be built, but *why* it needs to be built that way, which approaches were rejected, and what trade-offs were made.
 
-### 2. The Local Coding Agent Starts with Architectural Amnesia
-When the developer switches to an autonomous coding agent inside their IDE or terminal, that agent starts with zero connection to the upstream R&D. Despite having repository access, it lacks the broader context, reasoning, and architectural intent behind the project.
-
-### 3. The Developer Becomes an Exhausted Human Relay
-This creates a severe manual communication bottleneck. The developer is trapped acting as a human protocol between two isolated AI systems:
+When the developer switches to an autonomous coding agent inside their IDE or terminal, that agent starts with **architectural amnesia**—zero connection to the upstream R&D. The developer is trapped acting as a human relay:
 - The local agent finishes a task or reaches an ambiguous design boundary.
 - The developer manually copies the agent's doubts, questions, or logs into the browser chat.
 - The upstream AI (which holds the whole masterplan) analyzes the context and generates the architectural specifications and next steps.
@@ -34,6 +30,15 @@ This creates a severe manual communication bottleneck. The developer is trapped 
 - When the local agent finishes a milestone, the developer manually reports the progress back to the upstream AI to get the next milestone instructions.
 
 When this relay breaks—if the developer steps away or fails to relay a doubt—the local agent makes assumptions, drifts from the architecture, and writes conflicting code.
+
+### 2. The Intelligence & Cost Bottleneck: Local Agents Have Limited Capacity
+Developers frequently run smaller, cheaper, or locally hosted models in their IDEs for routine development work (editing files, generating boilerplate, running tests). 
+
+However, when the agent encounters an unfamiliar library, a complex distributed race condition, or a critical architectural fork, smaller models reach their reasoning limits. Traditionally, developers must either:
+- Pay expensive, metered per-token API charges for high-tier models.
+- Manually switch to a browser tab, re-explain the entire problem, and copy the answer back.
+
+**Why should a local coding agent be restricted to the intelligence of its local model when the developer already has access to world-class reasoning, live web search, and deep research through active web subscriptions?**
 
 ```mermaid
 flowchart TD
@@ -50,36 +55,52 @@ flowchart TD
 
 ## 💡 The Solution: ConvoLink
 
-ConvoLink eliminates the manual relay by establishing an **autonomous, bidirectional neural bridge** between authenticated upstream web AI sessions and local autonomous coding agents through **Chrome DevTools Protocol (CDP)** and the **Model Context Protocol (MCP)**.
+ConvoLink eliminates the manual relay and empowers local agents through **Three Core Product Pillars**:
+
+1. **The Context Bridge:** Continuously stream project specifications, architectural decisions, and intent from upstream conversations directly into local agents, while reporting milestone progress back upstream.
+2. **The Intelligence Bridge:** Allow local agents running smaller or cost-effective models to delegate complex reasoning, difficult debugging, and architectural judgment to powerful frontier web models.
+3. **The Capability Bridge:** Allow local agents to borrow upstream web capabilities—including **extended thinking**, **live web search grounding**, **deep research**, and **multi-model cross-validation**—using existing authenticated web subscriptions without additional API-token charges.
 
 ```mermaid
 flowchart TD
     subgraph Solution ["The ConvoLink Solution: Autonomous Upstream-Downstream Neural Link"]
         UpstreamSession["Upstream Web AI Knowledge Reservoir<br/>(Live ChatGPT, Claude, DeepSeek, Gemini Tabs)"]
-        ConvoLink["ConvoLink Bridge & MCP Server<br/>• Bidirectional context, spec & flow retrieval<br/>• Doubt resolution & milestone progress sync<br/>• Multi-model consensus validation<br/>• SQLite FTS5 conversation ledger"]
+        ConvoLink["ConvoLink Bridge & MCP Server<br/>• Bidirectional context, spec & flow retrieval<br/>• Asymmetric intelligence delegation<br/>• Extended thinking & web search borrowing<br/>• Multi-model consensus validation<br/>• SQLite FTS5 conversation ledger"]
         LocalIDEAgent["Downstream Coding Agent & IDE<br/>(Cursor, Claude Code, Antigravity, Shell)"]
 
-        UpstreamSession <-->|"Real-Time Architectural Guidance & Progress Sync"| ConvoLink <-->|"Native MCP Tools & Context Streaming"| LocalIDEAgent
+        UpstreamSession <-->|"Real-Time Architectural Guidance, Search & Progress Sync"| ConvoLink <-->|"Native MCP Tools & Context Streaming"| LocalIDEAgent
     end
 ```
+
+### Upstream Capability Borrowing Matrix
+
+| Upstream Web AI Capability | What the Local Coding Agent Gains |
+| :--- | :--- |
+| **Extended Thinking / Deep Reasoning** | Thorough, multi-step analysis of difficult concurrency, algorithmic, and architectural edge cases. |
+| **Live Web Search Grounding** | Access to current technical documentation, newest library releases, breaking changes, and migration guides. |
+| **Deep Research** | Multi-source investigation, comparative benchmark evaluations, and security posture analysis. |
+| **Living Project Context** | Direct access to 1-2 days of accumulated R&D, ADRs, rejected trade-offs, and masterplan specifications. |
+| **Multi-Model Consensus** | Independent cross-validation across ChatGPT, Claude, DeepSeek, and Gemini without per-token API fees. |
 
 ### The Connected Engineering Loop
 
 | Ecosystem Role | Primary Responsibility |
 | :--- | :--- |
-| **Web AI Architect** | Technical research, requirements modeling, system design, and architectural guidance. |
-| **Local Coding Agent** | Repository-level implementation, terminal commands, test execution, and file edits. |
-| **ConvoLink** | Programmatic communication and bidirectional context bridge between them. |
+| **Web AI Architect & Oracle** | Technical research, requirements modeling, deep reasoning, web search grounding, and system architecture. |
+| **Local Coding Agent (The Hands)** | Repository-level implementation, terminal commands, test execution, and fast file edits (often using cost-effective models). |
+| **ConvoLink** | Programmatic communication, intelligence delegation, and bidirectional context bridge between them. |
 
 ### How It Changes the Development Workflow
 
 | Traditional Disconnected Coding Agent | ConvoLink-Connected Coding Agent |
 | :--- | :--- |
 | Operates in isolation, blind to upstream R&D | Directly communicates with the upstream architectural conversation |
+| Restricted to the reasoning limit of its local model | Delegates complex reasoning to powerful upstream models on demand |
+| Lacks live web search or current library docs | Borrows live web search grounding from connected web AI sessions |
 | Requires the developer to manually relay questions & doubts | Autonomously queries the upstream architect for specifications |
 | Requires manual progress reporting after every milestone | Continuously reports execution progress and findings upstream |
 | High risk of architectural drift and conflicting assumptions | Maintains continuous architectural alignment throughout the build |
-| Relies on a single model's isolated reasoning | Fans out cross-validation across multiple authenticated models |
+| Relies on a single model's isolated reasoning | Fans out cross-validation across multiple authenticated models without API fees |
 
 ---
 
@@ -194,13 +215,20 @@ convo compare \
   --out-dir ./comparison-results
 ```
 
-### 4. Search Past R&D Decisions in Local Ledger (`convo search`)
+### 4. Delegate Complex Research & Borrow Web Search Grounding
+When a local agent running a smaller model encounters an unfamiliar library or breaking release, it delegates the investigation to an upstream AI with web search grounding:
+```bash
+convo ask --platform chatgpt \
+  "Research the latest stable breaking changes in @open-telemetry/sdk-trace-base v1.30. Examine official docs, deprecations, and provide a minimal adapter implementation matching our Hexagonal architecture."
+```
+
+### 5. Search Past R&D Decisions in Local Ledger (`convo search`)
 Recall why a specific technical trade-off was made days ago across any open browser chat:
 ```bash
 convo search "SQLite WAL mode busy_timeout pragma" --limit 5
 ```
 
-### 5. Write Generated Implementation Files Directly to Workspace (`-w`)
+### 6. Write Generated Implementation Files Directly to Workspace (`-w`)
 When the upstream model generates production code tagged with `// filepath:` directives, extract them directly into your file tree:
 ```bash
 convo ask --platform claude \
@@ -208,7 +236,7 @@ convo ask --platform claude \
   -w --out-dir .
 ```
 
-### 6. Reset Conversation or Spawn Background Tabs
+### 7. Reset Conversation or Spawn Background Tabs
 Start a fresh conversation thread, or spawn a clean tab in the background without stealing OS focus:
 ```bash
 # Reset active tab to a new conversation

@@ -14,11 +14,13 @@ metadata:
 ConvoLink (`convolink` / `convo`) connects AI coding agents directly to existing, authenticated web sessions of ChatGPT, Claude, DeepSeek, and Google Gemini via Chrome DevTools Protocol (CDP).
 
 Use this skill whenever you need to:
-1. **Leverage Active Web Subscriptions:** Query models without metered API token costs or separate API keys.
-2. **Generate Multi-File Artifacts:** Automatically extract source code blocks into files using `// filepath:` directives.
-3. **Handle Truncated Streams:** Automatically click "Continue generating" and stitch multi-chunk outputs seamlessly.
-4. **Inspect Canvas Side-Drawers:** Extract documents directly from ChatGPT Canvas and Gemini side drawers.
-5. **Coordinate Concurrent Queries:** Safely run multiple agents against browser tabs using PID-aware `tmpfs` mutex locks.
+1. **Bridge Upstream Architectural Context:** Ingest project specifications, design invariants, and mental models from upstream web conversations without manual human relays.
+2. **Delegate Complex Reasoning (Intelligence Bridge):** Let cost-effective local models consult frontier web AI models for difficult architectural judgment, debugging, or complex edge cases.
+3. **Borrow Upstream Web Capabilities:** Leverage extended thinking, live web search grounding, and deep research without metered API token charges.
+4. **Cross-Validate Decisions (`convo compare`):** Fan out architectural trade-offs across ChatGPT, Claude, DeepSeek, and Gemini simultaneously for consensus.
+5. **Generate Multi-File Artifacts:** Automatically extract source code blocks into files using `// filepath:` directives.
+6. **Handle Truncated Streams:** Automatically click "Continue generating" and stitch multi-chunk outputs seamlessly.
+7. **Coordinate Concurrent Queries:** Safely run multiple agents against browser tabs using PID-aware `tmpfs` mutex locks.
 
 ---
 
