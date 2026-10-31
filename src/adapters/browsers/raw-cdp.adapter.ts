@@ -1,5 +1,6 @@
 import type {
   BrowserPort,
+  BrowserCapabilities,
   SessionHandle,
   TabDescriptor,
   TransportHealth,
@@ -9,15 +10,18 @@ import type { CdpTarget, PendingMessage } from "./raw-cdp.types.js";
 
 export class RawCdpAdapter implements BrowserPort {
   public readonly id = "raw-cdp" as const;
+  public readonly capabilities: BrowserCapabilities = {
+    protocol: "cdp", browserFamily: "chromium",
+    supportsBackgroundLifecycle: true, supportsFileDownloads: true, supportsTabManagement: true,
+  };
   private readonly port: number;
   private readonly activeSockets = new Map<string, WebSocket>();
   private readonly pendingRequests = new Map<string, Map<number, PendingMessage>>();
   private messageCounter = 0;
 
   constructor(portOrEndpoint: number | string = 9222) {
-    if (typeof portOrEndpoint === "number") {
-      this.port = portOrEndpoint;
-    } else {
+    if (typeof portOrEndpoint === "number") this.port = portOrEndpoint;
+    else {
       const match = portOrEndpoint.match(/:(\d+)/);
       this.port = match && match[1] ? parseInt(match[1], 10) : 9222;
     }
@@ -166,18 +170,15 @@ export class RawCdpAdapter implements BrowserPort {
       if (!res.ok) throw new Error("HTTP " + res.status);
       const blob = await res.blob();
       return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
+        const r = new FileReader();
+        r.onload = () => resolve(r.result);
+        r.onerror = reject;
+        r.readAsDataURL(blob);
       });
     })()`;
     const dataUrl = await this.evaluate<string>(handle, expr);
-    if (!dataUrl || !dataUrl.includes(",")) {
-      throw new Error(`Failed to download file from ${url}`);
-    }
-    const base64 = dataUrl.split(",")[1];
-    return Buffer.from(base64!, "base64");
+    if (!dataUrl?.includes(",")) throw new Error(`Failed to download file from ${url}`);
+    return Buffer.from(dataUrl.split(",")[1]!, "base64");
   }
 
   private send(targetId: string, method: string, params: Record<string, unknown>): Promise<any> {

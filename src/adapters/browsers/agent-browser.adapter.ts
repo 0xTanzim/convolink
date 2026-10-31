@@ -1,5 +1,6 @@
 import type {
   BrowserPort,
+  BrowserCapabilities,
   SessionHandle,
   TabDescriptor,
   TransportHealth,
@@ -16,6 +17,13 @@ export type CommandExecutor = (
  */
 export class AgentBrowserAdapter implements BrowserPort {
   public readonly id = "agent-browser" as const;
+  public readonly capabilities: BrowserCapabilities = {
+    protocol: "cdp",
+    browserFamily: "chromium",
+    supportsBackgroundLifecycle: false,
+    supportsFileDownloads: false,
+    supportsTabManagement: true,
+  };
   private readonly port: number;
   private readonly execute: CommandExecutor;
 

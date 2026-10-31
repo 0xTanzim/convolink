@@ -1,3 +1,15 @@
+export type BrowserAdapterId = "raw-cdp" | "playwright" | "agent-browser" | "firefox-bidi";
+export type BrowserProtocol = "cdp" | "webdriver-bidi";
+export type BrowserFamily = "chromium" | "firefox" | "webkit" | "unknown";
+
+export interface BrowserCapabilities {
+  readonly protocol: BrowserProtocol;
+  readonly browserFamily: BrowserFamily;
+  readonly supportsBackgroundLifecycle: boolean;
+  readonly supportsFileDownloads: boolean;
+  readonly supportsTabManagement: boolean;
+}
+
 export interface TabDescriptor {
   readonly targetId: string;
   readonly url: string;
@@ -8,7 +20,7 @@ export interface TabDescriptor {
 export interface SessionHandle {
   readonly sessionId: string;
   readonly targetId: string;
-  readonly adapterId: "raw-cdp" | "playwright" | "agent-browser";
+  readonly adapterId: BrowserAdapterId;
 }
 
 export interface TransportHealth {
@@ -18,10 +30,15 @@ export interface TransportHealth {
   readonly openTabsCount: number;
   readonly latencyMs: number;
   readonly error?: string;
+  readonly capabilities?: BrowserCapabilities;
 }
 
 export interface BrowserPort {
-  readonly id: "raw-cdp" | "playwright" | "agent-browser";
+  readonly id: BrowserAdapterId;
+  readonly capabilities?: BrowserCapabilities;
+
+  health(): Promise<TransportHealth>;
+  listTabs(): Promise<TabDescriptor[]>;
 
   health(): Promise<TransportHealth>;
   listTabs(): Promise<TabDescriptor[]>;
