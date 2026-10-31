@@ -37,24 +37,38 @@ Add to your project or user MCP settings (`mcp.json`):
 ## 2. Available Cognitive Tools
 
 ### `convo_ask`
-Submit a prompt to an active or background AI browser tab (`chatgpt`, `deepseek`, `gemini`) and await the complete response with extracted code blocks.
+Submit a prompt to an active or background AI browser tab (`chatgpt`, `claude`, `deepseek`, `gemini`) and await the complete response with extracted code blocks.
 
 **Parameters:**
 - `prompt` (*string, required*): The prompt or instructions to send.
-- `platform` (*string, optional*): Target platform (`"chatgpt"` | `"deepseek"` | `"gemini"`). If omitted, ConvoLink matches the first ready tab.
+- `platform` (*string, optional*): Target platform (`"chatgpt"` | `"claude"` | `"deepseek"` | `"gemini"`). If omitted, ConvoLink matches the first ready tab.
 - `newChat` (*boolean, optional*): When `true`, resets the session to a fresh chat before submitting.
 - `openTab` (*boolean, optional*): When `true`, automatically spawns a new background tab if none is open.
 - `think` (*boolean, optional*): Toggles deep thinking / reasoning models (e.g. DeepSeek R1, ChatGPT Think).
 - `search` (*boolean, optional*): Toggles web search grounding.
 
 ### `convo_compare`
-Broadcast a prompt across ChatGPT, DeepSeek, and Gemini in parallel with staggered dispatch, benchmark their outputs, and optionally synthesize a consensus solution via Technical Arbiter.
+Broadcast a prompt across ChatGPT, Claude, DeepSeek, and Gemini in parallel with staggered dispatch, benchmark their outputs, and optionally synthesize a consensus solution via Technical Arbiter.
 
 **Parameters:**
 - `prompt` (*string, required*): The prompt or problem to evaluate.
-- `platforms` (*array of strings, optional*): Platforms to compare (defaults to `["chatgpt", "deepseek", "gemini"]`).
+- `platforms` (*array of strings, optional*): Platforms to compare (defaults to `["chatgpt", "claude", "deepseek", "gemini"]`).
 - `arbitrate` (*boolean, optional*): Execute stage 2 consensus synthesis via Technical Arbiter.
 - `arbiter` (*string, optional*): Designate the arbiter platform (e.g. `"deepseek"`).
+
+### `convo_search`
+Query the local SQLite FTS5 conversation ledger to find relevant turns, architecture decisions, and code snippets across all past browser conversations.
+
+**Parameters:**
+- `query` (*string, required*): Search query or keywords.
+- `limit` (*number, optional*): Maximum number of search results to return (default: 5).
+
+### `convo_export`
+Export the full turn-by-turn conversation history and extracted code blocks for a specific thread ID as Markdown or JSON.
+
+**Parameters:**
+- `threadId` (*string, required*): The UUID or platform thread ID to export.
+- `format` (*string, optional*): Output format (`"markdown"` | `"json"`, default: `"markdown"`).
 
 ### `convo_list_tabs`
 List all currently open browser tabs with their targetId, platform, title, and thread URLs.
@@ -65,7 +79,7 @@ List all currently open browser tabs with their targetId, platform, title, and t
 Spawn a fresh background browser tab for an AI platform or URL.
 
 **Parameters:**
-- `target` (*string, required*): Platform name (`"deepseek"` | `"chatgpt"` | `"gemini"`) or full web URL.
+- `target` (*string, required*): Platform name (`"chatgpt"` | `"claude"` | `"deepseek"` | `"gemini"`) or full web URL.
 
 ### `convo_tab_close`
 Close a specific browser tab cleanly by targetId.

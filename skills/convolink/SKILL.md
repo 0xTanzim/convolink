@@ -1,17 +1,17 @@
 ---
 name: convolink
-description: Bridge live browser sessions with ChatGPT, DeepSeek, and Gemini to automate prompts, extract code artifacts with // filepath: directives, handle multi-chunk stream continuation, and inspect canvas documents. Use whenever you need to query web AI models from the CLI or agent workflows, write generated files to the workspace, or tap into live browser tabs.
+description: Bridge live browser sessions with ChatGPT, Claude, DeepSeek, and Gemini to automate prompts, extract code artifacts with // filepath: directives, handle multi-chunk stream continuation, and inspect canvas documents. Use whenever you need to query web AI models from the CLI or agent workflows, write generated files to the workspace, search past conversation history, or tap into live browser tabs.
 license: MIT
 compatibility: claude-code, cursor, codex, antigravity, windsurf
 metadata:
   runtime: bun
   transport: cdp-9222
-  platforms: chatgpt, deepseek, gemini
+  platforms: chatgpt, claude, deepseek, gemini
 ---
 
 # ConvoLink Agent Skill
 
-ConvoLink (`convolink` / `convo`) connects AI coding agents directly to existing, authenticated web sessions of ChatGPT, DeepSeek, and Google Gemini via Chrome DevTools Protocol (CDP).
+ConvoLink (`convolink` / `convo`) connects AI coding agents directly to existing, authenticated web sessions of ChatGPT, Claude, DeepSeek, and Google Gemini via Chrome DevTools Protocol (CDP).
 
 Use this skill whenever you need to:
 1. **Leverage Active Web Subscriptions:** Query models without metered API token costs or separate API keys.
@@ -155,9 +155,12 @@ convo compare "Write a thread-safe LRU cache in Rust" \
   --arbiter deepseek
 ```
 
-### 2.9 Durable Turn Ledger & Session Continuity (`export` / `resume`)
-Every conversation turn is durably persisted in `$XDG_DATA_HOME/convolink/ledger.sqlite` via native `bun:sqlite`:
+### 2.9 Durable Turn Ledger, Search & Session Continuity (`search` / `export` / `resume`)
+Every conversation turn is durably persisted in `$XDG_DATA_HOME/convolink/ledger.sqlite` via native `bun:sqlite` with WAL mode:
 ```bash
+# Instant full-text search across all past conversations and code snippets
+convo search "JWT refresh token rotation" --limit 5
+
 # Export full conversation turns and code blocks as structured Markdown
 convo export <threadId> --format md
 
@@ -177,7 +180,7 @@ convo mcp
 # Or execute standalone binary directly
 bun run bin/convolink-mcp.ts
 ```
-Exposed tools: `convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`.  
+Exposed tools: `convo_ask`, `convo_compare`, `convo_search`, `convo_export`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`.  
 See [references/mcp.md](references/mcp.md) for IDE integration snippets and parameter schemas.
 
 ---
@@ -210,6 +213,6 @@ Provide full, production-ready code with no placeholders.
 | Error / Symptom | Root Cause | Agent Action |
 | :--- | :--- | :--- |
 | `Cannot connect to CDP on 127.0.0.1:9222` | Chrome is not running with remote debugging | Inform the user to run `./scripts/fedora-chrome-debug.sh` or launch Chrome with `--remote-debugging-port=9222`. |
-| `No active tab matching platform: <name>` | The requested web app is not open | Ask the user to open `chatgpt.com`, `chat.deepseek.com`, or `gemini.google.com` in their browser. |
+| `No active tab matching platform: <name>` | The requested web app is not open | Ask the user to open `chatgpt.com`, `claude.ai`, `chat.deepseek.com`, or `gemini.google.com` in their browser. |
 | `Tab is currently locked by PID <PID>` | Another process is using the tab | Wait 5–10 seconds and retry, or verify if the holding PID is still active. |
 | `Timeout waiting for response` | Generation exceeded timeout limit | Re-run with `--timeout 180000` or check if the tab was intercepted by a manual verification challenge. |

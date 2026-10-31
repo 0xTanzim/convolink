@@ -1,117 +1,105 @@
 # ConvoLink (`convolink` / `convo`)
 
 > **Autonomous AI Conversation Runtime Linking Web Models to Local Codebases**  
-> *Link your terminal and AI coding agents directly to authenticated web sessions of ChatGPT, DeepSeek, and Google Gemini with automated artifact extraction, stream continuation, and non-blocking security gating.*
+> *Connect your terminal and AI coding agents directly to authenticated web sessions of ChatGPT, Claude, DeepSeek, and Google Gemini. Query your live conversations, compare 4 models in parallel, search past chats with full-text search, and extract code directly into your project files.*
 
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-122%20passing%20(bun:test)-success)](https://bun.sh)
-[![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#architecture)
-[![License](https://img.shields.io/badge/License-MIT-green)](#license)
+[![Tests](https://img.shields.io/badge/Tests-137%20passing%20(bun:test)-success)](https://bun.sh)
+[![Architecture](https://img.shields.io/badge/Architecture-Hexagonal%20Ports%20%26%20Adapters-orange)](#-architecture)
+[![License](https://img.shields.io/badge/License-MIT-green)](#-license)
 
 ---
 
-## 💡 Why ConvoLink?
+## ⚡ The Problem: The Web-to-IDE Memory Wall
 
-Modern web AI interfaces (**ChatGPT Plus/Pro**, **DeepSeek-V3/R1**, and **Google Gemini Advanced**) provide leading-edge reasoning, real-time web search grounding, interactive Canvas side drawers, and generous subscription compute. However, developers and autonomous coding agents are traditionally isolated from these web interfaces—forced to either manually copy-paste code snippets or pay redundant, metered token fees for API models that lack the UI's specialized scaffolding.
+Every developer experiences this workflow friction daily:
 
-**ConvoLink** bridges this gap. It connects your CLI and autonomous agents directly to your existing, authenticated browser tabs using the non-invasive **Chrome DevTools Protocol (CDP)** and standard **W3C WebDriver BiDi**.
-
-### Key Capabilities
-
-- 💰 **Zero-Cost Subscription Compute:** Run high-volume code generations directly through your active web subscriptions without managing API keys or paying extra token fees.
-- ⚖️ **Multi-Model Comparison Engine (`convo compare`):** Broadcast a prompt across ChatGPT, DeepSeek, and Gemini simultaneously with staggered 250ms dispatch and failure isolation, producing deterministic benchmark tables and namespaced code artifacts.
-- 🧑‍⚖️ **Two-Stage Arbiter Consensus Engine (`--arbitrate`, `--arbiter`):** Collect candidate answers from multiple models in parallel, feed them into a designated reasoning Arbiter (e.g. DeepSeek R1), critique logic flaws and hallucinations, and output unified production code.
-- 🦊 **Multi-Browser Transports (Chromium & Firefox):** Seamlessly switch between direct native `RawCdpAdapter` (<2ms latency), `AgentBrowserAdapter` (`agent-browser` 0.39.2 CLI), and `FirefoxBidiAdapter` (standard W3C WebDriver BiDi protocol).
-- 🧠 **2026 Resilient Web Selectors:** Multi-selector fallback chains for modern ChatGPT (ProseMirror & CodeMirror), Google Gemini (Quill & Markdown), and DeepSeek (Chat & DeepThink R1).
-- 🪄 **Tab & Fresh Chat Spawning:** Reset active conversations on demand (`--new`) or spawn new tabs in the background (`--open-tab`, `tab new <platform>`) without stealing window focus.
-- ↩️ **State Movement & Mistake Rollback:** Automatic pre-mutation checkpoint journaling (`convo undo`, `convo back`, `convo history`) guarantees that if an agent resets a conversation or navigates away by mistake, it can immediately restore the prior thread URL without state loss.
-- 📁 **Automated Artifact & Multi-File Extraction:** Automatically parses fenced code blocks containing `// filepath:`, `# filepath:`, or `<!-- file: -->` directives and writes clean source trees directly to your workspace.
-- 🔄 **Autonomous Multi-Chunk Continuation:** Detects truncated responses ("Continue generating" buttons), automatically triggers continuation, and stitches multi-chunk streams seamlessly (up to 5 iterations).
-- 🎨 **Canvas & Side-Drawer Inspection:** Scrapes active document state from ChatGPT Canvas and Gemini side drawers directly through the DOM.
-- 🔒 **PID-Aware `tmpfs` Mutex Locking:** Prevents prompt collisions across concurrent processes using lock files in `$XDG_RUNTIME_DIR/convolink/` with automatic dead-PID stale lock recovery.
-- 🛡️ **Non-Blocking Security Gate:** Automatically scrubs outbound credentials (`sk-...`, `ghp_...`, AWS, `.env`) and classifies inbound destructive commands (`rm -rf`, `sudo`) without halting `stdio` pipelines.
-- 🎯 **Zero Window-Focus Theft:** Interacts silently via background CDP lifecycle commands (`Page.setWebLifecycleState: active`), keeping developer window focus completely uninterrupted.
-
----
-
-## 🏗️ Architecture
-
-ConvoLink is built strictly on **Hexagonal Architecture (Ports and Adapters)** with strict Inversion of Control (IoC).
+1. **You brainstorm in web chats:** You spend an hour in **ChatGPT Plus/Pro**, **Claude Pro**, **DeepSeek R1**, or **Gemini Advanced** planning system architecture, debugging complex edge cases, and reasoning through deep algorithms.
+2. **You switch to your IDE:** You open your editor or launch an autonomous coding agent (**Cursor**, **Claude Code**, **Antigravity**, **VS Code**).
+3. **Total Agent Amnesia:** Your local agent has **zero memory** of the architectural decisions or solutions you just developed in the browser.
+4. **The "Human Clipboard" Trap:** When your local agent gets stuck or introduces a bug, you are forced to copy-paste terminal compiler errors into your browser tabs, wait for an answer, and copy code blocks back into your project files.
 
 ```mermaid
-flowchart TD
-    subgraph InboundEntrypoints ["Inbound Entrypoints"]
-        CLI["CLI (bin/convolink.ts, bin/convo.ts)"]
-        Skills["Agent Skills (skills/convolink/)"]
-        MCP["MCP Server (bin/convolink-mcp.ts stdio)"]
+flowchart LR
+    subgraph Problem ["The Broken Workflow: Developer as Human Clipboard"]
+        WebAI["Browser AI (ChatGPT / Claude / DeepSeek / Gemini)<br/>Deep architectural context, reasoning & subscriptions"]
+        Human["Developer (Copy-Paste Relay)<br/>Manual snippet transfer & context loss"]
+        LocalAgent["Local Coding Agent (Cursor / Claude Code / CLI)<br/>Total amnesia: blind to web conversations"]
+        WebAI <-->|Manual Copy / Paste| Human <-->|Manual Copy / Paste| LocalAgent
     end
-
-    subgraph CoreKernel ["Pure Domain Kernel (src/core/) — Zero Browser Imports"]
-        Orchestrator["SessionOrchestrator"]
-        ComparisonEngine["ComparisonEngineService & ArbiterPromptBuilder"]
-        LockService["LockService (tmpfs Mutex)"]
-        PolicyService["PolicyService (Secret Scrubbing)"]
-        ArtifactService["ArtifactService (Directive Parser)"]
-        ThreadExport["ThreadExportService"]
-    end
-
-    subgraph OutboundAdapters ["Outbound Infrastructure Adapters (src/adapters/)"]
-        CDP["RawCdpAdapter (WebSocket CDP :9222)"]
-        AgentBrowser["AgentBrowserAdapter (agent-browser CLI)"]
-        FirefoxBiDi["FirefoxBidiAdapter (W3C WebDriver BiDi)"]
-        DeepSeek["DeepSeekDriver (Vue Microtask Settling & R1)"]
-        ChatGPT["ChatGPTDriver (CodeMirror 6 & ProseMirror)"]
-        Gemini["GeminiDriver (Quill DOM & Sandbox Links)"]
-        Sqlite["SqliteLedgerAdapter (bun:sqlite WAL Ledger)"]
-    end
-
-    InboundEntrypoints --> CoreKernel
-    CoreKernel --> OutboundAdapters
 ```
 
-### Architectural Guardrails (`AGENTS.md`)
-1. **The Zero-Import Isolation Law of `src/core/`:** No domain service or entity within `src/core/` is permitted to import any browser automation framework, WebSocket client, or network transport. All external I/O is abstracted behind Port interfaces (`BrowserPort`, `PlatformPort`).
-2. **Granularity & Line Limits:** Strict mechanical file size ceiling of **200 lines per file** and **80 lines per handler**, ensuring zero God-components, low cyclomatic complexity, and testable code.
+```mermaid
+flowchart LR
+    subgraph Solution ["The ConvoLink Solution: Direct Browser-to-IDE Bridge"]
+        BrowserSession["Authenticated Browser Tabs<br/>(ChatGPT, Claude, DeepSeek, Gemini)"]
+        ConvoLinkRuntime["ConvoLink Runtime & MCP Server<br/>• Non-invasive CDP / WebDriver BiDi<br/>• Zero focus theft & tmpfs mutex locks<br/>• Parallel comparison & arbiter consensus<br/>• SQLite FTS5 conversation ledger"]
+        AgentIDE["Local AI Agents & Terminal<br/>(Cursor, Claude Code, Antigravity, Shell)"]
+        BrowserSession <-->|Zero-Token CDP Bridge| ConvoLinkRuntime <-->|MCP / CLI / JSON-RPC| AgentIDE
+    end
+```
+
+**ConvoLink solves this permanently.** It turns your open, authenticated browser tabs into an active, queryable knowledge oracle for your terminal and local AI agents.
 
 ---
 
-## 🚀 Quickstart
+## 🌟 Core Superpowers
+
+### 1. 🧠 Zero Amnesia & Zero Token Cost
+Tap into the rich reasoning power of **ChatGPT Plus/Pro**, **Claude 3.7**, **DeepSeek R1**, and **Google Gemini Advanced** directly from your terminal or IDE agent. Use your existing subscriptions without managing API keys, paying metered token fees, or losing web-exclusive features like Deep Research, Canvas, and live search.
+
+### 2. ⚖️ Multi-Model Comparison & Arbiter Consensus (`convo compare`)
+Broadcast any coding challenge or architectural question to **ChatGPT, Claude, DeepSeek, and Gemini simultaneously**. Review a side-by-side benchmark table comparing execution speeds and code quality. Enable `--arbitrate` to have a designated reasoning Arbiter (e.g., DeepSeek R1) evaluate all candidate solutions, identify logic flaws, and synthesize the single best production implementation.
+
+### 3. 🔍 Instant Full-Text Conversation Search (`convo search`)
+All conversation turns and generated code blocks are automatically indexed into a local, high-performance **SQLite FTS5 ledger** with WAL mode. Instantly recall prior discussions, snippets, and decisions across all sessions:
+```bash
+convo search "JWT refresh token rotation"
+```
+
+### 4. 📁 Zero-Touch Multi-File Extraction (`-w`)
+No more copying code block by block. When models output code tagged with `// filepath: src/auth.ts`, ConvoLink automatically parses the directives, creates parent directories recursively, sanitizes path traversal attacks, and writes the source files directly to your workspace.
+
+### 5. 🔌 Turnkey Model Context Protocol (MCP) Server (`convo mcp`)
+Connect ConvoLink to **Cursor**, **Claude Desktop**, **Antigravity**, or any MCP-compliant agent in 30 seconds. Your coding agent gains native tools to list open AI tabs, query active discussions, compare multiple models, and search conversation history.
+
+---
+
+## 🚀 30-Second Quickstart
 
 ### Prerequisites
-
 - **[Bun](https://bun.sh)** (`>= 1.2.0`)
-- **Google Chrome** or **Chromium**
+- **Google Chrome** (or Chromium / Brave)
 
-### 1. Installation
-
+### 1. Clone & Install
 ```bash
 git clone https://github.com/0xTanzim/convolink.git
 cd convolink
 bun install
+bun link # Optional: makes `convo` and `convolink` globally accessible
 ```
 
-### 2. Start Chrome with Remote Debugging
-
-Launch Google Chrome with remote debugging enabled on port `9222`:
+### 2. Launch Chrome with Remote Debugging
+Launch Chrome with remote debugging enabled on port `9222`:
 
 ```bash
 # On Linux (Fedora / Ubuntu / Debian):
 ./scripts/fedora-chrome-debug.sh
 
-# Or launch manually on any OS:
-google-chrome --remote-debugging-port=9222 --restore-last-session &
+# Or on macOS:
+/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 &
+
+# Or on Windows (PowerShell):
+Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222"
 ```
 
-> **Tip:** Open [ChatGPT](https://chatgpt.com), [DeepSeek](https://chat.deepseek.com), or [Google Gemini](https://gemini.google.com) in any tab and log in as normal.
+> **Note:** Open your favorite AI platforms ([ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), [DeepSeek](https://chat.deepseek.com), [Gemini](https://gemini.google.com)) in tabs and log in.
 
 ### 3. Verify Health (`convo doctor`)
-
-Run the diagnostic suite to confirm CDP connectivity and detect open AI tabs:
+Check CDP transport connectivity and detect your open AI tabs:
 
 ```bash
-bun run convo doctor
-# Or with global/linked binary:
 convo doctor
 ```
 
@@ -119,156 +107,80 @@ convo doctor
 🔍 Running ConvoLink Doctor...
 
 [CDP Transport] Status: ONLINE (Latency: 1ms)
-[Tabs] Found 3 total open tab(s), 3 supported AI tab(s).
+[Tabs] Found 4 total open tab(s), 4 supported AI tab(s).
 
-• [DEEPSEEK] Hello greeting - DeepSeek
-  TargetId: 713AD61E2ACB2C39A39AE3EE887A30E3 | ✅ READY | 🔓 UNLOCKED
-  URL: https://chat.deepseek.com/a/chat/s/b36a98cc-7205-4cde-a1a0-cfc6c98f35c8
-  Layout: deepseek-standard-v1
-
-• [CHATGPT] Greeting response
+• [CHATGPT] Architecture Discussion - ChatGPT
   TargetId: A16BE3AD1A2B8238DE0B27ECA73F9580 | ✅ READY | 🔓 UNLOCKED
   URL: https://chatgpt.com/c/6ae56dbc-63fc-83ec-bc20-00b69ce6cc33
-  Layout: chatgpt-2026-turnkey
 
-• [GEMINI] Google Gemini
+• [CLAUDE] Concurrency Refactoring - Claude
+  TargetId: 44F12A9E58BC478E916BA1283B927CE1 | ✅ READY | 🔓 UNLOCKED
+  URL: https://claude.ai/chat/5b7f14b2-e981-4322-a7d2-7c3905581bf4
+
+• [DEEPSEEK] Algorithmic Optimization - DeepSeek
+  TargetId: 713AD61E2ACB2C39A39AE3EE887A30E3 | ✅ READY | 🔓 UNLOCKED
+  URL: https://chat.deepseek.com/a/chat/s/b36a98cc-7205-4cde-a1a0-cfc6c98f35c8
+
+• [GEMINI] Cloud Deployment Strategy - Gemini
   TargetId: 837BDC4DF3585EA32B8AE2EE261C24BA | ✅ READY | 🔓 UNLOCKED
   URL: https://gemini.google.com/app/e2bdddb2fd90b84a
-  Layout: gemini-modern
 ```
 
 ---
 
-## 💻 CLI Reference
+## 🛠️ Common Workflows & Examples
 
-ConvoLink commands are accessible via `convo <command>` or `convolink <command>`.
-
-### Commands
-
-| Command | Description |
-| :--- | :--- |
-| `doctor [--launch]` | Runs connection checks, tests CDP latency, audits open AI tabs, and can auto-launch Chrome. |
-| `list` | Lists all open browser tabs matching supported AI platforms. |
-| `ask <prompt>` | Submits a prompt to an AI tab, awaits completion, and outputs response. |
-| `compare <prompt>` | Broadcasts prompt across multiple models in parallel with optional Technical Arbiter. |
-| `export <threadId>` | Exports full conversation history and extracted code blocks as Markdown or JSON. |
-| `resume <threadId>` | Restores a conversation session by re-opening the saved thread URL in the browser. |
-| `mcp` | Launches the Model Context Protocol (MCP) server over `stdio` for agent IDEs. |
-| `tab new <platform>` | Spawns a fresh background tab for a platform (`chatgpt`, `deepseek`, `gemini`). |
-| `tab close <targetId>` | Cleanly closes a specific browser tab target. |
-| `back [targetId]` | Navigates the attached tab session back in browser history. |
-| `undo [targetId]` | Restores the previous conversation URL from the checkpoint journal. |
-| `history [targetId]` | Lists recent session checkpoints and thread URLs. |
-
-### `ask` Command Options
-
-| Flag | Short | Default | Description |
-| :--- | :--- | :--- | :--- |
-| `--new` | `-n` | `false` | Resets the active tab to a fresh conversation before submitting. |
-| `--open-tab` | | `false` | Spawns a brand-new tab in the background before submitting. |
-| `--transport <name>` | | `raw-cdp` | Transport engine: `raw-cdp`, `agent-browser`, or `firefox-bidi`. |
-| `--platform <name>` | `-p` | First available | Target platform (`chatgpt`, `deepseek`, `gemini`). |
-| `--targetId <hex>` | `-t` | First available | Target specific Chrome tab by its CDP `targetId`. |
-| `--write-files` | `-w` | `false` | Automatically extract code blocks and write them to disk. |
-| `--out-dir <path>` | `-o` | `./artifacts` | Target directory for extracted artifact files. |
-| `--no-continue` | | `false` | Disable automatic multi-chunk stream continuation. |
-| `--think` | | `undefined` | Toggle reasoning / deep-thinking mode (e.g., DeepThink R1). |
-| `--timeout <ms>` | | `120000` | Maximum wait time for model completion (in ms). |
-
-### `compare` Command Options
-
-| Flag | Default | Description |
-| :--- | :--- | :--- |
-| `--platforms <p1,p2>` | `chatgpt,deepseek,gemini` | Comma-separated list of model platforms to query. |
-| `--mode <mode>` | `parallel` | Execution schedule: `parallel` (staggered 250ms) or `sequential`. |
-| `--arbitrate` | `false` | Trigger Stage 2 Technical Arbiter consensus synthesis. |
-| `--arbiter <platform>` | `deepseek` | Designate specific model platform as the Arbiter judge. |
-| `--out-dir <path>` | `undefined` | Output directory to save `REPORT.md` and namespaced artifacts. |
-| `--timeout <ms>` | `120000` | Timeout per model execution (in ms). |
-| `--transport <name>` | `raw-cdp` | Transport engine (`raw-cdp`, `agent-browser`, `firefox-bidi`). |
-
----
-
-## 📁 Automated Artifact Extraction in Action
-
-When asking web models to generate complex multi-file projects, prompt the model to tag code blocks with `// filepath: path/to/file`:
-
+### Ask a Live Model & Write Code Directly to Workspace
+Query your open Claude tab and write the generated files directly into `./src`:
 ```bash
-convo ask --platform chatgpt \
-  "Create a simple TypeScript calculator with tests. Use // filepath: src/calc.ts and // filepath: tests/calc.test.ts" \
-  -w --out-dir ./my-project
+convo ask --platform claude \
+  "Refactor our JWT validator to use subtle crypto. Use // filepath: src/auth/crypto.ts and // filepath: tests/auth/crypto.test.ts" \
+  -w --out-dir .
 ```
 
-### Output:
-```text
-Python
-Run
-# filepath: src/calc.ts
-export const add = (a: number, b: number): number => a + b;
-export const sub = (a: number, b: number): number => a - b;
-
-# filepath: tests/calc.test.ts
-import { expect, test } from "bun:test";
-import { add } from "../src/calc.js";
-
-test("add", () => expect(add(2, 3)).toBe(5));
-
-📁 Saved 2 artifact file(s):
-  • ./my-project/src/calc.ts
-  • ./my-project/tests/calc.test.ts
+### Multi-Model Comparison & Arbiter Consensus
+Query ChatGPT, Claude, and DeepSeek in parallel, then have DeepSeek R1 synthesize the consensus answer:
+```bash
+convo compare \
+  "Design a lock-free ring buffer in TypeScript with zero garbage collection allocations." \
+  --platforms chatgpt,claude,deepseek \
+  --arbitrate \
+  --arbiter deepseek \
+  --out-dir ./comparison-results
 ```
 
-Directives are automatically stripped, parent directories are created recursively, and directory traversal attacks (`../../../`) are strictly sanitized.
+### Search Past Conversations in the Local Ledger
+Find every turn across all past browser conversations discussing WebSockets:
+```bash
+convo search "WebSocket reconnection backoff" --limit 5
+```
+
+### Export a Thread as Clean Markdown
+Export full turn-by-turn conversation logs for archival or documentation:
+```bash
+convo export 6ae56dbc-63fc-83ec-bc20-00b69ce6cc33 --format markdown > THREAD.md
+```
+
+### Reset Conversation or Open a Fresh Background Tab
+Start a fresh chat in the active tab, or spawn a clean tab without stealing OS focus:
+```bash
+# Reset the active tab to a new conversation
+convo ask --platform deepseek "Explain Raft consensus" --new
+
+# Or spawn a new background tab
+convo tab new claude
+```
 
 ---
 
-## 🤖 Agent Installation via `npx skills add`
+## 🔌 IDE & Agent Integration
 
-ConvoLink is packaged as a portable, publishable agent capability conforming to the [AgenticSkills.io](https://agenticskills.io) and Vercel Labs open agent skills standard (`SKILL.md`).
+### Model Context Protocol (MCP) Setup
 
-Install ConvoLink directly into any project or workspace with a single command:
+ConvoLink includes a native JSON-RPC 2.0 MCP server over `stdio`. It exposes tools (`convo_ask`, `convo_compare`, `convo_search`, `convo_list_tabs`, `convo_export`, `convo_tab_new`, `convo_undo`) directly to modern AI agents.
 
-```bash
-# Install into your project's agent directory (.claude/skills, .agents/skills, etc.)
-npx skills add 0xTanzim/convolink
-
-# Or install globally across all agent sessions
-npx skills add -g 0xTanzim/convolink
-```
-
-### Supported AI Coding Environments
-- **Claude Code** (`.claude/skills/convolink/`)
-- **Antigravity / Gemini CLI** (`.agents/skills/convolink/`)
-- **Cursor** (`.cursor/skills/convolink/`)
-- **GitHub Copilot CLI** (`gh skill install ...`)
-- **Windsurf** (`.windsurf/skills/`)
-- **OpenAI Codex & Custom LLM Orchestrators**
-
-### How Agents Use ConvoLink
-Once installed, your coding agent reads `skills/convolink/SKILL.md` dynamically and learns how to:
-1. Run `convo doctor` to verify that Chrome is active on port 9222.
-2. Route prompts to the appropriate web AI model (`chatgpt`, `deepseek`, `gemini`).
-3. Instruct models to use `// filepath:` directives and persist generated code directly to disk with `-w`.
-4. Recover gracefully from lock contention and model timeouts.
-
-For deep-dive directive formatting, agents can consult the bundled reference guide:
-- [skills/convolink/references/directives.md](skills/convolink/references/directives.md)
-
----
-
-## 🔌 Model Context Protocol (MCP) Integration
-
-ConvoLink exposes its capabilities through a native JSON-RPC 2.0 MCP server over `stdio`, allowing tools like Claude Desktop, Cursor, Antigravity, and OpenCode to tap into live browser AI tabs.
-
-### Launch MCP Server
-```bash
-convo mcp
-# Or execute standalone binary:
-bun run bin/convolink-mcp.ts
-```
-
-### Claude Desktop Configuration
-Add to `claude_desktop_config.json`:
+#### Claude Desktop
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS) or `~/.config/Claude/claude_desktop_config.json` (Linux):
 ```json
 {
   "mcpServers": {
@@ -280,44 +192,165 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
-See [skills/convolink/references/mcp.md](skills/convolink/references/mcp.md) for full tool schemas (`convo_ask`, `convo_compare`, `convo_list_tabs`, `convo_tab_new`, `convo_tab_close`, `convo_undo`).
+#### Cursor IDE
+Add to `.cursor/mcp.json` in your project or global user settings:
+```json
+{
+  "mcpServers": {
+    "convolink": {
+      "command": "bun",
+      "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+    }
+  }
+}
+```
+
+### Agentic Skills Standard (`npx skills add`)
+ConvoLink complies with the open [AgenticSkills.io](https://agenticskills.io) standard (`SKILL.md`). Install it into any agent workspace with one command:
+```bash
+# Install into project agent directory (.claude/skills, .agents/skills, etc.)
+npx skills add 0xTanzim/convolink
+
+# Or install globally across all coding agent sessions
+npx skills add -g 0xTanzim/convolink
+```
+
+Supported environments include **Claude Code**, **Antigravity / Gemini CLI**, **Cursor**, **GitHub Copilot CLI**, **Windsurf**, and custom LLM orchestrators.
+
+---
+
+## 💻 CLI Command Reference
+
+| Command | Description |
+| :--- | :--- |
+| `doctor [--launch]` | Verifies CDP connection health, tests protocol latency, and audits open AI tabs. |
+| `list` | Lists all active browser tabs matching supported AI platforms. |
+| `ask <prompt>` | Sends a prompt to a specific AI tab, streams completion, and outputs the response. |
+| `compare <prompt>` | Broadcasts prompt across multiple models in parallel with optional Arbiter consensus. |
+| `search <query>` | Performs SQLite FTS5 full-text search across past conversation turns and code snippets. |
+| `export <threadId>` | Exports a conversation thread and extracted code blocks as Markdown or JSON. |
+| `resume <threadId>` | Restores a session by navigating the browser to the saved conversation URL. |
+| `mcp` | Runs the Model Context Protocol (MCP) server over `stdio` for agent IDEs. |
+| `tab new <platform>` | Spawns a new background tab for `chatgpt`, `claude`, `deepseek`, or `gemini`. |
+| `tab close <targetId>` | Closes a specific browser tab cleanly. |
+| `back [targetId]` | Navigates the tab backward in browser history. |
+| `undo [targetId]` | Restores the prior thread URL from the pre-mutation checkpoint journal. |
+| `history [targetId]` | Displays recent session checkpoints and thread navigation history. |
+
+### `convo ask` Flags
+- `-p, --platform <name>`: Target platform (`chatgpt`, `claude`, `deepseek`, `gemini`). Default: first ready tab.
+- `-t, --targetId <hex>`: Target a specific browser tab by CDP ID.
+- `-n, --new`: Reset active conversation to a fresh session before submitting.
+- `--open-tab`: Spawn a brand-new tab in the background before submitting.
+- `-w, --write-files`: Automatically extract code blocks and write them to disk.
+- `-o, --out-dir <path>`: Destination directory for extracted files (default: `./artifacts`).
+- `--think`: Enable reasoning / deep-thinking mode (e.g. DeepSeek R1).
+- `--no-continue`: Disable automated multi-chunk continuation.
+- `--timeout <ms>`: Request timeout in milliseconds (default: `120000`).
+- `--transport <name>`: Transport engine: `raw-cdp` (default), `playwright`, `agent-browser`, or `firefox-bidi`.
+
+### `convo compare` Flags
+- `--platforms <p1,p2>`: Comma-separated list of platforms (default: `chatgpt,claude,deepseek,gemini`).
+- `--arbitrate`: Trigger Stage 2 Technical Arbiter consensus synthesis.
+- `--arbiter <platform>`: Designate Arbiter judge (default: `deepseek`).
+- `--mode <parallel|sequential>`: Execution schedule (default: `parallel` with staggered 250ms dispatch).
+- `--out-dir <path>`: Directory to persist `REPORT.md` and extracted code artifacts.
+- `--timeout <ms>`: Timeout per model execution (default: `120000`).
+
+---
+
+## 🏗️ Architecture
+
+ConvoLink is engineered following **Hexagonal Architecture (Ports and Adapters)** with strict Inversion of Control (IoC).
+
+```mermaid
+flowchart TD
+    subgraph Inbound ["Inbound Entrypoints"]
+        CLI["CLI (bin/convo.ts, bin/convolink.ts)"]
+        MCP["MCP Server (bin/convolink-mcp.ts stdio)"]
+        Skills["Agent Skills (skills/convolink/SKILL.md)"]
+    end
+
+    subgraph Core ["Pure Domain Kernel (src/core/) — Zero Browser Imports"]
+        Orchestrator["SessionOrchestrator"]
+        ComparisonEngine["ComparisonEngine & ArbiterPromptBuilder"]
+        LockService["LockService (tmpfs PID-Aware Mutex)"]
+        PolicyService["PolicyService (Secret Scrubbing)"]
+        ArtifactService["ArtifactService (Directive Parser)"]
+        ThreadExport["ThreadExportService"]
+    end
+
+    subgraph Ports ["Abstract Port Contracts (src/core/ports/)"]
+        BrowserPort["BrowserPort"]
+        PlatformPort["PlatformPort"]
+        ThreadStore["ThreadStore"]
+    end
+
+    subgraph Outbound ["Outbound Infrastructure Adapters (src/adapters/)"]
+        subgraph Transports ["Browser Transports"]
+            CDP["RawCdpAdapter (:9222 Native WebSocket)"]
+            PW["PlaywrightAdapter (connectOverCDP)"]
+            BiDi["FirefoxBidiAdapter (W3C WebDriver BiDi)"]
+            AB["AgentBrowserAdapter (agent-browser CLI)"]
+        end
+        subgraph Drivers ["Platform DOM Drivers"]
+            ChatGPTDriver["ChatGPTDriver (ProseMirror & CodeMirror)"]
+            ClaudeDriver["ClaudeDriver (ProseMirror DOM)"]
+            DeepSeekDriver["DeepSeekDriver (Vue Microtasks & R1)"]
+            GeminiDriver["GeminiDriver (Quill DOM & Markdown)"]
+        end
+        subgraph Storage ["Durable Persistence"]
+            SqliteLedger["SqliteLedgerAdapter (bun:sqlite WAL & FTS5)"]
+        end
+    end
+
+    Inbound --> Core
+    Core --> Ports
+    Ports --> Outbound
+```
+
+### Architectural Guarantees (`AGENTS.md`)
+1. **The Zero-Import Isolation Law of `src/core/`:** No file within `src/core/` is permitted to import any browser automation framework, WebSocket library, or network driver. Domain logic remains 100% decoupled and unit-testable.
+2. **Strict File Size Limits:** Max **200 lines per file** and **80 lines per function** across core services to eliminate God-components and maintain high readability.
+3. **100% Test-First Provenance:** Every domain service, adapter, and CLI command is backed by automated tests.
+
+---
+
+## 🛡️ Enterprise & Operational Safety
+
+- 🎯 **Zero Window-Focus Theft:** Interacts silently via background CDP lifecycle commands (`Page.setWebLifecycleState: active`) and focus emulation. Your typing and OS window focus are never interrupted.
+- 🔒 **PID-Aware `tmpfs` Mutex Locking:** Prevents prompt collisions across concurrent processes using lock files in `$XDG_RUNTIME_DIR/convolink/` (RAM-backed `tmpfs`). Stale locks from dead processes (`process.kill(pid, 0)`) or expired heartbeats are automatically reclaimed.
+- 🛡️ **Non-Blocking Secret Scrubbing:** Every outbound prompt is automatically scanned. Sensitive tokens matching OpenAI keys (`sk-...`), GitHub PATs (`ghp_...`), AWS secrets, and `.env` variable assignments are redacted to `[REDACTED_SECRET]` before leaving your machine.
+- 🚪 **Safe Detach Semantics:** ConvoLink **never** calls `browser.close()`. It attaches to existing browser sessions and cleanly disconnects its WebSocket client upon completion. Your browser, open tabs, cookies, and active sessions remain untouched.
+- 🌐 **100% Local Execution:** Communicates solely via local loopback (`127.0.0.1:9222`). Zero prompt data or code is ever sent to third-party telemetry servers.
 
 ---
 
 ## 🧪 Testing & Verification
 
-ConvoLink adheres to strict **Test-Driven Development (TDD)**. All business logic is covered by isolated unit tests using in-memory test doubles (`FakeBrowserPort`, `FakeThreadStore`).
-
-Run the full automated test suite:
+ConvoLink is verified with `bun:test` across unit, integration, and end-to-end suites using in-memory test doubles (`FakeBrowserPort`, `FakeThreadStore`):
 
 ```bash
-# Run all tests (unit, integration, e2e)
+# Run all automated tests
 bun test
 
 # Run unit tests only
 bun run test:unit
 
-# Run strict TypeScript 7 type checking
+# Run strict TypeScript 7 typecheck
 bun run typecheck
 ```
 
 ```text
-bun test v1.4.4 (38afee6c8)
-
- 122 pass
+bun test v1.4.4
+ 137 pass
  0 fail
- 385 expect() calls
-Ran 122 tests across 30 files. [1105.00ms]
-$ tsc --noEmit (0 errors)
+ 430 expect() calls
+Ran 137 tests across 32 files. [1455.00ms]
+
+$ tsc --noEmit
+(0 errors)
 ```
-
----
-
-## 🛡️ Security & Privacy Guardrails
-
-1. **Non-Blocking Secret Redaction:** All outbound prompts are scanned before hitting Chromium. Tokens matching OpenAI API keys (`sk-...`), GitHub personal access tokens (`ghp_...`), AWS credentials, and `.env` variable assignments are replaced with `[REDACTED_SECRET]`.
-2. **Local Execution:** ConvoLink communicates solely with `127.0.0.1:9222` over local WebSocket loopback. No prompt data or browser state is ever transmitted to third-party telemetry servers.
-3. **Safe Detach Semantics:** ConvoLink never calls `browser.close()`. It connects to your existing browser session and detaches cleanly upon query completion, preserving your tabs, cookies, and logins.
 
 ---
 
