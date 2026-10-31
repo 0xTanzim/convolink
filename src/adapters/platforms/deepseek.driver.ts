@@ -73,7 +73,7 @@ export class DeepSeekDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const expression = `(async () => {
       /* submitPrompt */
-      const ta = document.querySelector('textarea');
+      const ta = document.querySelector('#chat-input, textarea[placeholder*="Send"], textarea.chat-input, textarea');
       if (!ta) throw new Error("DeepSeek textarea not found");
 
       const beforeCount = document.querySelectorAll('.ds-markdown').length;
@@ -82,12 +82,12 @@ export class DeepSeekDriver implements PlatformPort {
 
       const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
       if (setter) setter.call(ta, ${JSON.stringify(prompt)});
-      else ta.value = ${JSON.stringify(prompt)};
+      else (ta as HTMLTextAreaElement).value = ${JSON.stringify(prompt)};
       ta.dispatchEvent(new Event('input', { bubbles: true }));
 
       await new Promise(r => setTimeout(r, 60));
-      const sendBtn = document.querySelector('div[role="button"].ds-button--circle');
-      if (sendBtn && !sendBtn.className.includes('disabled')) sendBtn.click();
+      const sendBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button, button[class*="send"]');
+      if (sendBtn && !sendBtn.className.includes('disabled')) (sendBtn as HTMLElement).click();
       else ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
 
       return { turnCount: beforeCount, lastTurnHash, submittedPromptHash: String(${prompt.length}) };
@@ -116,13 +116,16 @@ export class DeepSeekDriver implements PlatformPort {
         handle,
         `(() => {
           /* awaitCompletion */
-          const circleBtn = document.querySelector('div[role="button"].ds-button--circle');
+          const circleBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button');
           const svg = circleBtn ? circleBtn.querySelector('svg') : null;
-          const isGenerating = Boolean(svg && svg.innerHTML.includes('linearGradient'));
+          const isGenerating = Boolean(
+            (svg && (svg.innerHTML.includes('linearGradient') || svg.classList.toString().includes('spin'))) ||
+            (circleBtn && (circleBtn.querySelector('.ds-icon-spinning') || circleBtn.className.includes('loading')))
+          );
           const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
           const last = mdList.length > 0 ? mdList[mdList.length - 1] : null;
           const codeBlocks = last ? Array.from(last.querySelectorAll('pre')).map(p => {
-            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap');
+            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap') || p.querySelector('.code-block-header');
             const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
             return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
           }) : [];

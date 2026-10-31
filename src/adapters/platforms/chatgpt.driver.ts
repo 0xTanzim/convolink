@@ -61,14 +61,14 @@ export class ChatGPTDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const expression = `(async () => {
       /* submitPrompt */
-      const c = document.querySelector('div.ProseMirror[contenteditable="true"]') || document.querySelector('#prompt-textarea');
+      const c = document.querySelector('div.ProseMirror[contenteditable="true"], #prompt-textarea, div[contenteditable="true"][data-placeholder], div[contenteditable="true"]');
       if (!c) throw new Error("ChatGPT composer not found");
-      const turns = Array.from(document.querySelectorAll('[data-turn-key]'));
+      const turns = Array.from(document.querySelectorAll('article[data-testid^="conversation-turn-"], [data-turn-key], div[data-message-author-role]'));
       const beforeTurns = turns.length;
       const last = turns.length > 0 ? turns[turns.length - 1] : null;
       let lastText = '';
       if (last) {
-        const raw = last.innerText || '';
+        const raw = (last.querySelector('div[data-message-author-role="assistant"]')?.innerText || last.innerText || '');
         const idx = raw.lastIndexOf('ChatGPT said:');
         lastText = idx !== -1 ? raw.substring(idx + 'ChatGPT said:'.length).trim() : raw.trim();
       }
@@ -77,7 +77,7 @@ export class ChatGPTDriver implements PlatformPort {
       document.execCommand('insertText', false, ${JSON.stringify(prompt)});
       c.dispatchEvent(new Event('input', { bubbles: true }));
       await new Promise(r => setTimeout(r, 80));
-      const send = document.querySelector('button[aria-label="Send"], button[data-testid="send-button"]');
+      const send = document.querySelector('button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]');
       if (send && !send.disabled && send.getAttribute('aria-disabled') !== 'true') send.click();
       else c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
       return { turnCount: beforeTurns, lastTurnHash: lastText, submittedPromptHash: String(${prompt.length}) };
@@ -101,14 +101,14 @@ export class ChatGPTDriver implements PlatformPort {
         handle,
         `(() => {
           /* awaitCompletion */
-          const stop = document.querySelector('button[aria-label*="Stop"], button[data-testid="stop-button"]');
+          const stop = document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label="Stop generating"]');
           const isGenerating = Boolean(stop && stop.offsetParent !== null);
-          const turns = Array.from(document.querySelectorAll('[data-turn-key]'));
+          const turns = Array.from(document.querySelectorAll('article[data-testid^="conversation-turn-"], [data-turn-key], div[data-message-author-role]'));
           const hasNewTurn = turns.length > ${before.turnCount};
           const last = turns.length > 0 ? turns[turns.length - 1] : null;
           let assistantText = '';
           if (last) {
-            const raw = last.innerText || '';
+            const raw = (last.querySelector('div[data-message-author-role="assistant"]')?.innerText || last.innerText || '');
             const idx = raw.lastIndexOf('ChatGPT said:');
             assistantText = idx !== -1 ? raw.substring(idx + 'ChatGPT said:'.length).trim() : raw.trim();
           }

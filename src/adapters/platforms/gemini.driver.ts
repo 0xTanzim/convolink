@@ -64,7 +64,7 @@ export class GeminiDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const expr = `(() => {
       /* submitPrompt */
-      const composer = document.querySelector('rich-textarea div.ql-editor.textarea, rich-textarea [contenteditable="true"]');
+      const composer = document.querySelector('rich-textarea div.ql-editor.textarea, rich-textarea [contenteditable="true"], p[data-placeholder], div[contenteditable="true"].ql-editor');
       if (!composer) throw new Error("Gemini Quill composer not found");
 
       const beforeTurns = document.querySelectorAll('user-query, model-response').length;
@@ -72,8 +72,8 @@ export class GeminiDriver implements PlatformPort {
       document.execCommand('selectAll', false, null);
       document.execCommand('insertText', false, ${JSON.stringify(prompt)});
 
-      const sendBtn = document.querySelector('button[aria-label="Send message"], button.send-button');
-      if (sendBtn) {
+      const sendBtn = document.querySelector('button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"]');
+      if (sendBtn && !sendBtn.disabled && sendBtn.getAttribute('aria-disabled') !== 'true') {
         sendBtn.click();
       } else {
         composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
@@ -108,8 +108,8 @@ export class GeminiDriver implements PlatformPort {
         handle,
         `(() => {
           /* awaitCompletion */
-          const spinner = document.querySelector('mat-mdc-progress-spinner, button[aria-label="Stop response"]');
-          const isGenerating = Boolean(spinner && (spinner.offsetParent !== null || spinner.tagName.toLowerCase() === 'mat-mdc-progress-spinner'));
+          const spinner = document.querySelector('mat-mdc-progress-spinner, mat-progress-spinner, button[aria-label="Stop response"], button[aria-label*="Stop"], .sparkle-thinking');
+          const isGenerating = Boolean(spinner && (spinner.offsetParent !== null || spinner.tagName.toLowerCase().includes('spinner')));
           const models = Array.from(document.querySelectorAll('model-response'));
           const turns = Array.from(document.querySelectorAll('user-query, model-response'));
           const hasNewTurn = turns.length > ${before.turnCount};
