@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Runtime & Application Caches
+.omni/
+artifacts/
+/tmp/omni-*
+*.tmp
+
+# Lock files (allow bun.lock / pnpm-lock.yaml)
+*.lock
+!bun.lock
+!pnpm-lock.yaml
+!package-lock.json
+
+# Build & TypeScript Output
+dist/
+build/
+*.tsbuildinfo
+.turbo/
+.cache/
+
+# Explicitly un-ignore CLI executable directory (overrides ~/.config/git/global.gitignore)
+!bin/
+!bin/**
+
+# Environment variables & credentials
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# System & OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor & IDE artifacts
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Test Coverage
+coverage/
+.nyc_output/
+
+# Local Agent & Workspace Configurations
+.agents/
+
+# OpenSpec Archive (main specifications live in openspec/specs/)
+openspec/changes/archive/

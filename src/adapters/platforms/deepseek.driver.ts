@@ -1,0 +1,195 @@
+import type { BrowserPort, SessionHandle } from "../../core/ports/browser.port.js";
+import type {
+  CompletionResult,
+  ContinuationTrigger,
+  ConversationTurn,
+  DownloadLinkDescriptor,
+  PlatformId,
+  PlatformPort,
+  SelectorResolution,
+  ToggleOptions,
+  TurnFingerprint,
+} from "../../core/ports/platform.port.js";
+import { TimeoutError } from "../../core/errors/bridge-errors.js";
+
+export class DeepSeekDriver implements PlatformPort {
+  public readonly id: PlatformId = "deepseek";
+
+  public matchesUrl(url: string): boolean {
+    return url.includes("chat.deepseek.com");
+  }
+
+  public extractThreadId(url: string): string {
+    const match = url.match(/\/s\/([a-zA-Z0-9-]+)/);
+    return match && match[1] ? match[1] : "default";
+  }
+
+  public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
+    const expression = `(() => {
+      /* resolveSelectors */
+      const textarea = document.querySelector('textarea');
+      const sendBtn = document.querySelector('div[role="button"].ds-button--circle');
+      const mdList = document.querySelectorAll('.ds-markdown');
+      const stopSvg = document.querySelector('svg linearGradient');
+
+      return {
+        ok: Boolean(textarea && sendBtn),
+        layoutVariant: "deepseek-standard-v1",
+        composerSelector: textarea ? "textarea" : null,
+        sendButtonSelector: sendBtn ? 'div[role="button"].ds-button--circle' : null,
+        stopIndicatorSelector: stopSvg ? "svg linearGradient" : null,
+        turnContainerSelector: mdList.length > 0 ? ".ds-markdown" : null,
+      };
+    })()`;
+    return browser.evaluate<SelectorResolution>(handle, expression);
+  }
+
+  public async readThread(
+    handle: SessionHandle,
+    browser: BrowserPort,
+    options?: { lastNTurns?: number },
+  ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
+    const lastN = options?.lastNTurns ?? 50;
+    const expression = `(() => {
+      /* readThread */
+      const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
+      const slice = mdList.slice(-${lastN});
+      
+      return {
+        layoutVariant: "deepseek-standard-v1",
+        turns: slice.map((el, i) => {
+          const codeBlocks = Array.from(el.querySelectorAll('pre')).map(p => {
+            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap');
+            const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
+            return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
+          });
+          const text = el.innerText || '';
+          return {
+            turnIndex: i,
+            role: "assistant",
+            markdownContent: text,
+            codeBlocks,
+            contentHash: String(text.length),
+          };
+        }),
+      };
+    })()`;
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, expression);
+  }
+
+  public async applyToggles(handle: SessionHandle, browser: BrowserPort, toggles: ToggleOptions): Promise<void> {
+    const expression = `(() => {
+      const toggleButtons = Array.from(document.querySelectorAll('.ds-toggle-button'));
+      for (const btn of toggleButtons) {
+        const text = (btn.innerText || '').trim();
+        const isSelected = (btn.className || '').includes('ds-toggle-button--selected');
+        if (${toggles.search !== undefined} && text.includes('Search') && isSelected !== ${Boolean(toggles.search)}) btn.click();
+        if (${toggles.think !== undefined} && text.includes('DeepThink') && isSelected !== ${Boolean(toggles.think)}) btn.click();
+      }
+    })()`;
+    await browser.evaluate(handle, expression);
+  }
+
+  public async submitPrompt(
+    handle: SessionHandle,
+    browser: BrowserPort,
+    prompt: string,
+    _files?: string[],
+  ): Promise<TurnFingerprint> {
+    const expression = `(async () => {
+      /* submitPrompt */
+      const ta = document.querySelector('textarea');
+      if (!ta) throw new Error("DeepSeek textarea not found");
+
+      const beforeCount = document.querySelectorAll('.ds-markdown').length;
+      const lastBefore = beforeCount > 0 ? document.querySelectorAll('.ds-markdown')[beforeCount - 1] : null;
+      const lastTurnHash = lastBefore ? (lastBefore.innerText || '').trim() : '';
+
+      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
+      if (setter) setter.call(ta, ${JSON.stringify(prompt)});
+      else ta.value = ${JSON.stringify(prompt)};
+      ta.dispatchEvent(new Event('input', { bubbles: true }));
+
+      await new Promise(r => setTimeout(r, 60));
+      const sendBtn = document.querySelector('div[role="button"].ds-button--circle');
+      if (sendBtn && !sendBtn.className.includes('disabled')) sendBtn.click();
+      else ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+
+      return { turnCount: beforeCount, lastTurnHash, submittedPromptHash: String(${prompt.length}) };
+    })()`;
+    return browser.evaluate<TurnFingerprint>(handle, expression);
+  }
+
+  public async awaitCompletion(
+    handle: SessionHandle,
+    browser: BrowserPort,
+    before: TurnFingerprint,
+    timeoutMs: number,
+  ): Promise<CompletionResult> {
+    const start = Date.now();
+    const pollIntervalMs = 500;
+
+    while (Date.now() - start < timeoutMs) {
+      const status = await browser.evaluate<{
+        mdCount: number;
+        hasNewTurn?: boolean;
+        isGenerating: boolean;
+        turnIndex: number;
+        text: string;
+        codeBlocks: Array<{ language: string; code: string }>;
+      }>(
+        handle,
+        `(() => {
+          /* awaitCompletion */
+          const circleBtn = document.querySelector('div[role="button"].ds-button--circle');
+          const svg = circleBtn ? circleBtn.querySelector('svg') : null;
+          const isGenerating = Boolean(svg && svg.innerHTML.includes('linearGradient'));
+          const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
+          const last = mdList.length > 0 ? mdList[mdList.length - 1] : null;
+          const codeBlocks = last ? Array.from(last.querySelectorAll('pre')).map(p => {
+            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap');
+            const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
+            return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
+          }) : [];
+          return { mdCount: mdList.length, hasNewTurn: mdList.length > ${before.turnCount}, isGenerating, turnIndex: mdList.length - 1, text: last ? (last.innerText || '').trim() : '', codeBlocks };
+        })()`,
+      );
+
+      const hasNewTurn = Boolean(status.hasNewTurn || (status.text && status.text.length > 0 && status.text !== before.lastTurnHash));
+
+      if (hasNewTurn && !status.isGenerating && status.text && status.text.length > 0) {
+        return {
+          status: "complete",
+          turn: { turnIndex: status.turnIndex, role: "assistant", markdownContent: status.text, codeBlocks: status.codeBlocks, contentHash: String(status.text.length) },
+          elapsedMs: Date.now() - start,
+        };
+      }
+
+      await new Promise((r) => setTimeout(r, pollIntervalMs));
+    }
+
+    throw new TimeoutError("DeepSeek response timed out", timeoutMs);
+  }
+
+  public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
+    const expr = `(() => {
+      /* findContinuationTrigger */
+      const btn = document.querySelector('button.ds-button--continue, button[aria-label*="Continue"]');
+      return { hasContinuation: Boolean(btn && btn.offsetParent !== null), triggerSelector: "button.ds-button--continue" };
+    })()`;
+    return browser.evaluate<ContinuationTrigger>(handle, expr);
+  }
+
+  public async triggerContinuation(handle: SessionHandle, browser: BrowserPort): Promise<void> {
+    await browser.click(handle, 'button.ds-button--continue, button[aria-label*="Continue"]');
+  }
+
+  public async findDownloadLinks(handle: SessionHandle, browser: BrowserPort): Promise<DownloadLinkDescriptor[]> {
+    const expr = `(() => {
+      /* findDownloadLinks */
+      const anchors = Array.from(document.querySelectorAll('a[download], a[href^="blob:"]'));
+      return anchors.map(a => ({ url: a.href, filename: a.getAttribute('download') || undefined }));
+    })()`;
+    return browser.evaluate<DownloadLinkDescriptor[]>(handle, expr);
+  }
+}

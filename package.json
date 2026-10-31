@@ -1,0 +1,31 @@
+{
+  "name": "convolink",
+  "version": "1.0.0",
+  "description": "Autonomous AI conversation runtime linking web models (ChatGPT, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, and non-blocking security gating",
+  "type": "module",
+  "main": "src/index.ts",
+  "bin": {
+    "convolink": "./bin/convolink.ts",
+    "convo": "./bin/convo.ts",
+    "omni": "./bin/convolink.ts",
+    "omni-bridge": "./bin/convolink.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "test:unit": "bun test tests/unit",
+    "test:integration": "bun test tests/integration",
+    "test:e2e": "bun test tests/e2e",
+    "convolink": "bun run bin/convolink.ts",
+    "convo": "bun run bin/convo.ts",
+    "bridge": "bun run bin/convolink.ts",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "playwright": "^1.50.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.4.4",
+    "@types/node": "^22.13.0",
+    "typescript": "^5.7.0"
+  }
+}

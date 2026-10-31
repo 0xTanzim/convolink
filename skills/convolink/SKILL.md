@@ -1,0 +1,128 @@
+---
+name: convolink
+description: Bridge live browser sessions with ChatGPT, DeepSeek, and Gemini to automate prompts, extract code artifacts with // filepath: directives, handle multi-chunk stream continuation, and inspect canvas documents. Use whenever you need to query web AI models from the CLI or agent workflows, write generated files to the workspace, or tap into live browser tabs.
+license: MIT
+compatibility: claude-code, cursor, codex, antigravity, windsurf
+metadata:
+  runtime: bun
+  transport: cdp-9222
+  platforms: chatgpt, deepseek, gemini
+---
+
+# ConvoLink Agent Skill
+
+ConvoLink (`convolink` / `convo`) connects AI coding agents directly to existing, authenticated web sessions of ChatGPT, DeepSeek, and Google Gemini via Chrome DevTools Protocol (CDP).
+
+Use this skill whenever you need to:
+1. **Leverage Active Web Subscriptions:** Query models without metered API token costs or separate API keys.
+2. **Generate Multi-File Artifacts:** Automatically extract source code blocks into files using `// filepath:` directives.
+3. **Handle Truncated Streams:** Automatically click "Continue generating" and stitch multi-chunk outputs seamlessly.
+4. **Inspect Canvas Side-Drawers:** Extract documents directly from ChatGPT Canvas and Gemini side drawers.
+5. **Coordinate Concurrent Queries:** Safely run multiple agents against browser tabs using PID-aware `tmpfs` mutex locks.
+
+---
+
+## 1. Quick Diagnostics (`convo doctor`)
+
+Before submitting queries, check whether the local Chrome instance is listening and inspect open AI tabs:
+
+```bash
+convo doctor
+# Or with the full binary name:
+convolink doctor
+```
+
+### Healthy Diagnostic Output:
+```text
+🔍 Running ConvoLink Doctor...
+
+[CDP Transport] Status: ONLINE (Latency: 1ms)
+[Tabs] Found 3 total open tab(s), 3 supported AI tab(s).
+
+• [DEEPSEEK] Hello greeting - DeepSeek
+  TargetId: 713AD61E2ACB2C39A39AE3EE887A30E3 | ✅ READY | 🔓 UNLOCKED
+  URL: https://chat.deepseek.com/a/chat/s/b36a98cc-7205-4cde-a1a0-cfc6c98f35c8
+  Layout: deepseek-standard-v1
+
+• [CHATGPT] Greeting response
+  TargetId: A16BE3AD1A2B8238DE0B27ECA73F9580 | ✅ READY | 🔓 UNLOCKED
+  URL: https://chatgpt.com/c/6ae56dbc-63fc-83ec-bc20-00b69ce6cc33
+  Layout: chatgpt-2026-turnkey
+```
+
+- **ONLINE:** Chromium is running with `--remote-debugging-port=9222`.
+- **READY:** Composer input and send button were successfully located.
+- **UNLOCKED:** No other agent is currently querying this tab.
+
+---
+
+## 2. Core Agent Workflows
+
+### 2.1 Querying an AI Model (`convo ask`)
+Send a prompt to the first available platform tab:
+```bash
+convo ask --platform deepseek "Explain hexagonal architecture in 3 bullet points"
+```
+Or target a specific tab by its unique CDP `targetId`:
+```bash
+convo ask --targetId 713AD61E2ACB2C39A39AE3EE887A30E3 "Analyze this function"
+```
+
+### 2.2 Writing Multi-File Code Artifacts to Disk (`-w` / `--write-files`)
+Instruct the model to tag each file with a directive comment on the first line. ConvoLink will strip the directive, create directories recursively, and write the files to the workspace:
+
+```bash
+convo ask --platform chatgpt \
+  "Write an express server with auth middleware. Put files in separate code blocks with // filepath: src/server.ts and // filepath: src/auth.ts" \
+  -w --out-dir ./generated
+```
+
+For complete directive syntax, see [references/directives.md](references/directives.md).
+
+### 2.3 Handling Truncated Streams & Continuations
+When web models produce large responses and hit output limits (e.g. ChatGPT "Continue generating", DeepSeek continuation trigger), ConvoLink automatically clicks the button, stitches the stream, and returns the full response (up to 5 iterations).
+
+To disable auto-continuation:
+```bash
+convo ask --platform chatgpt "Output full spec" --no-continue
+```
+
+### 2.4 Deep Thinking / Reasoning Mode
+Toggle reasoning/thinking models on supported platforms (e.g., DeepSeek R1, ChatGPT Think):
+```bash
+convo ask --platform deepseek "Solve this complex concurrency problem" --think
+```
+
+---
+
+## 3. Best Practices for Prompts
+
+To ensure 100% reliable artifact generation across all models, structure your prompt like this:
+
+```text
+Please implement the requested solution.
+For every file, output a separate code block and place the relative filepath on the very first line:
+// filepath: relative/path/to/file.ext
+(or # filepath: for python/yaml/bash/dockerfile, <!-- file: --> for markdown/html).
+Provide full, production-ready code with no placeholders.
+```
+
+---
+
+## 4. Operational Invariants & Safeguards
+
+- **Non-Blocking Execution:** Security checks (secret scrubbing and destructive command detection) never pause `stdio` or block the agent process. Destructive commands are tagged in metadata (`contains_destructive_command: true`).
+- **Zero Focus Theft:** All interactions run in the background via CDP lifecycle emulation (`Page.setWebLifecycleState: active`). The developer's active desktop window focus is never interrupted.
+- **Safe Detach Semantics:** ConvoLink never closes the browser process (`browser.close()`). It disconnects the WebSocket cleanly, leaving all tabs, cookies, and user sessions intact.
+- **PID-Aware Mutexes:** Concurrent executions against the same tab are guarded by lock files in `$XDG_RUNTIME_DIR/convolink/`. Stale locks from crashed processes are automatically reclaimed after verifying PID liveness via `process.kill(pid, 0)`.
+
+---
+
+## 5. Troubleshooting & Error Recovery
+
+| Error / Symptom | Root Cause | Agent Action |
+| :--- | :--- | :--- |
+| `Cannot connect to CDP on 127.0.0.1:9222` | Chrome is not running with remote debugging | Inform the user to run `./scripts/fedora-chrome-debug.sh` or launch Chrome with `--remote-debugging-port=9222`. |
+| `No active tab matching platform: <name>` | The requested web app is not open | Ask the user to open `chatgpt.com`, `chat.deepseek.com`, or `gemini.google.com` in their browser. |
+| `Tab is currently locked by PID <PID>` | Another process is using the tab | Wait 5–10 seconds and retry, or verify if the holding PID is still active. |
+| `Timeout waiting for response` | Generation exceeded timeout limit | Re-run with `--timeout 180000` or check if the tab was intercepted by a manual verification challenge. |
