@@ -1,6 +1,9 @@
 import type { createContainer } from "../container.js";
 import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
 import { GhostCleanupService } from "../adapters/browsers/ghost-cleanup.js";
+import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js";
+import { PlatformEnv } from "../core/env/platform-env.js";
+import { BrowserLocator } from "../core/env/browser-locator.js";
 export { handleHistory, handleResume, handleExport, handleSearch } from "./cli.storage.js";
 export { handleProfile } from "./cli.profile.js";
 
@@ -8,13 +11,25 @@ type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
 
 export async function handleDoctor(orchestrator: Orchestrator, args: string[]): Promise<number> {
   if (args.includes("--launch")) {
-    console.log("🚀 Attempting to auto-launch Chrome with remote debugging on port 9222...");
-    try {
-      Bun.spawn(["bash", "scripts/fedora-chrome-debug.sh"], { stdout: "inherit", stderr: "inherit" });
-    } catch {}
+    console.log("🚀 Attempting to auto-launch browser with remote debugging on port 9222...");
+    const launcher = new BrowserLauncherService();
+    const launched = await launcher.ensureBrowserRunning({ port: 9222 });
+    if (launched) {
+      console.log("✅ Browser online with remote debugging on port 9222.\n");
+    } else {
+      console.log("⚠️ Could not auto-launch browser.\n");
+    }
   }
 
   console.log("🔍 Running ConvoLink Doctor...\n");
+  const platform = PlatformEnv.detect();
+  const binary = BrowserLocator.findBrowserExecutable("any");
+  const distroTag = platform.distro ? ` (${platform.distro})` : "";
+  const libcTag = platform.libc ? ` [libc: ${platform.libc}]` : "";
+  const wslTag = platform.isWsl ? " [WSL2]" : "";
+  console.log(`[Host Environment] OS: ${platform.os}${distroTag}${wslTag} | Arch: ${platform.arch}${libcTag}`);
+  console.log(`[Browser Binary] Resolved: ${binary || "NONE DETECTED"}\n`);
+
   try {
     const report = await orchestrator.doctor();
     console.log(`[CDP Transport] Status: ${report.transportHealth.ok ? "ONLINE" : "OFFLINE"} (Latency: ${report.transportHealth.latencyMs}ms)`);

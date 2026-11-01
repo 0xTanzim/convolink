@@ -11,3 +11,15 @@ export function getDownloadFileExpr(url: string): string {
     });
   })()`;
 }
+
+export const getFocusExpr = (sel: string): string =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (el) el.focus(); })()`;
+
+export const getClickExpr = (sel: string): string =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (el) el.click(); })()`;
+
+export const getKeyPressExpr = (sel: string, key: string): string =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (el) { el.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, bubbles: true })); el.dispatchEvent(new KeyboardEvent('keyup', { key: ${JSON.stringify(key)}, bubbles: true })); } })()`;
+
+export const getChangeExpr = (sel: string): string =>
+  `(() => { const el = document.querySelector(${JSON.stringify(sel)}); if (el && 'files' in el) el.dispatchEvent(new Event('change', { bubbles: true })); })()`;

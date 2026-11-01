@@ -127,4 +127,21 @@ describe("CLI Entrypoint", () => {
       console.error = origErr;
     }
   });
+
+  it("runs doctor printing host environment and browser binary diagnostics", async () => {
+    let output = "";
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => {
+      output += args.join(" ") + "\n";
+    };
+
+    try {
+      await runCli(["doctor"]);
+      expect(output).toContain("ConvoLink Doctor");
+      expect(output).toContain("[Host Environment]");
+      expect(output).toContain("[Browser Binary]");
+    } finally {
+      console.log = origLog;
+    }
+  });
 });

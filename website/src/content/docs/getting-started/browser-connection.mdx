@@ -27,6 +27,53 @@ ConvoLink implements the **Zero Ghost Browser Law** (`AGENTS.md`) using a priori
 | **Tier 3** | Companion Extension | WebSocket bridge via `chrome.debugger` | Works on everyday profile with **zero flags** |
 | **Tier 4** | Dedicated Profile | Spawns dedicated persistent profile | Explicit fallback only; never the default |
 
+## Cross-Platform Setup
+
+ConvoLink is engineered to run seamlessly across all modern operating systems, CPU architectures, and containerized cloud environments:
+
+<Tabs>
+  <TabItem label="Linux">
+    ```bash
+    # Standard Google Chrome / Chromium
+    google-chrome --remote-debugging-port=9222 &
+
+    # ConvoLink auto-launch
+    convo doctor --launch
+    ```
+    *Supports Fedora, Ubuntu, Debian, Arch Linux, Alpine (musl), Flatpak, and Snap.*
+  </TabItem>
+  <TabItem label="macOS">
+    ```bash
+    # Apple Silicon (M1/M2/M3/M4) & Intel
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 &
+    ```
+    *Also supports Brave, Microsoft Edge, and Arc Browser.*
+  </TabItem>
+  <TabItem label="Windows">
+    ```powershell
+    # PowerShell Native
+    Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222"
+    ```
+    *Or run `powershell -File .\scripts\convo-debug.ps1` for interactive diagnostics.*
+  </TabItem>
+  <TabItem label="WSL2">
+    **Windows Host Chrome to WSL2 Bridging:**
+    1. Launch Chrome on Windows with `--remote-debugging-port=9222`.
+    2. Allow port 9222 across the WSL virtual ethernet adapter in Administrator PowerShell:
+    ```powershell
+    netsh interface portproxy add v4tov4 listenport=9222 listenaddress=0.0.0.0 connectport=9222 connectaddress=127.0.0.1
+    New-NetFirewallRule -DisplayName "WSL Chrome CDP" -Direction Inbound -Protocol TCP -LocalPort 9222 -Action Allow
+    ```
+    3. Run `convo doctor` inside WSL2. ConvoLink automatically resolves the Windows default gateway.
+  </TabItem>
+  <TabItem label="Cloud / Headless">
+    ```bash
+    # Auto-injects --headless=new, --disable-gpu, --disable-dev-shm-usage, --no-sandbox
+    convo doctor --launch
+    ```
+  </TabItem>
+</Tabs>
+
 ## Multi-Profile Discovery (`convo profile`)
 
 Developers often use multiple browser profiles (e.g., Personal vs Work). ConvoLink reads browser `Local State` to extract human-readable profile names and Google emails:

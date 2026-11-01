@@ -79,14 +79,25 @@ Allows local agents to borrow upstream web capabilities—**extended thinking (D
 
 ## 🚀 60-Second Quickstart
 
-### 1. Run Instantly or Install Globally
+### 1. Install or Run Instantly
+
+#### One-Line Universal Installers
+```bash
+# Linux (Ubuntu/Debian, Fedora, Arch, Alpine) & macOS:
+curl -fsSL https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.sh | bash
+
+# Windows Native (PowerShell):
+irm https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.ps1 | iex
+```
+
+#### Or Run with Package Managers
 ```bash
 # Run instantly with zero setup:
 bunx -y convolink@latest doctor
 
 # Or install globally:
 bun add -g convolink
-# (or: npm install -g convolink)
+# (or: pnpm add -g convolink)
 ```
 
 ### 2. Connect Your Real Browser (Zero "Ghost Browsers")
@@ -104,13 +115,135 @@ Connects directly to your everyday browser session with **zero Chrome startup fl
    convo ext pair
    ```
 
-#### Path B: Direct CDP Remote Debugging
-Connect directly via Chrome DevTools Protocol (CDP):
-- **Everyday Chrome (Chrome 144+):** Open `chrome://inspect/#remote-debugging` in your everyday Chrome and toggle remote debugging. Chrome writes its dynamic port to `DevToolsActivePort`, which ConvoLink detects automatically.
-- **Linux Native Helper (Fedora / Ubuntu):** Run our native script to inspect running sessions or launch safely:
-  ```bash
-  ./scripts/fedora-chrome-debug.sh
-  ```
+#### Path B: Direct Remote Debugging (Cross-Platform)
+
+Connect directly via Chrome DevTools Protocol (CDP) or native launchers:
+
+<details>
+<summary><b>🐧 Fedora & RHEL / CentOS Linux</b></summary>
+
+```bash
+# Launch Chrome with remote debugging on port 9222
+google-chrome --remote-debugging-port=9222 &
+
+# Or use ConvoLink auto-launch
+convo doctor --launch
+```
+</details>
+
+<details>
+<summary><b>🐧 Ubuntu, Debian, Linux Mint & Pop!_OS</b></summary>
+
+```bash
+# Standard APT Google Chrome
+google-chrome --remote-debugging-port=9222 &
+
+# Chromium (APT or Snap)
+chromium-browser --remote-debugging-port=9222 &
+```
+*Note for Snap/Flatpak users: ConvoLink automatically discovers sandboxed binaries at `/snap/bin/` and `/var/lib/flatpak/exports/bin/`.*
+</details>
+
+<details>
+<summary><b>🏹 Arch Linux & Manjaro</b></summary>
+
+```bash
+# Google Chrome (AUR) or Chromium (official repo)
+google-chrome-stable --remote-debugging-port=9222 &
+# or
+chromium --remote-debugging-port=9222 &
+```
+</details>
+
+<details>
+<summary><b>🏔️ Alpine Linux (musl libc / Docker)</b></summary>
+
+```bash
+# Install Chromium
+apk add chromium
+
+# Launch with container-safe flags
+chromium-browser --remote-debugging-port=9222 --headless=new --disable-gpu --disable-dev-shm-usage --no-sandbox &
+```
+</details>
+
+<details>
+<summary><b>🦾 Linux ARM64 (Raspberry Pi, Asahi Linux, Ampere Cloud VMs)</b></summary>
+
+Official Google Chrome `.deb`/`.rpm` is x86_64 only. On ARM64 Linux, ConvoLink automatically prioritizes native Chromium:
+```bash
+# Install native ARM64 Chromium
+sudo apt install chromium-browser # (Debian/Ubuntu)
+# or: sudo dnf install chromium     # (Fedora)
+
+chromium-browser --remote-debugging-port=9222 &
+```
+</details>
+
+<details>
+<summary><b>🍎 macOS (Apple Silicon M1/M2/M3/M4 & Intel)</b></summary>
+
+```bash
+# Launch Google Chrome with remote debugging
+"/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 &
+
+# Or launch Brave
+"/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" --remote-debugging-port=9222 &
+
+# Or launch Microsoft Edge
+"/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge" --remote-debugging-port=9222 &
+```
+</details>
+
+<details>
+<summary><b>🪟 Windows Native (PowerShell / Command Prompt)</b></summary>
+
+```powershell
+# Launch Google Chrome with remote debugging on port 9222
+Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222"
+
+# Or use ConvoLink debug probe
+powershell -File .\scripts\convo-debug.ps1
+```
+</details>
+
+<details>
+<summary><b>🌉 Windows Subsystem for Linux (WSL2) Cross-Boundary Bridging</b></summary>
+
+ConvoLink running inside WSL2 connects directly to your Windows host Chrome session!
+
+1. **On Windows Host:** Launch Chrome with remote debugging:
+   ```powershell
+   chrome.exe --remote-debugging-port=9222
+   ```
+2. **On Windows Host (One-Time Setup):** Allow port 9222 across the WSL2 vEthernet adapter in Administrator PowerShell:
+   ```powershell
+   # 1-Click setup via ConvoLink helper
+   powershell -File .\scripts\convo-debug.ps1 -ConfigureWslBridge
+
+   # Or manually:
+   netsh interface portproxy add v4tov4 listenport=9222 listenaddress=0.0.0.0 connectport=9222 connectaddress=127.0.0.1
+   New-NetFirewallRule -DisplayName "WSL Chrome CDP" -Direction Inbound -Protocol TCP -LocalPort 9222 -Action Allow
+   ```
+3. **Inside WSL2:** ConvoLink automatically probes `127.0.0.1` and falls back to your Windows default gateway (`ip route show default`):
+   ```bash
+   convo doctor
+   ```
+</details>
+
+<details>
+<summary><b>☁️ Cloud MicroVMs & Headless CI/CD Containers</b></summary>
+
+ConvoLink automatically injects container-safe flags (`--headless=new`, `--disable-gpu`, `--disable-dev-shm-usage`, `--no-sandbox`) when no display server is detected:
+```bash
+convo doctor --launch
+# Or manually:
+google-chrome --remote-debugging-port=9222 --headless=new --disable-gpu --disable-dev-shm-usage --no-sandbox &
+```
+</details>
+
+<br/>
+
 - **Dedicated Persistent AI Profile:** If you prefer a standalone browser window that saves all your logins across reboots:
   ```bash
   google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/convolink/profiles/ai-profile" &

@@ -2,11 +2,15 @@ import { spawn } from "node:child_process";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
+import { PlatformEnv } from "../../core/env/platform-env.js";
 
 export interface LauncherDependencies {
   findBinary?: (browserName?: string) => string | null;
-  checkPort?: (port: number) => Promise<boolean>;
+  checkPort?: (port: number, host?: string) => Promise<boolean>;
   spawnProcess?: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => void;
+  isWsl?: () => boolean;
+  getWslGateway?: () => string | null;
+  isHeadless?: () => boolean;
 }
 
 export interface EnsureBrowserOptions {
@@ -16,16 +20,23 @@ export interface EnsureBrowserOptions {
   browser?: string;
   timeoutMs?: number;
   pollIntervalMs?: number;
+  headless?: boolean;
 }
 
 export class BrowserLauncherService {
   private readonly findBinary: (browserName?: string) => string | null;
-  private readonly portChecker: (port: number) => Promise<boolean>;
+  private readonly customPortChecker?: (port: number, host?: string) => Promise<boolean>;
   private readonly spawner: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => void;
+  private readonly isWsl: () => boolean;
+  private readonly getWslGateway: () => string | null;
+  private readonly isHeadless: () => boolean;
 
   public constructor(deps: LauncherDependencies = {}) {
     this.findBinary = deps.findBinary ?? ((b) => HostEnv.findBrowserExecutable(b));
-    this.portChecker = deps.checkPort ?? ((port) => this.checkPort(port));
+    this.customPortChecker = deps.checkPort;
+    this.isWsl = deps.isWsl ?? (() => PlatformEnv.isWsl());
+    this.getWslGateway = deps.getWslGateway ?? (() => PlatformEnv.getWslGatewayIp());
+    this.isHeadless = deps.isHeadless ?? (() => PlatformEnv.isHeadless());
     this.spawner =
       deps.spawnProcess ??
       ((bin, args, opts) => {
@@ -34,9 +45,27 @@ export class BrowserLauncherService {
       });
   }
 
-  public async checkPort(port = 9222): Promise<boolean> {
+  public async checkPort(port = 9222, host = "127.0.0.1"): Promise<boolean> {
+    if (this.customPortChecker) {
+      if (await this.customPortChecker(port, host)) return true;
+      if (host === "127.0.0.1" && this.isWsl()) {
+        const gw = this.getWslGateway();
+        if (gw && (await this.customPortChecker(port, gw))) return true;
+      }
+      return false;
+    }
+
+    if (await this.ping(host, port)) return true;
+    if (host === "127.0.0.1" && this.isWsl()) {
+      const gw = this.getWslGateway();
+      if (gw && (await this.ping(gw, port))) return true;
+    }
+    return false;
+  }
+
+  private async ping(host: string, port: number): Promise<boolean> {
     try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/version`, {
+      const res = await fetch(`http://${host}:${port}/json/version`, {
         signal: AbortSignal.timeout(300),
       });
       return res.ok;
@@ -67,7 +96,7 @@ export class BrowserLauncherService {
 
   public async ensureBrowserRunning(options: EnsureBrowserOptions = {}): Promise<boolean> {
     const port = options.port ?? 9222;
-    if (await this.portChecker(port)) {
+    if (await this.checkPort(port)) {
       return true;
     }
 
@@ -82,6 +111,9 @@ export class BrowserLauncherService {
       args.push(`--profile-directory=${options.profileDirectory}`);
       args.push("--no-first-run");
     }
+    if (options.headless === true || (options.headless === undefined && this.isHeadless())) {
+      args.push("--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox");
+    }
 
     this.spawner(binary, args, { detached: true, stdio: "ignore" });
 
@@ -91,12 +123,11 @@ export class BrowserLauncherService {
 
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, interval));
-      if (await this.portChecker(port)) {
+      if (await this.checkPort(port)) {
         return true;
       }
     }
 
-    // Check if the failure was caused by a running browser instance locking the profile
     const lock = this.isProfileLocked(options.profilePath);
     if (lock.locked) {
       console.error(

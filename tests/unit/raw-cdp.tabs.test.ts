@@ -71,4 +71,48 @@ describe("RawCdpAdapter Tab & Navigation Operations", () => {
     expect(evaluated.some((e) => e.includes("window.location.href =") && e.includes("chat.deepseek.com"))).toBe(true);
     expect(evaluated.some((e) => e.includes("window.history.back()"))).toBe(true);
   });
+
+  it("resolves WSL2 gateway endpoint and rewrites wsDebuggerUrl when 127.0.0.1 fails in WSL", async () => {
+    const originalFetch = globalThis.fetch;
+    const requestedUrls: string[] = [];
+
+    globalThis.fetch = (async (input: RequestInfo | URL) => {
+      const url = String(input);
+      requestedUrls.push(url);
+      if (url.includes("127.0.0.1")) {
+        throw new Error("Connection refused on loopback");
+      }
+      if (url.includes("172.28.0.1")) {
+        return new Response(
+          JSON.stringify([
+            {
+              id: "tab-wsl-1",
+              type: "page",
+              url: "https://chatgpt.com/",
+              title: "ChatGPT",
+              webSocketDebuggerUrl: "ws://127.0.0.1:9222/devtools/page/tab-wsl-1",
+            },
+          ]),
+          { status: 200, headers: { "Content-Type": "application/json" } }
+        );
+      }
+      throw new Error(`Unexpected URL: ${url}`);
+    }) as any;
+
+    try {
+      const adapter = new RawCdpAdapter(9222, {
+        isWsl: () => true,
+        getWslGateway: () => "172.28.0.1",
+      });
+
+      const tabs = await adapter.listTabs();
+
+      expect(requestedUrls.some((u) => u.includes("127.0.0.1"))).toBe(true);
+      expect(requestedUrls.some((u) => u.includes("172.28.0.1"))).toBe(true);
+      expect(tabs.length).toBe(1);
+      expect(tabs[0]?.webSocketDebuggerUrl).toBe("ws://172.28.0.1:9222/devtools/page/tab-wsl-1");
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
 });

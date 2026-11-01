@@ -117,4 +117,44 @@ describe("BrowserLauncherService (Detached Daemon)", () => {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }
   });
+
+  it("appends container-safe headless flags when headless option is true", async () => {
+    let capturedArgs: string[] = [];
+
+    const launcher = new BrowserLauncherService({
+      findBinary: () => "/usr/bin/google-chrome",
+      checkPort: async () => false,
+      spawnProcess: (_bin, args) => {
+        capturedArgs = args;
+      },
+    });
+
+    await launcher.ensureBrowserRunning({
+      headless: true,
+      timeoutMs: 50,
+      pollIntervalMs: 10,
+    });
+
+    expect(capturedArgs).toContain("--headless=new");
+    expect(capturedArgs).toContain("--disable-gpu");
+    expect(capturedArgs).toContain("--disable-dev-shm-usage");
+    expect(capturedArgs).toContain("--no-sandbox");
+  });
+
+  it("probes WSL gateway IP when running in WSL and loopback port is closed", async () => {
+    const probedUrls: string[] = [];
+    const launcher = new BrowserLauncherService({
+      checkPort: async (_port, host) => {
+        probedUrls.push(host || "127.0.0.1");
+        return host === "172.28.0.1";
+      },
+      isWsl: () => true,
+      getWslGateway: () => "172.28.0.1",
+    });
+
+    const isRunning = await launcher.checkPort(9222);
+    expect(isRunning).toBe(true);
+    expect(probedUrls).toContain("127.0.0.1");
+    expect(probedUrls).toContain("172.28.0.1");
+  });
 });
