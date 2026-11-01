@@ -113,4 +113,36 @@ describe("SessionOrchestrator Tab & Rollback Operations", () => {
     await orchestrator.goBack("tab-1");
     expect(browser.backNavigations.length).toBe(1);
   });
+
+  it("automatically auto-provisions a new tab when requested platform tab is not open", async () => {
+    const browser = new FakeBrowserPort();
+    browser.evalResponseMap.set("resolveSelectors", {
+      ok: true,
+      layoutVariant: "v1",
+      composerSelector: "textarea",
+      sendButtonSelector: "button",
+      stopIndicatorSelector: null,
+      turnContainerSelector: ".turn",
+    });
+    browser.evalResponseMap.set("awaitCompletion", {
+      mdCount: 1,
+      hasNewTurn: true,
+      isGenerating: false,
+      turnIndex: 0,
+      text: "Auto provision reply",
+      codeBlocks: [],
+    });
+
+    // Provide browser with NO deepseek tabs (only unrelated tab)
+    browser.customTabs = [{ targetId: "other-tab", title: "Google", url: "https://www.google.com" }];
+
+    const { orchestrator } = makeOrchestrator(browser);
+    const result = await orchestrator.ask({
+      prompt: "Hello DeepSeek",
+      platform: "deepseek",
+    });
+
+    expect(result.turn.markdownContent).toBe("Auto provision reply");
+    expect(browser.createdTabs).toContain("https://chat.deepseek.com/");
+  });
 });

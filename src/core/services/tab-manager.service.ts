@@ -3,6 +3,7 @@ import type { PlatformId, PlatformPort } from "../ports/platform.port.js";
 import type { LockService } from "./lock.service.js";
 import type { StateJournalService } from "./journal.service.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
+import { TabResolver } from "./tab-resolver.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
 
 export class TabManagerService {
@@ -82,6 +83,21 @@ export class TabManagerService {
       if (sessionHandle) await this.browser.detach(sessionHandle);
       await this.lockService.releaseLock(lockHandle);
     }
+  }
+
+  public async resolveOrAutoOpenTab(
+    options: { targetId?: string; platform?: PlatformId; prompt?: string; openTab?: boolean },
+    tabs: DiscoveredTab[],
+  ): Promise<DiscoveredTab> {
+    if (options.openTab) {
+      return this.createTab(options.platform ?? "chatgpt");
+    }
+    const matchingPlatformTab = options.platform ? tabs.find((t) => t.platformId === options.platform) : undefined;
+    const hasDriver = options.platform ? this.drivers.some((d) => d.id === options.platform) : false;
+    if (options.platform && !options.targetId && !matchingPlatformTab && hasDriver && this.browser.createTab) {
+      return this.createTab(options.platform);
+    }
+    return TabResolver.resolveTargetTab(options, tabs);
   }
 
   public async undo(tab: DiscoveredTab): Promise<{ restoredUrl: string } | null> {

@@ -11,12 +11,14 @@ export class FakeBrowserPort implements BrowserPort {
   public evalResponseMap = new Map<string, unknown>();
   public filledTexts: Array<{ selector: string; text: string }> = [];
   public clickedSelectors: string[] = [];
+  public customTabs?: TabDescriptor[];
 
   public async health(): Promise<TransportHealth> {
     return { ok: true, adapterId: "fake", endpoint: "fake", openTabsCount: 1, latencyMs: 1 };
   }
 
   public async listTabs(): Promise<TabDescriptor[]> {
+    if (this.customTabs) return this.customTabs;
     return [{ targetId: "tab-1", title: "DeepSeek", url: "https://chat.deepseek.com/a/chat/s/test-123" }];
   }
 

@@ -101,9 +101,7 @@ export class SessionOrchestrator {
 
   public async ask(options: AskOptions): Promise<AskResult> {
     const tabs = await this.listTabs();
-    const targetTab = options.openTab
-      ? await this.createTab(options.platform ?? "chatgpt")
-      : TabResolver.resolveTargetTab(options, tabs);
+    const targetTab = await this.tabManager.resolveOrAutoOpenTab(options, tabs);
 
     const driver = TabResolver.findDriver(targetTab.url, this.drivers);
     if (!driver) throw new PlatformDriverNotFoundError(targetTab.url);

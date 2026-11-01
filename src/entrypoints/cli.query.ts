@@ -1,6 +1,7 @@
 import type { createContainer } from "../container.js";
 import { parseAskArgs, parseCompareArgs, readStdin } from "./cli.args.js";
 import { ensureProjectProfile } from "./cli.prompt.js";
+import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js";
 import type { BrowserAdapterId } from "../core/ports/browser.port.js";
 
 type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
@@ -18,7 +19,9 @@ export async function handleAsk(
     return 1;
   }
 
-  await ensureProjectProfile({ profileArg: parsed.profile });
+  const config = await ensureProjectProfile({ profileArg: parsed.profile });
+  const launcher = new BrowserLauncherService();
+  await launcher.ensureBrowserRunning({ profilePath: config?.profilePath });
 
   try {
     const result = await orchestrator.ask({
@@ -72,6 +75,8 @@ export async function handleCompare(
   }
 
   await ensureProjectProfile({ profileArg: parsed.profile });
+  const launcher = new BrowserLauncherService();
+  await launcher.ensureBrowserRunning();
   try {
     const report = await orchestrator.compare({
       prompt, platforms: parsed.platforms, mode: parsed.mode, timeoutMs: parsed.timeoutMs,
