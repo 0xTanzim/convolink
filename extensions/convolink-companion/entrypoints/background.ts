@@ -1,3 +1,5 @@
+const defineBackground = (fn: () => void) => fn();
+
 export default defineBackground(() => {
   const BRIDGE_WS_URL = "ws://127.0.0.1:9224";
   const AI_DOMAINS = [

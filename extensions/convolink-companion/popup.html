@@ -1,47 +1,111 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <meta charset="utf-8">
+  <meta charset="UTF-8">
+  <title>ConvoLink Companion</title>
   <style>
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-      width: 280px;
-      padding: 16px;
+      width: 300px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       margin: 0;
-      color: #1e293b;
-      background: #f8fafc;
+      padding: 16px;
+      background: #18181b;
+      color: #fafafa;
     }
-    h3 {
-      margin: 0 0 8px 0;
+    h2 {
       font-size: 15px;
+      margin: 0 0 12px 0;
       display: flex;
       align-items: center;
       gap: 6px;
     }
     .badge {
-      display: inline-block;
-      padding: 2px 8px;
-      border-radius: 9999px;
       font-size: 11px;
-      font-weight: 600;
+      background: #27272a;
+      padding: 2px 6px;
+      border-radius: 4px;
+      color: #a1a1aa;
     }
-    .online { background: #dcfce7; color: #166534; }
-    .offline { background: #fee2e2; color: #991b1b; }
-    .info {
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      margin-bottom: 12px;
+      padding: 8px;
+      background: #27272a;
+      border-radius: 6px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #eab308;
+    }
+    .dot.connected { background: #22c55e; }
+    .dot.unauthorized { background: #ef4444; }
+    .dot.disconnected { background: #71717a; }
+    label {
       font-size: 12px;
-      color: #64748b;
+      color: #a1a1aa;
+      display: block;
+      margin-bottom: 4px;
+    }
+    input {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 6px 8px;
+      background: #09090b;
+      border: 1px solid #3f3f46;
+      border-radius: 4px;
+      color: #fff;
+      font-size: 12px;
+      margin-bottom: 8px;
+    }
+    button {
+      width: 100%;
+      padding: 6px;
+      background: #3b82f6;
+      border: none;
+      border-radius: 4px;
+      color: #fff;
+      font-weight: 500;
+      font-size: 12px;
+      cursor: pointer;
+      margin-bottom: 12px;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    .help {
+      font-size: 11px;
+      color: #71717a;
       line-height: 1.4;
-      margin-top: 8px;
+    }
+    code {
+      background: #27272a;
+      padding: 1px 4px;
+      border-radius: 3px;
+      color: #e4e4e7;
     }
   </style>
 </head>
 <body>
-  <h3>🔗 ConvoLink Companion</h3>
-  <div id="statusBadge" class="badge online">Checking bridge...</div>
-  <p class="info">
-    Provides zero-flag, authenticated CDP connection from your everyday Chrome profile to local AI coding agents.
-  </p>
-  <div class="info" style="font-size: 11px;">Bridge Endpoint: ws://127.0.0.1:9224</div>
-  <script src="popup.js"></script>
+  <h2>ConvoLink Bridge <span class="badge" id="browserBadge">Chrome</span></h2>
+  <div class="status">
+    <div class="dot" id="statusDot"></div>
+    <span id="statusText">Checking status...</span>
+  </div>
+  <div>
+    <label for="profileInput">Profile Nickname</label>
+    <input type="text" id="profileInput" placeholder="e.g. Work, Creative, Personal">
+    <label for="tokenInput">Pairing Token</label>
+    <input type="password" id="tokenInput" placeholder="Enter token from 'convo ext pair'">
+    <button id="saveBtn">Save Settings & Connect</button>
+  </div>
+  <div class="help">
+    Run <code>convo ext pair</code> in terminal to get your local pairing token.
+  </div>
+  <script type="module" src="./popup.js"></script>
 </body>
 </html>

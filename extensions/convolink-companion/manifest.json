@@ -4,9 +4,10 @@
   "version": "1.0.0",
   "description": "Zero-flag intelligence & context bridge for ConvoLink and local AI agents.",
   "permissions": [
-    "debugger",
     "tabs",
-    "storage"
+    "storage",
+    "alarms",
+    "scripting"
   ],
   "host_permissions": [
     "https://chatgpt.com/*",

@@ -20,6 +20,8 @@ artifacts/
 # Build & TypeScript Output
 dist/
 build/
+.output/
+*.zip
 *.tsbuildinfo
 .turbo/
 .cache/
