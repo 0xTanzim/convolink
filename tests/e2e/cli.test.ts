@@ -39,6 +39,8 @@ describe("CLI Entrypoint", () => {
       expect(output).toContain("convo mcp");
       expect(output).toContain("--transport");
       expect(output).toContain("firefox-bidi");
+      expect(output).toContain("extension-bridge");
+      expect(output).toContain("convo ext pair");
       expect(output).toContain("--new, -n");
       expect(output).toContain("--open-tab");
     } finally {

@@ -33,6 +33,24 @@ export class HostEnv {
   }
 
   /**
+   * Resolves the persistent configuration directory (~/.config/convolink or $XDG_CONFIG_HOME/convolink).
+   */
+  public static getConfigDir(): string {
+    const xdgConfig = process.env.XDG_CONFIG_HOME;
+    if (xdgConfig && xdgConfig.trim().length > 0 && xdgConfig.trim() !== "undefined") {
+      return path.join(xdgConfig.trim(), this.APP_NAME);
+    }
+    return path.join(os.homedir(), ".config", this.APP_NAME);
+  }
+
+  /**
+   * Resolves the deterministic path to the local bridge pairing token file.
+   */
+  public static getBridgeTokenPath(): string {
+    return path.join(this.getConfigDir(), "bridge-token.json");
+  }
+
+  /**
    * Formats a deterministic mutex lockfile path for a browser tab.
    */
   public static getTabLockPath(targetId: string): string {

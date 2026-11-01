@@ -14,6 +14,7 @@ Usage:
   convo export <threadId>        Export structured conversation ledger (Markdown or JSON)
   convo search <query>           Full-text search across historical conversation turns and code
   convo profile [list|select]    View and persist active browser profile in .convo/config.json
+  convo ext pair [--rotate]      Display or rotate extension pairing token for browser bridge
   convo clean                    Purge stray ghost browser processes and temporary debug profiles
   convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio
 
@@ -22,7 +23,7 @@ Options for ask:
   --open-tab                     Spawn brand new tab in background before submitting
   -p, --platform <id>            Target specific platform (deepseek | chatgpt | gemini | claude)
   -t, --target, --targetId <id>  Target specific browser tab targetId
-  --transport <name>             Transport engine: raw-cdp (default) | agent-browser | firefox-bidi
+  --transport <name>             Transport engine: raw-cdp (default) | agent-browser | firefox-bidi | extension-bridge
   --think / --no-think           Enable or disable deep thinking mode
   --search / --no-search         Enable or disable web search mode
   --timeout <ms>                 Response wait timeout in milliseconds (default: 120000)

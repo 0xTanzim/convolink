@@ -61,4 +61,13 @@ describe("TabResolver Shorthand & Disambiguation Guard", () => {
     expect(resolved.targetId).toBe("hex-tab-ccc");
     expect(resolved.platformId).toBe("deepseek");
   });
+
+  it("prioritizes exact targetId match over ordinal index shorthand", () => {
+    const extTabs: DiscoveredTab[] = [
+      { targetId: "tab-1", title: "ChatGPT 1", url: "https://chatgpt.com/", platformId: "chatgpt", threadId: null },
+      { targetId: "901", title: "Extension Tab 901", url: "https://chatgpt.com/", platformId: "chatgpt", threadId: null },
+    ];
+    const resolvedExt = TabResolver.resolveTargetTab({ targetId: "901" }, extTabs);
+    expect(resolvedExt.targetId).toBe("901");
+  });
 });

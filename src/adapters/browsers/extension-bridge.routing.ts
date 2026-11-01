@@ -75,3 +75,12 @@ export class ClientRegistry {
     return null;
   }
 }
+
+export function mapClientTabs(rawList: any[], client: ConnectedClient, multiClient: boolean): TabDescriptor[] {
+  return rawList.map((t: any) => ({
+    targetId: multiClient ? `${client.clientId}::${t.tabId ?? t.targetId}` : String(t.tabId ?? t.targetId),
+    title: `${multiClient ? `[${client.profileLabel || client.browserFamily}] ` : ""}${t.title || "Untitled Tab"}`,
+    url: t.url,
+  }));
+}
+

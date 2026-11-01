@@ -13,6 +13,7 @@ export default defineBackground(() => {
   let clientId = "";
   let browserFamily = "chrome";
   let profileLabel = "Personal";
+  let bridgeToken = "";
 
   // Top-level listener registration for alarms recovery
   chrome.alarms.onAlarm.addListener((alarm) => {
@@ -22,7 +23,7 @@ export default defineBackground(() => {
   });
 
   async function initIdentity(): Promise<void> {
-    const data = await chrome.storage.local.get(["installationProfileId", "profileLabel"]);
+    const data = await chrome.storage.local.get(["installationProfileId", "profileLabel", "bridgeToken"]);
     if (data.installationProfileId) {
       installationProfileId = data.installationProfileId as string;
     } else {
@@ -31,6 +32,7 @@ export default defineBackground(() => {
     }
     clientId = installationProfileId;
     profileLabel = (data.profileLabel as string) || "Personal";
+    bridgeToken = (data.bridgeToken as string) || "";
 
     const ua = navigator.userAgent.toLowerCase();
     if (ua.includes("brave") || (navigator as any).brave) {
@@ -66,6 +68,7 @@ export default defineBackground(() => {
             browserFamily,
             profileLabel,
             extensionVersion: "1.0.0",
+            token: bridgeToken,
           }),
         );
 
@@ -80,18 +83,28 @@ export default defineBackground(() => {
       ws.onmessage = async (event) => {
         try {
           const msg = JSON.parse(event.data);
+          if (msg.type === "HANDSHAKE_ACK") {
+            if (msg.success) {
+              await chrome.storage.local.set({ connectionStatus: "connected", lastError: null });
+            } else {
+              await chrome.storage.local.set({ connectionStatus: "unauthorized", lastError: msg.error });
+            }
+            return;
+          }
           await handleMessage(msg);
         } catch {}
       };
 
-      ws.onclose = () => {
+      ws.onclose = async () => {
         ws = null;
         if (heartbeatTimer) clearInterval(heartbeatTimer);
+        await chrome.storage.local.set({ connectionStatus: "disconnected" });
         scheduleReconnect();
       };
 
-      ws.onerror = () => {
+      ws.onerror = async () => {
         ws = null;
+        await chrome.storage.local.set({ connectionStatus: "disconnected" });
       };
     } catch {
       scheduleReconnect();
@@ -124,11 +137,152 @@ export default defineBackground(() => {
       sendResult(id, { active: true });
       return;
     }
+
+    if (type === "ATTACH" || type === "DETACH") {
+      sendResult(id, { ok: true });
+      return;
+    }
+
+    if (type === "CREATE_TAB") {
+      const newTab = await chrome.tabs.create({ url: msg.url });
+      sendResult(id, { targetId: String(newTab.id), title: newTab.title || "", url: newTab.url || msg.url });
+      return;
+    }
+
+    if (type === "CLOSE_TAB") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      await chrome.tabs.remove(tabId);
+      sendResult(id, { ok: true });
+      return;
+    }
+
+    if (type === "NAVIGATE") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      await chrome.tabs.update(tabId, { url: msg.url });
+      sendResult(id, { ok: true });
+      return;
+    }
+
+    if (type === "EVALUATE") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      try {
+        const results = await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (code: string) => {
+            try {
+              const res = (0, eval)(code);
+              return { ok: true, value: res };
+            } catch (err: any) {
+              return { ok: false, error: String(err?.message || err) };
+            }
+          },
+          args: [msg.expression],
+        });
+        const first = results?.[0]?.result as { ok: boolean; value?: any; error?: string } | undefined;
+        if (!first) {
+          sendError(id, "No execution result from tab");
+        } else if (first.ok) {
+          sendResult(id, { value: first.value });
+        } else {
+          sendError(id, first.error || "Evaluation failed in page");
+        }
+      } catch (err: any) {
+        sendError(id, err.message || "Failed to executeScript on target tab");
+      }
+      return;
+    }
+
+    if (type === "FILL_TEXT") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (selector: string, text: string) => {
+            const el = document.querySelector(selector) as HTMLElement | null;
+            if (!el) throw new Error(`Element not found for selector: ${selector}`);
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            el.focus();
+            if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+              const proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
+              if (setter) setter.call(el, text);
+              else el.value = text;
+              el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
+              el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
+            } else if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
+              el.textContent = text;
+              el.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
+            } else {
+              (el as any).value = text;
+              el.dispatchEvent(new Event("input", { bubbles: true }));
+            }
+          },
+          args: [msg.selector, msg.text],
+        });
+        sendResult(id, { ok: true });
+      } catch (err: any) {
+        sendError(id, err.message || "FILL_TEXT failed");
+      }
+      return;
+    }
+
+    if (type === "CLICK") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (selector: string) => {
+            const el = document.querySelector(selector) as HTMLElement | null;
+            if (!el) throw new Error(`Element not found for selector: ${selector}`);
+            el.scrollIntoView({ block: "center", inline: "nearest" });
+            const rect = el.getBoundingClientRect();
+            const opts = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
+            el.dispatchEvent(new MouseEvent("mousedown", opts));
+            el.dispatchEvent(new MouseEvent("mouseup", opts));
+            el.dispatchEvent(new MouseEvent("click", opts));
+            if (typeof el.click === "function") el.click();
+          },
+          args: [msg.selector],
+        });
+        sendResult(id, { ok: true });
+      } catch (err: any) {
+        sendError(id, err.message || "CLICK failed");
+      }
+      return;
+    }
+
+    if (type === "PRESS_KEY") {
+      const tabId = parseInt(String(msg.targetId), 10);
+      try {
+        await chrome.scripting.executeScript({
+          target: { tabId },
+          func: (selector: string, key: string) => {
+            const el = (document.querySelector(selector) as HTMLElement | null) || document.activeElement || document.body;
+            const keyCode = key === "Enter" ? 13 : 0;
+            const opts = { key, code: key === "Enter" ? "Enter" : key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true };
+            el.dispatchEvent(new KeyboardEvent("keydown", opts));
+            el.dispatchEvent(new KeyboardEvent("keypress", opts));
+            el.dispatchEvent(new KeyboardEvent("keyup", opts));
+          },
+          args: [msg.selector, msg.key],
+        });
+        sendResult(id, { ok: true });
+      } catch (err: any) {
+        sendError(id, err.message || "PRESS_KEY failed");
+      }
+      return;
+    }
   }
 
   function sendResult(id: number, result: any): void {
     if (ws && ws.readyState === WebSocket.OPEN) {
       ws.send(JSON.stringify({ id, result }));
+    }
+  }
+
+  function sendError(id: number, error: string): void {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({ id, error }));
     }
   }
 

@@ -30,7 +30,7 @@ export async function handleDoctor(orchestrator: Orchestrator, args: string[]): 
       }
       console.log("\n💡 Remediation:");
       console.log("  1. If Chrome is already open, go to: chrome://inspect/#remote-debugging to enable debugging on your active session.");
-      console.log("  2. Or use the ConvoLink Chrome Companion Extension (zero-flag bridge).");
+      console.log("  2. Or use the ConvoLink Companion Extension: run 'convo ext pair' to view your pairing token.");
       console.log("  3. Run 'convo clean' to terminate any accidentally created ghost instances.\n");
       return 1;
     }

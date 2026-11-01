@@ -14,6 +14,7 @@ import {
   handleClean,
   handleProfile,
 } from "./cli.ops.js";
+import { handleExt } from "./cli.ext.js";
 import { handleAsk, handleCompare } from "./cli.query.js";
 
 export async function runCli(args: string[]): Promise<number> {
@@ -51,6 +52,8 @@ export async function runCli(args: string[]): Promise<number> {
       return handleClean();
     case "profile":
       return handleProfile(args.slice(1));
+    case "ext":
+      return handleExt(args.slice(1));
     case "mcp":
       await runMcpServer();
       return 0;

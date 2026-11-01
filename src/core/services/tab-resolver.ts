@@ -44,6 +44,10 @@ export class TabResolver {
 
   private static resolveByTargetId(targetId: string, tabs: DiscoveredTab[]): DiscoveredTab {
     const trimmed = targetId.trim();
+    // Exact targetId match first (e.g. extension tabId or hex targetId)
+    const exact = tabs.find((t) => t.targetId === trimmed);
+    if (exact) return exact;
+
     // Shorthand index matching: #1, @2, 1
     const indexMatch = trimmed.match(/^[#@]?(\d+)$/);
     if (indexMatch && indexMatch[1]) {
@@ -54,8 +58,6 @@ export class TabResolver {
       throw new TabNotFoundError("index", targetId);
     }
 
-    const found = tabs.find((t) => t.targetId === trimmed);
-    if (!found) throw new TabNotFoundError(undefined, targetId);
-    return found;
+    throw new TabNotFoundError(undefined, targetId);
   }
 }

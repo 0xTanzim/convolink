@@ -5,7 +5,7 @@ export default defineConfig({
     name: "ConvoLink Companion",
     description: "Zero-flag intelligence & context bridge for ConvoLink and local AI agents.",
     version: "1.0.0",
-    permissions: ["tabs", "storage", "alarms"],
+    permissions: ["tabs", "storage", "alarms", "scripting"],
     host_permissions: [
       "https://chatgpt.com/*",
       "https://chat.deepseek.com/*",

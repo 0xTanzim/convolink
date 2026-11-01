@@ -15,6 +15,7 @@ import { TabManagerService } from "./core/services/tab-manager.service.js";
 import { ComparisonCoordinator } from "./core/services/comparison-coordinator.service.js";
 import { SqliteLedgerAdapter } from "./adapters/storage/sqlite-ledger.adapter.js";
 import { SessionOrchestrator } from "./core/services/orchestrator.js";
+import { BridgeTokenService } from "./core/services/bridge-token.service.js";
 import type { BrowserPort, BrowserAdapterId } from "./core/ports/browser.port.js";
 import type { PlatformPort } from "./core/ports/platform.port.js";
 import type { ThreadStore, WorkspaceSinkPort } from "./core/ports/storage.port.js";
@@ -52,7 +53,7 @@ export function createContainer(options?: ContainerOptions): AppContainer {
       : transport === "firefox-bidi"
         ? new FirefoxBidiAdapter(port)
         : transport === "extension-bridge"
-          ? new ExtensionBridgeAdapter(port === 9222 ? 9224 : port)
+          ? new ExtensionBridgeAdapter(port === 9222 ? 9224 : port, new BridgeTokenService())
           : new RawCdpAdapter(endpoint)
   );
 

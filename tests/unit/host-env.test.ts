@@ -49,6 +49,30 @@ describe("HostEnv", () => {
     }
   });
 
+  it("resolves config directory using XDG_CONFIG_HOME or falls back to ~/.config", () => {
+    const originalXdgConfig = process.env.XDG_CONFIG_HOME;
+    try {
+      process.env.XDG_CONFIG_HOME = "/home/test/.config";
+      const configDir = HostEnv.getConfigDir();
+      expect(configDir).toBe("/home/test/.config/convolink");
+
+      delete process.env.XDG_CONFIG_HOME;
+      const fallbackDir = HostEnv.getConfigDir();
+      expect(fallbackDir).toBe(path.join(os.homedir(), ".config", "convolink"));
+    } finally {
+      if (originalXdgConfig === undefined) {
+        delete process.env.XDG_CONFIG_HOME;
+      } else {
+        process.env.XDG_CONFIG_HOME = originalXdgConfig;
+      }
+    }
+  });
+
+  it("resolves deterministic bridge token path inside config directory", () => {
+    const tokenPath = HostEnv.getBridgeTokenPath();
+    expect(tokenPath).toBe(path.join(HostEnv.getConfigDir(), "bridge-token.json"));
+  });
+
   it("formats deterministic tab lock paths with targetId", () => {
     const originalXdg = process.env.XDG_RUNTIME_DIR;
     try {

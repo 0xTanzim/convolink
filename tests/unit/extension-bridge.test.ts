@@ -23,7 +23,7 @@ describe("ExtensionBridgeAdapter", () => {
     const health = await adapter.health();
     expect(health.ok).toBe(false);
     expect(health.adapterId).toBe("extension-bridge");
-    expect(health.error).toContain("No ConvoLink Chrome Companion extension connected");
+    expect(health.error).toContain("No ConvoLink Companion extension connected");
   });
 
   it("handles extension registration and responds to listTabs", async () => {
@@ -179,5 +179,121 @@ describe("ExtensionBridgeAdapter", () => {
     expect(clients[0]?.connectionId).toBe("conn-new");
 
     wsNew.close();
+  });
+
+  it("rejects untrusted origin headers like public websites", async () => {
+    adapter = new ExtensionBridgeAdapter(19229);
+    await adapter.start();
+
+    // Try connecting with a malicious website origin header
+    const res = await fetch("http://127.0.0.1:19229", {
+      headers: {
+        Origin: "https://evil-attacker.example.com",
+      },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it("authenticates handshake with valid pairing token and rejects invalid token", async () => {
+    const fakeTokenService = {
+      getToken: () => "valid-secret-token-1234567890abcdef",
+      validateToken: (t?: string) => t === "valid-secret-token-1234567890abcdef",
+      rotateToken: () => "new-token",
+    };
+
+    adapter = new ExtensionBridgeAdapter(19230, fakeTokenService as any);
+    await adapter.start();
+
+    // 1. Connection with invalid token
+    const wsBad = new WebSocket("ws://127.0.0.1:19230");
+    await new Promise<void>((r) => { wsBad.onopen = () => r(); });
+
+    let badAck: any = null;
+    wsBad.onmessage = (e) => {
+      badAck = JSON.parse(e.data.toString());
+    };
+
+    wsBad.send(JSON.stringify({
+      type: "HANDSHAKE",
+      protocolVersion: 1,
+      clientId: "client-bad",
+      token: "wrong-token",
+    }));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(badAck?.success).toBe(false);
+    expect(badAck?.error).toContain("Invalid pairing token");
+    expect(adapter.getConnectedClients().length).toBe(0);
+
+    // 2. Connection with valid token
+    const wsGood = new WebSocket("ws://127.0.0.1:19230");
+    await new Promise<void>((r) => { wsGood.onopen = () => r(); });
+
+    let goodAck: any = null;
+    wsGood.onmessage = (e) => {
+      goodAck = JSON.parse(e.data.toString());
+    };
+
+    wsGood.send(JSON.stringify({
+      type: "HANDSHAKE",
+      protocolVersion: 1,
+      clientId: "client-good",
+      token: "valid-secret-token-1234567890abcdef",
+    }));
+
+    await new Promise((r) => setTimeout(r, 50));
+    expect(goodAck?.success).toBe(true);
+    expect(adapter.getConnectedClients().length).toBe(1);
+
+    wsGood.close();
+  });
+
+  it("routes evaluate, fillText, click, and pressKey DOM actions to connected extension", async () => {
+    adapter = new ExtensionBridgeAdapter(19231);
+    await adapter.start();
+
+    const ws = new WebSocket("ws://127.0.0.1:19231");
+    await new Promise<void>((r) => { ws.onopen = () => r(); });
+
+    const receivedActions: any[] = [];
+    ws.onmessage = (e) => {
+      const msg = JSON.parse(e.data.toString());
+      receivedActions.push(msg);
+      if (msg.type === "LIST_TABS") {
+        ws.send(JSON.stringify({ id: msg.id, result: [{ tabId: 777, title: "AI Tab", url: "https://chatgpt.com/" }] }));
+      } else if (msg.type === "EVALUATE") {
+        ws.send(JSON.stringify({ id: msg.id, result: { value: 42 } }));
+      } else if (["ATTACH", "FILL_TEXT", "CLICK", "PRESS_KEY"].includes(msg.type)) {
+        ws.send(JSON.stringify({ id: msg.id, result: { ok: true } }));
+      }
+    };
+
+    ws.send(JSON.stringify({
+      type: "HANDSHAKE",
+      protocolVersion: 1,
+      clientId: "client-777",
+      browserFamily: "chrome",
+    }));
+    await new Promise((r) => setTimeout(r, 40));
+
+    const tabs = await adapter.listTabs();
+    expect(tabs.length).toBe(1);
+
+    const session = await adapter.attach("777");
+    expect(session.targetId).toBe("777");
+
+    const evalRes = await adapter.evaluate<number>(session, "1 + 41");
+    expect(evalRes).toBe(42);
+
+    await adapter.fillText(session, "textarea#prompt", "Hello AI");
+    await adapter.click(session, "button#send");
+    await adapter.pressKey(session, "textarea#prompt", "Enter");
+
+    expect(receivedActions.some((a) => a.type === "EVALUATE" && a.expression === "1 + 41")).toBe(true);
+    expect(receivedActions.some((a) => a.type === "FILL_TEXT" && a.text === "Hello AI")).toBe(true);
+    expect(receivedActions.some((a) => a.type === "CLICK" && a.selector === "button#send")).toBe(true);
+    expect(receivedActions.some((a) => a.type === "PRESS_KEY" && a.key === "Enter")).toBe(true);
+
+    ws.close();
   });
 });
