@@ -30,7 +30,7 @@ We established the **Zero "Ghost Browser" Law** (`AGENTS.md` and `docs/ADR.md` A
 | Component | Engineering Achievement | Verification Status |
 | :--- | :--- | :--- |
 | **Doctor Offline Resilience** | `orchestrator.doctor()` wraps `listTabs()` gracefully; reports `OFFLINE` with actionable remediation instead of throwing raw socket `ECONNREFUSED`. | ✅ Verified (`tests/unit/orchestrator-doctor-offline.test.ts`) |
-| **Multi-Profile Discovery** | `BrowserDiscoveryService` reads `Local State` JSON to extract profile IDs, user names, and Google account emails (`kdptanzim0@gmail.com`). | ✅ Verified (`tests/unit/browser-discovery.test.ts` & Live Host Audit) |
+| **Multi-Profile Discovery** | `BrowserDiscoveryService` reads `Local State` JSON to extract profile IDs, user names, and Google account emails (`developer@example.com`). | ✅ Verified (`tests/unit/browser-discovery.test.ts` & Live Host Audit) |
 | **Tab Disambiguation Guard** | `TabResolver` supports `#1`, `#2` shorthand indexing and throws `AmbiguousTabError` instead of silently guessing when multiple tabs match. | ✅ Verified (`tests/unit/tab-resolver-disambiguation.test.ts`) |
 | **Ghost Cleanup Service** | `GhostCleanupService` identifies and purges ghost directories while strictly protecting real user profiles; wired to `convo clean`. | ✅ Verified (`tests/unit/ghost-cleanup.test.ts`) |
 | **Companion Extension Bridge** | Manifest V3 extension (`extensions/convolink-companion/`) + WebSocket adapter (`ExtensionBridgeAdapter`) for zero-flag everyday Chrome connectivity. | ✅ Verified (`tests/unit/extension-bridge.test.ts`) |
@@ -75,7 +75,7 @@ flowchart TD
 - **Next Phase Optimization:** Introduce `--wait [seconds]` flag (default 30s in interactive mode) displaying a smooth terminal spinner: `Waiting for Chrome to appear...`. As soon as the developer clicks their Chrome icon, ConvoLink locks on automatically without an error.
 
 ### Scenario B: Multiple Profiles & Multi-Account Isolation
-- **Risk:** User has personal ChatGPT Plus in `Default (kdptanzim0@gmail.com)` and work Claude Enterprise in `Profile 1 (work@corp.com)`.
+- **Risk:** User has personal ChatGPT Plus in `Default (personal@example.com)` and work Claude Enterprise in `Profile 1 (work@example.com)`.
 - **Enforcement:** If prompt or query does not specify `--targetId` or shorthand `#index`, and multiple AI tabs exist, ConvoLink refuses to execute. It raises `AmbiguousTabError` detailing candidate tabs and their topics, preventing accidental prompt leaks across accounts.
 
 ### Scenario C: Ghost Process / Dirty State Recovery

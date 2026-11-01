@@ -16,8 +16,8 @@ describe("ConfigService (.convo/config.json)", () => {
   it("saves and loads project configuration in .convo/config.json", async () => {
     const configService = new ConfigService();
     const testConfig: ConvoProjectConfig = {
-      profileId: "zack-ai",
-      profileEmail: "avigilzack@gmail.com",
+      profileId: "dev-profile",
+      profileEmail: "developer@example.com",
       profilePath: "/path/to/profile",
       preferredPlatform: "chatgpt",
       transport: "raw-cdp",
@@ -29,8 +29,8 @@ describe("ConfigService (.convo/config.json)", () => {
 
     const loaded = await configService.loadConfig(tmpDir);
     expect(loaded).toBeDefined();
-    expect(loaded?.profileId).toBe("zack-ai");
-    expect(loaded?.profileEmail).toBe("avigilzack@gmail.com");
+    expect(loaded?.profileId).toBe("dev-profile");
+    expect(loaded?.profileEmail).toBe("developer@example.com");
     expect(loaded?.preferredPlatform).toBe("chatgpt");
 
     fs.rmSync(tmpDir, { recursive: true, force: true });

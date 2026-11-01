@@ -76,7 +76,7 @@ convo profile list
 # Select and persist active profile for this project (.convo/config.json)
 convo profile select #1
 # Or select by email/name:
-convo profile select avigilzack@gmail.com
+convo profile select developer@example.com
 ```
 
 Once selected, ConvoLink saves `.convo/config.json` at the project root, automatically targeting that profile with **zero prompts** on subsequent calls.

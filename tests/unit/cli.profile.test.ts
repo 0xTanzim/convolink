@@ -24,11 +24,11 @@ describe("CLI Profile Operations (convo profile)", () => {
 
   it("selects and persists preferred profile into .convo/config.json", async () => {
     const configService = new ConfigService(tmpDir);
-    await configService.saveConfig({ profileId: "zack-ai", profileEmail: "avigilzack@gmail.com" });
+    await configService.saveConfig({ profileId: "dev-profile", profileEmail: "developer@example.com" });
 
     const loaded = await configService.loadConfig(tmpDir);
-    expect(loaded?.profileId).toBe("zack-ai");
-    expect(loaded?.profileEmail).toBe("avigilzack@gmail.com");
+    expect(loaded?.profileId).toBe("dev-profile");
+    expect(loaded?.profileEmail).toBe("developer@example.com");
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

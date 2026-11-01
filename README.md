@@ -153,7 +153,7 @@ Or launch your persistent AI profile:
 ./scripts/fedora-chrome-debug.sh
 
 # Or with custom profile:
-google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/convolink/profiles/zack-ai" &
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/convolink/profiles/ai-profile" &
 ```
 
 #### Option B: ConvoLink Chrome Companion Extension (Zero Flags)
@@ -171,7 +171,7 @@ convo profile list
 # Select active profile for this repository (persisted in .convo/config.json):
 convo profile select #1
 # Or select by email:
-convo profile select avigilzack@gmail.com
+convo profile select developer@example.com
 ```
 
 ### 4. Verify Health (`convo doctor`)

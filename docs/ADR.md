@@ -319,7 +319,7 @@ Autonomous coding agents (Claude Desktop, Cursor, Antigravity) need native JSON-
 Accepted
 
 ### Context
-Starting in Google Chrome 136+, Chromium security mitigations block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles. Naive automation tools circumvent this by spawning Chrome with an ad-hoc `--user-data-dir`, creating an unauthenticated "ghost browser" with zero cookies, zero saved Google accounts, and zero active AI conversations. Furthermore, developers maintain multiple profiles (e.g. personal `kdptanzim0@gmail.com` vs. dedicated AI profile `avigilzack@gmail.com`), creating risks of cross-account data leakage or repetitive interactive prompts.
+Starting in Google Chrome 136+, Chromium security mitigations block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles. Naive automation tools circumvent this by spawning Chrome with an ad-hoc `--user-data-dir`, creating an unauthenticated "ghost browser" with zero cookies, zero saved Google accounts, and zero active AI conversations. Furthermore, developers maintain multiple profiles (e.g. personal `personal@example.com` vs. dedicated AI profile `developer@example.com`), creating risks of cross-account data leakage or repetitive interactive prompts.
 
 ### Decision
 1. **Zero-Ghost Browser Law:** ConvoLink will never spawn an empty, unauthenticated browser instance as its default connection strategy. It attaches exclusively to existing authenticated sessions or guides the user explicitly.
