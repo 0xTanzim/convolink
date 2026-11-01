@@ -1,124 +1,161 @@
 # ConvoLink — Strategic Roadmap & Engineering Execution Plan (`Next_plan.md`)
 
-> **Architectural Core:** An Intelligence, Context, and Capability Bridge connecting upstream web AI conversations to local autonomous coding agents.
+> **Architectural Core:** An Intelligence, Context, and Capability Bridge connecting upstream web AI conversations to local autonomous coding agents.  
 > **Date:** November 1, 2026  
-> **Status:** Phase 3 Verified & Complete $\rightarrow$ Advancing to Phases 4 & 5
+> **Status:** Phases 1–3 Complete & Verified $\rightarrow$ **Target Phase: Phase 4 (Context Compiler, Snapshot Sync, & Tab Rollover Engine)**
 
 ---
 
-## 1. Executive Summary: The Existing Browser Breakthrough
+## 1. Executive Summary & Current State of the System
 
-During live browser testing and diagnostics, we addressed the foundational friction point separating a brittle automation script from an enterprise context runtime: **the existing browser session boundary**.
+ConvoLink provides a zero-friction bridge connecting local autonomous coding agents (Antigravity, Claude Code, Cursor, OpenCode) with real, authenticated browser sessions (ChatGPT, Claude, DeepSeek, Gemini).
 
-### The Problem: The "Ghost Browser" Trap & Chrome 136+ Security Wall
-- Starting in **Google Chrome 136**, Chromium security policies explicitly block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles.
-- Automated workarounds that naively spawn Chrome with a custom `--user-data-dir` create an **unauthenticated "ghost browser"**: a blank profile with zero cookies, zero saved Google accounts, and zero ChatGPT/Claude/DeepSeek sessions.
-- Developers spend days in their everyday browser chatting, brainstorming, and accumulating project intent. Forcing them to re-authenticate inside a separate browser window violates ConvoLink's primary value proposition.
-
-### The Solution: The 4-Tier Connection Engine & Ghost Purge
-We established the **Zero "Ghost Browser" Law** (`AGENTS.md` and `docs/ADR.md` ADR-017):
-1. **Tier 1 (Everyday Active Session via `DevToolsActivePort`):** Scans dynamic ports written by Chrome 144+ user-consented debugging (`chrome://inspect/#remote-debugging`).
-2. **Tier 2 (Configured CDP Port Scanner):** Connects to existing active instances on localhost ports 9222/9229 without spawning new processes.
-3. **Tier 3 (ConvoLink Chrome Companion Extension Bridge):** A lightweight Manifest V3 extension using `chrome.debugger` to attach to existing tabs in the user's primary profile with **zero Chrome startup flags** and **zero browser restarts**.
-4. **Tier 4 (Dedicated Persistent Profile):** Explicitly requested fallback only; never the default.
-5. **Ghost Cleanup Safeguard (`convo clean`):** Automatically terminates stray ghost browser processes and deletes temporary debug directories.
+### Achievements in Phases 1, 2, and 3:
+1. **Zero "Ghost Browser" Guarantee:** Eliminated unauthenticated blank browser profiles. ConvoLink connects directly to the developer's everyday browser profile via user-consented dynamic CDP ports or our Companion Extension Bridge.
+2. **Cross-Browser Companion Extension (Chrome + Firefox MV3):** Authored in strict TypeScript/Bun under `extensions/convolink-companion/`, featuring dynamic manifest generation, non-blocking cryptographic pairing (`convo ext pair`), and content scripts for real-time DOM interaction with upstream AI web clients.
+3. **Automated Packaging & Release Automation (`v1.0.0` Live):**
+   - Packaged and published official `v1.0.0` release on GitHub: [https://github.com/0xTanzim/convolink/releases/tag/v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0)
+   - Full automated CI/CD pipeline (`.github/workflows/extension-release.yml`) with automated version bumping, `bun test` verification, typechecking, and multi-browser ZIP artifact distribution.
+4. **Ironclad Test Suite:** **286 tests passing 100%** (0 failures, 1,555 assertions) with zero TypeScript typecheck errors.
 
 ---
 
-## 2. Completed Milestones & Verified Capabilities
+## 2. Completed Milestones & Verification Ledger
 
-| Component | Engineering Achievement | Verification Status |
-| :--- | :--- | :--- |
-| **Doctor Offline Resilience** | `orchestrator.doctor()` wraps `listTabs()` gracefully; reports `OFFLINE` with actionable remediation instead of throwing raw socket `ECONNREFUSED`. | ✅ Verified (`tests/unit/orchestrator-doctor-offline.test.ts`) |
-| **Multi-Profile Discovery** | `BrowserDiscoveryService` reads `Local State` JSON to extract profile IDs, user names, and Google account emails (`developer@example.com`). | ✅ Verified (`tests/unit/browser-discovery.test.ts` & Live Host Audit) |
-| **Tab Disambiguation Guard** | `TabResolver` supports `#1`, `#2` shorthand indexing and throws `AmbiguousTabError` instead of silently guessing when multiple tabs match. | ✅ Verified (`tests/unit/tab-resolver-disambiguation.test.ts`) |
-| **Ghost Cleanup Service** | `GhostCleanupService` identifies and purges ghost directories while strictly protecting real user profiles; wired to `convo clean`. | ✅ Verified (`tests/unit/ghost-cleanup.test.ts`) |
-| **Companion Extension Bridge** | Manifest V3 extension (`extensions/convolink-companion/`) + WebSocket adapter (`ExtensionBridgeAdapter`) for zero-flag everyday Chrome connectivity. | ✅ Verified (`tests/unit/extension-bridge.test.ts`) |
-| **Fedora Debug Script Fix** | `scripts/fedora-chrome-debug.sh` updated to inspect running Chrome sessions and guide user consent without spawning unauthenticated ghost profiles. | ✅ Verified live |
-| **HITL Profile Elicitation** | Multi-agent interactive selection across Antigravity (`ask_question`), Claude Code (`AskUserQuestion`), OpenCode, Codex, Pi, and MCP (`convo_profile_list`, `convo_profile_select`). | ✅ Verified (`tests/unit/mcp.test.ts`, `tests/unit/cli.prompt.test.ts`) |
+| Component | Engineering Achievement | Status | Verification Reference |
+| :--- | :--- | :---: | :--- |
+| **Doctor Offline Resilience** | `orchestrator.doctor()` wraps `listTabs()` gracefully; reports `OFFLINE` with actionable remediation instead of throwing raw socket `ECONNREFUSED`. | ✅ Done | `tests/unit/orchestrator-doctor-offline.test.ts` |
+| **Multi-Profile Discovery** | `BrowserDiscoveryService` reads `Local State` JSON to extract profile IDs, user names, and Google account emails (`developer@example.com`). | ✅ Done | `tests/unit/browser-discovery.test.ts` |
+| **Tab Disambiguation Guard** | `TabResolver` supports `#1`, `#2` shorthand indexing and throws `AmbiguousTabError` instead of silently guessing when multiple tabs match. | ✅ Done | `tests/unit/tab-resolver-disambiguation.test.ts` |
+| **Ghost Cleanup Service** | `GhostCleanupService` identifies and purges ghost directories while strictly protecting real user profiles; wired to `convo clean`. | ✅ Done | `tests/unit/ghost-cleanup.test.ts` |
+| **Companion Extension Core** | Manifest V3 extension (`extensions/convolink-companion/`) + WebSocket adapter (`ExtensionBridgeAdapter`) for zero-flag everyday Chrome connectivity. | ✅ Done | `tests/unit/extension-bridge.test.ts` |
+| **Cross-Browser MV3 Packaging** | `scripts/build-extension.ts` generates clean unpacked trees and ZIP archives for both Chromium and Firefox MV3 with Gecko settings. | ✅ Done | `tests/unit/build-extension.test.ts` |
+| **Cryptographic Pairing Auth** | `BridgeTokenService` generates and rotates non-blocking HMAC tokens; `convo ext pair` manages pairing secrets securely. | ✅ Done | `tests/unit/bridge-token.test.ts` & `tests/unit/cli.ext.test.ts` |
+| **HITL Profile Elicitation** | Multi-agent interactive selection across Antigravity (`ask_question`), Claude Code (`AskUserQuestion`), OpenCode, and MCP tools. | ✅ Done | `tests/unit/mcp.test.ts` & `tests/unit/cli.prompt.test.ts` |
+| **Release Management CLI** | `scripts/release.ts` automates semantic version bumping (`patch`, `minor`, `major`), workspace syncing, git tagging, and GitHub release creation. | ✅ Done | `tests/unit/release.test.ts` |
+| **Docker Clean-Room CI** | Full CI workflow verified inside isolated `node:24-bookworm` container with SELinux `:z` mount. | ✅ Done | Container test run log |
+| **GitHub Actions Pipeline** | Complete workflow (`extension-release.yml`) builds, tests, typechecks, and uploads all ZIP artifacts. | ✅ Done | GitHub Run ID: `41275404532` |
+| **Official `v1.0.0` Release** | Published on GitHub Releases with 4 attached ZIP assets for Chrome and Firefox. | ✅ Done | GitHub Tag: `v1.0.0` |
 
 ---
 
-## 3. Architecture Topology: The 4-Tier Connection Hierarchy
+## 3. The Next Target: Phase P4 — Context Compiler, Snapshot Sync & Tab Rollover Engine
+
+### The Problem We Are Solving:
+1. **The Browser Lag & Hang Bug:** When conversations grow large (50+ turns, extensive code blocks, canvas modifications), web AI apps (ChatGPT, Claude, DeepSeek) experience heavy DOM lag, memory bloat, and occasional renderer crashes.
+2. **Context Window Degradation:** Upstream models start forgetting early instructions or hallucinating on truncated context windows.
+3. **Disconnected Local Workspace:** Upstream architectural decisions and invariants remain trapped inside the browser tab instead of being available locally in `.convo/CONTEXT.md` for coding agents.
+
+### The Solution: The Context Compiler & Tab Rollover Engine
 
 ```mermaid
 flowchart TD
-    Agent["Local AI Agent / Developer"] --> CLI["convo ask / doctor / compare"]
-    CLI --> ConnEngine["Browser Discovery & Connection Engine"]
-
-    subgraph "Connection Strategy Priority"
-        T1["Tier 1: DevToolsActivePort Scan<br/>(Chrome 144+ chrome://inspect/#remote-debugging)"]
-        T2["Tier 2: Active CDP Scanner<br/>(127.0.0.1:9222 / 9229 / custom port)"]
-        T3["Tier 3: ConvoLink Companion Extension<br/>(chrome.debugger via ws://127.0.0.1:9224)"]
-        T4["Tier 4: Explicit Fallback Profile<br/>(Only when explicitly commanded by user)"]
+    subgraph Browser["Live Browser Tab (Lagging / Large Conversation)"]
+        Tab["Active AI Conversation<br/>(50+ turns, bloated DOM)"]
     end
 
-    ConnEngine --> T1
-    T1 -- Found & Alive --> RawCdp["RawCdpAdapter"]
-    T1 -- Missing --> T2
-    T2 -- Found & Alive --> RawCdp
-    T2 -- Missing --> T3
-    T3 -- Connected --> ExtBridge["ExtensionBridgeAdapter"]
-    T3 -- Missing --> T4
+    subgraph Compiler["Context Compiler Engine (ContextCompilerPort)"]
+        Ledger["SQLite FTS5 Ledger<br/>(Full thread history)"] --> Extractor["Structured Distillation Engine"]
+        Extractor --> Invariants["Active Invariants"]
+        Extractor --> Decisions["Settled Decisions"]
+        Extractor --> Discarded["Discarded Approaches"]
+        Extractor --> Interfaces["Canonical Interfaces"]
+        Extractor --> Directives["Immediate Directives"]
+        Invariants & Decisions & Discarded & Interfaces & Directives --> Packer["Markdown Snapshot Generator"]
+        Packer --> Hash["SHA-256 Fingerprint"]
+    end
 
-    RawCdp --> DisambigGuard["TabResolver & Disambiguation Guard<br/>(#1, #2 indexing + Ambiguity Check)"]
-    ExtBridge --> DisambigGuard
+    subgraph Workspace["Local Project Repository"]
+        Packer --> ContextFile[".convo/CONTEXT.md"]
+        Hash --> ProvFile[".convo/PROVENANCE.json"]
+    end
 
-    DisambigGuard --> ActiveTab["Active Authenticated AI Tab<br/>(ChatGPT / Claude / DeepSeek / Gemini)"]
+    subgraph Rollover["convo rollover (Ceiling Breaker)"]
+        ContextFile --> RolloverEngine["Rollover Engine"]
+        RolloverEngine --> NewTab["Spawn Clean New Chat Tab<br/>(Same platform, zero lag)"]
+        RolloverEngine --> SeedPrompt["Seed Prompt with .convo/CONTEXT.md"]
+        SeedPrompt --> FastSession["Fast, Responsive Conversation Continued"]
+    end
+
+    Tab --> Ledger
 ```
 
 ---
 
-## 4. Cold-Boot & Everyday Edge Case Playbook
+## 4. Phase P4 Detailed Deliverables & Architecture
 
-### Scenario A: User Boots PC $\rightarrow$ Immediate Antigravity/CLI Execution (No Chrome Running)
-- **Current Behavior:** `convo doctor` reports `OFFLINE` cleanly, enumerates installed profiles on disk, and presents clear next steps.
-- **Next Phase Optimization:** Introduce `--wait [seconds]` flag (default 30s in interactive mode) displaying a smooth terminal spinner: `Waiting for Chrome to appear...`. As soon as the developer clicks their Chrome icon, ConvoLink locks on automatically without an error.
+### Deliverable 4.1: `MarkdownSnapshotCompiler` Adapter
+- **Location:** `src/adapters/compilers/markdown-snapshot-compiler.adapter.ts`
+- **Implements:** `ContextCompilerPort` (`src/core/ports/compiler.port.ts`).
+- **Capabilities:**
+  - Parses conversation turns into structured architectural sections:
+    - **Active Invariants:** Non-negotiable architectural constraints and technical rules.
+    - **Settled Decisions:** Architectural agreements, library choices, protocol decisions.
+    - **Discarded Approaches:** What was tried and rejected (and why), preventing loops.
+    - **Canonical Code Interfaces:** Essential TypeScript interfaces, types, and signatures.
+    - **Immediate Directives:** The active next steps to resume without hesitation.
+  - Computes deterministic SHA-256 hash of the generated markdown body.
+  - If content hash is unchanged, skips file writes to prevent cache invalidation.
 
-### Scenario B: Multiple Profiles & Multi-Account Isolation
-- **Risk:** User has personal ChatGPT Plus in `Default (personal@example.com)` and work Claude Enterprise in `Profile 1 (work@example.com)`.
-- **Enforcement:** If prompt or query does not specify `--targetId` or shorthand `#index`, and multiple AI tabs exist, ConvoLink refuses to execute. It raises `AmbiguousTabError` detailing candidate tabs and their topics, preventing accidental prompt leaks across accounts.
+### Deliverable 4.2: Context Sync Service (`ContextSyncService`)
+- **Location:** `src/core/services/context-sync.service.ts`
+- **Capabilities:**
+  - Connects `ThreadStore` (or active browser session) to `MarkdownSnapshotCompiler`.
+  - Persists `.convo/CONTEXT.md` and `.convo/PROVENANCE.json` to the current workspace via `WorkspaceFileSinkAdapter`.
+  - Records metadata: `sourceThreadId`, `platform`, `turnRange`, `packetHash`, and `compiledAt`.
 
-### Scenario C: Ghost Process / Dirty State Recovery
-- **Enforcement:** If an automated test or process ever creates a stray debug directory, `convo clean` terminates stray debug processes and purges temporary files while strictly guarding real user configuration directories (`~/.config/google-chrome`, `~/.config/microsoft-edge`).
+### Deliverable 4.3: CLI Commands (`convo compile` & `convo sync`)
+- **Command:** `convo compile [threadId]`
+  - Compiles the specified thread (or active tab thread) and displays the compiled packet preview in the terminal.
+- **Command:** `convo sync [--tab=<id>] [--force]`
+  - Reads active tab turns, persists them to SQLite ledger, and writes `.convo/CONTEXT.md` and `.convo/PROVENANCE.json` to the workspace.
+
+### Deliverable 4.4: The Ceiling Breaker: `convo rollover`
+- **Command:** `convo rollover [--tab=<id>] [--target=<platform>]`
+- **Flow:**
+  1. Identifies the active bloated tab and reads all turns up to the current state.
+  2. Runs `ContextSyncService` to compile the session into `.convo/CONTEXT.md`.
+  3. Opens a fresh new chat tab on the same platform via `PlatformDriver.triggerNewChat()` or URL navigation.
+  4. Automatically injects a structured rehydration prompt:
+     ```text
+     [CONVOLINK CONTINUATION CONTEXT]
+     The following is a compiled architectural snapshot of our conversation up to this point.
+     All settled decisions and invariants remain active. Let us continue from the immediate directive.
+
+     <CONTEXT.md contents>
+     ```
+  5. Updates `.convo/config.json` with the new `activeThreadId`.
+  6. **Result:** Browser lag drops to zero, token limits are reset, and the developer/agent continues seamlessly.
 
 ---
 
-## 5. Next Implementation Phases: Roadmap P4 & P5
+## 5. Implementation Roadmap (Phases P4 $\rightarrow$ P5 $\rightarrow$ P6)
 
-### Phase P4: Context Compiler & Snapshot Sync (`.convo/CONTEXT.md`)
-- **Objective:** Bridge conversation intent directly into the codebase's local workspace.
-- **Deliverables:**
-  1. `ContextCompilerPort`: Interface under `src/core/ports/compiler.port.ts`.
-  2. `MarkdownSnapshotCompiler`: Under `src/adapters/compilers/`, reads thread turns from SQLite FTS5 ledger and compiles them into a clean, hierarchical `.convo/CONTEXT.md` file.
-  3. `convo compile [threadId]`: CLI command to compile and update local context snapshot for IDE agents (Antigravity, Cursor, Windsurf, Claude Code).
-  4. Bidirectional Sync: Detect changes in project specs and append structured progress markers back to upstream AI threads.
+```mermaid
+flowchart LR
+    P4["Phase P4: Context Compiler & Rollover<br/>• MarkdownSnapshotCompiler<br/>• .convo/CONTEXT.md sync<br/>• convo compile & convo rollover"]
+    P5["Phase P5: Native Messaging Host<br/>• Auto-launch extension bridge<br/>• convo ext install-host<br/>• Zero-config background link"]
+    P6["Phase P6: Live TUI Dashboard<br/>• convo tui terminal monitor<br/>• Real-time streaming inspector<br/>• Multi-tab model switcher"]
 
-### Phase P5: Terminal User Interface (`convo tui`)
-- **Objective:** Visual real-time monitoring and multi-tab switcher for developers.
-- **Deliverables:**
-  1. Lightweight terminal dashboard using pure ANSI/termbox primitives without heavy bloat.
-  2. Real-time view of active browser tabs, streaming responses, and token/character counters.
-  3. One-key switching between models (`1` for ChatGPT, `2` for DeepSeek, `3` for Gemini, `4` for Claude).
-  4. Live arbitration viewer for `convo compare --arbitrate`.
+    P4 --> P5 --> P6
+```
 
-### Phase P6: Native Messaging Host for Companion Extension
-- **Objective:** Remove the need for manual WebSocket connection in the Chrome Companion Extension.
-- **Deliverables:**
-  1. `convo extension install`: One-command script writing Native Messaging manifest to `~/.config/google-chrome/NativeMessagingHosts/com.convolink.bridge.json`.
-  2. Automatic extension launch upon Chrome startup, providing seamless out-of-the-box communication.
+### Phase P5: Native Messaging Host (`convo ext install-host`)
+- Automatic stdio host manifest registered in Chrome/Firefox config directories.
+- Allows companion extension to communicate with ConvoLink without requiring the developer to keep a terminal command running.
+
+### Phase P6: Terminal User Interface (`convo tui`)
+- Compact, high-speed terminal dashboard (pure ANSI).
+- Displays active tabs across ChatGPT, Claude, DeepSeek, and Gemini in real-time.
+- One-key model switching and live stream inspector.
 
 ---
 
-## 6. Definition of Done Checklist for Current State
+## 6. Definition of Done for Phase P4
 
-- [x] Zero ghost browser instances running on system (confirmed with `ps` and `convo clean`).
-- [x] Zero ghost directories on filesystem (confirmed with `GhostCleanupService`).
-- [x] `bun test`: **231 passed, 0 failed, 3 skipped (CDP live fixtures)** across 45 files (1,368 assertions).
-- [x] `bun run typecheck`: **0 errors, 0 warnings** under strict TypeScript 7 ESM.
-- [x] `openspec validate --specs`: **10/10 passed**.
-- [x] Strict compliance with file ceilings (< 200 lines per core file, < 80 lines per handler).
-- [x] Multi-profile discovery verified against real local installations (Chrome, Edge, Brave).
-- [x] Shorthand tab indexing (`#1`, `#2`) and `AmbiguousTabError` disambiguation guard verified.
-- [x] ConvoLink Chrome Companion Extension authored under `extensions/convolink-companion/`.
-- [x] Roadmap documented in `Next_plan.md`.
+- [ ] **TDD Iron Law:** Every compiler and rollover function preceded by a failing automated test in `tests/unit/`.
+- [ ] **`MarkdownSnapshotCompiler`:** Implements `ContextCompilerPort` with deterministic SHA-256 hashing.
+- [ ] **Artifact Generation:** Produces clean `.convo/CONTEXT.md` and `.convo/PROVENANCE.json` files.
+- [ ] **CLI Commands:** `convo compile`, `convo sync`, and `convo rollover` fully functional and verified via E2E tests.
+- [ ] **Browser Lag Elimination:** Rollover workflow verified to transfer state to a fresh tab with zero context loss.
+- [ ] **Quality Gates:** 100% tests passing (`bun test`), 0 type errors (`bun run typecheck`), all files under line ceilings.
