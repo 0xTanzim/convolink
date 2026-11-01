@@ -1,5 +1,6 @@
 import type { createContainer } from "../container.js";
 import { parseAskArgs, parseCompareArgs, readStdin } from "./cli.args.js";
+import { ensureProjectProfile } from "./cli.prompt.js";
 import type { BrowserAdapterId } from "../core/ports/browser.port.js";
 
 type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
@@ -16,6 +17,8 @@ export async function handleAsk(
     console.error("Error: Prompt is required. Provide as arguments or pipe via stdin.");
     return 1;
   }
+
+  await ensureProjectProfile({ profileArg: parsed.profile });
 
   try {
     const result = await orchestrator.ask({
@@ -67,6 +70,8 @@ export async function handleCompare(
     console.error("Error: Prompt is required for comparison.");
     return 1;
   }
+
+  await ensureProjectProfile({ profileArg: parsed.profile });
   try {
     const report = await orchestrator.compare({
       prompt, platforms: parsed.platforms, mode: parsed.mode, timeoutMs: parsed.timeoutMs,
