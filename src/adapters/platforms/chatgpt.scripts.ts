@@ -64,13 +64,19 @@ export function getChatGPTReadThreadExpr(lastN: number): string {
 export function getChatGPTSubmitPromptExpr(prompt: string): string {
   return `(async () => {
     /* submitPrompt */
-    const selector = 'div.ProseMirror[contenteditable="true"], #prompt-textarea, div[contenteditable="true"][data-placeholder], div[contenteditable="true"]';
-    let c = document.querySelector(selector);
+    const findComposer = () => {
+      const explicit = document.querySelector('#prompt-textarea, [aria-label="Ask ChatGPT"], form div.ProseMirror[contenteditable="true"]');
+      if (explicit) return explicit;
+      const allPm = document.querySelectorAll('div.ProseMirror[contenteditable="true"]');
+      if (allPm.length > 0) return allPm[allPm.length - 1];
+      return document.querySelector('div[contenteditable="true"][data-placeholder], div[contenteditable="true"]');
+    };
+    let c = findComposer();
     if (!c) {
       const deadline = Date.now() + 6000;
       while (Date.now() < deadline && !c) {
         await new Promise(r => setTimeout(r, 200));
-        c = document.querySelector(selector);
+        c = findComposer();
       }
     }
     if (!c) throw new Error("ChatGPT composer not found");
@@ -88,7 +94,7 @@ export function getChatGPTSubmitPromptExpr(prompt: string): string {
     document.execCommand('selectAll', false, null);
     document.execCommand('insertText', false, ${JSON.stringify(prompt)});
     c.dispatchEvent(new Event('input', { bubbles: true }));
-    await new Promise(r => setTimeout(r, 80));
+    await new Promise(r => setTimeout(r, 150));
     const send = document.querySelector('button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]');
     if (send && !send.disabled && send.getAttribute('aria-disabled') !== 'true') send.click();
     else c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));

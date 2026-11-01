@@ -6,7 +6,8 @@ import type {
   TabDescriptor,
   TransportHealth,
 } from "../../core/ports/browser.port.js";
-import { BrowserConnectionError, TabNotFoundError } from "../../core/errors/bridge-errors.js";
+import { BrowserConnectionError } from "../../core/errors/bridge-errors.js";
+import { ClientRegistry, type ConnectedClient } from "./extension-bridge.routing.js";
 
 interface PendingRequest {
   resolve: (val: unknown) => void;
@@ -25,17 +26,21 @@ export class ExtensionBridgeAdapter implements BrowserPort {
 
   private readonly port: number;
   private server: Server<unknown> | null = null;
-  private activeClient: ServerWebSocket<unknown> | null = null;
+  private readonly registry = new ClientRegistry();
   private readonly pendingRequests = new Map<number, PendingRequest>();
   private messageCounter = 0;
-  private profileName: string | null = null;
 
   constructor(port = 9224) {
     this.port = port;
   }
 
+  public getConnectedClients(): ConnectedClient[] {
+    return this.registry.getAll();
+  }
+
   public async start(): Promise<void> {
     if (this.server) return;
+    const adapter = this;
     this.server = Bun.serve({
       port: this.port,
       hostname: "127.0.0.1",
@@ -44,17 +49,12 @@ export class ExtensionBridgeAdapter implements BrowserPort {
         return new Response("ConvoLink Extension Bridge", { status: 200 });
       },
       websocket: {
-        open: (ws) => {
-          this.activeClient = ws;
-        },
-        message: (_ws, message) => {
-          this.handleIncomingMessage(message.toString());
+        open: () => {},
+        message: (ws, message) => {
+          adapter.handleIncomingMessage(ws, message.toString());
         },
         close: (ws) => {
-          if (this.activeClient === ws) {
-            this.activeClient = null;
-            this.profileName = null;
-          }
+          adapter.registry.removeBySocket(ws);
         },
       },
     });
@@ -65,7 +65,6 @@ export class ExtensionBridgeAdapter implements BrowserPort {
       this.server.stop(true);
       this.server = null;
     }
-    this.activeClient = null;
     for (const req of this.pendingRequests.values()) {
       req.reject(new Error("ExtensionBridgeAdapter stopped"));
     }
@@ -75,86 +74,101 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   public async health(): Promise<TransportHealth> {
     const start = Date.now();
     await this.start();
-    if (!this.activeClient) {
+    const clients = this.registry.getAll();
+    if (clients.length === 0) {
       return {
-        ok: false,
-        adapterId: this.id,
-        endpoint: `ws://127.0.0.1:${this.port}`,
-        openTabsCount: 0,
-        latencyMs: Date.now() - start,
+        ok: false, adapterId: this.id, endpoint: `ws://127.0.0.1:${this.port}`,
+        openTabsCount: 0, latencyMs: Date.now() - start, capabilities: this.capabilities,
         error: `No ConvoLink Chrome Companion extension connected on ws://127.0.0.1:${this.port}`,
-        capabilities: this.capabilities,
       };
     }
     try {
       const tabs = await this.listTabs();
+      const labels = clients.map((c) => `${c.browserFamily} [${c.profileLabel}]`).join(", ");
       return {
-        ok: true,
-        adapterId: this.id,
-        endpoint: `ws://127.0.0.1:${this.port} (${this.profileName ?? "Chrome"})`,
-        openTabsCount: tabs.length,
-        latencyMs: Date.now() - start,
-        capabilities: this.capabilities,
+        ok: true, adapterId: this.id, endpoint: `ws://127.0.0.1:${this.port} (${labels})`,
+        openTabsCount: tabs.length, latencyMs: Date.now() - start, capabilities: this.capabilities,
       };
     } catch (err: unknown) {
       return {
-        ok: false,
-        adapterId: this.id,
-        endpoint: `ws://127.0.0.1:${this.port}`,
-        openTabsCount: 0,
-        latencyMs: Date.now() - start,
-        error: (err as Error).message,
-        capabilities: this.capabilities,
+        ok: false, adapterId: this.id, endpoint: `ws://127.0.0.1:${this.port}`,
+        openTabsCount: 0, latencyMs: Date.now() - start, error: (err as Error).message, capabilities: this.capabilities,
       };
     }
   }
 
   public async listTabs(): Promise<TabDescriptor[]> {
-    const res = await this.sendRequest<{ tabs: TabDescriptor[] }>("LIST_TABS", {});
-    return (res as unknown as TabDescriptor[]) ?? [];
+    const clients = this.registry.getAll();
+    const aggregated: TabDescriptor[] = [];
+
+    for (const client of clients) {
+      try {
+        const res = await this.sendRequestToClient<any>(client.ws, "LIST_TABS", {});
+        const rawList = Array.isArray(res) ? res : res?.tabs || [];
+        const mapped = rawList.map((t: any) => {
+          const rawId = String(t.tabId ?? t.targetId);
+          const targetId = clients.length > 1 ? `${client.clientId}::${rawId}` : rawId;
+          const badge = clients.length > 1 ? `[${client.profileLabel || client.browserFamily}] ` : "";
+          return {
+            targetId,
+            title: `${badge}${t.title || "Untitled Tab"}`,
+            url: t.url,
+          };
+        });
+        client.tabs = mapped;
+        aggregated.push(...mapped);
+      } catch {}
+    }
+
+    return aggregated;
   }
 
-  public async attach(targetId: string): Promise<SessionHandle> {
-    await this.sendRequest("ATTACH", { targetId });
-    return { sessionId: `ext-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
+  public attach(targetId: string): Promise<SessionHandle> {
+    return this.sendAction("ATTACH", targetId).then(() => ({
+      sessionId: `ext-${targetId}-${Date.now()}`, targetId, adapterId: this.id,
+    }));
   }
-
-  public async detach(handle: SessionHandle): Promise<void> {
-    await this.sendRequest("DETACH", { targetId: handle.targetId }).catch(() => {});
+  public detach(handle: SessionHandle): Promise<void> {
+    return this.sendAction("DETACH", handle.targetId).catch(() => {});
   }
+  public keepAliveInBackground(_handle: SessionHandle): Promise<void> { return Promise.resolve(); }
+  public bringToFront(h: SessionHandle): Promise<void> { return this.sendAction("BRING_TO_FRONT", h.targetId); }
 
-  public async keepAliveInBackground(_handle: SessionHandle): Promise<void> {}
-  public async bringToFront(handle: SessionHandle): Promise<void> {
-    await this.sendRequest("BRING_TO_FRONT", { targetId: handle.targetId });
-  }
-
-  public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
-    const res = await this.sendRequest<{ value: T }>("EVALUATE", { targetId: handle.targetId, expression });
+  public async evaluate<T>(h: SessionHandle, expression: string): Promise<T> {
+    const res = await this.sendRequest<{ value: T }>("EVALUATE", { targetId: h.targetId, expression }, h.targetId);
     return (res as unknown as { value: T })?.value;
   }
 
-  public async fillText(handle: SessionHandle, selector: string, text: string): Promise<void> {
-    await this.sendRequest("FILL_TEXT", { targetId: handle.targetId, selector, text });
+  public fillText(h: SessionHandle, selector: string, text: string): Promise<void> {
+    return this.sendAction("FILL_TEXT", h.targetId, { selector, text });
+  }
+  public click(h: SessionHandle, selector: string): Promise<void> {
+    return this.sendAction("CLICK", h.targetId, { selector });
+  }
+  public pressKey(h: SessionHandle, selector: string, key: string): Promise<void> {
+    return this.sendAction("PRESS_KEY", h.targetId, { selector, key });
+  }
+  public setInputFiles(): Promise<void> { return Promise.resolve(); }
+
+  private sendAction(type: string, targetId: string, extra: Record<string, unknown> = {}): Promise<void> {
+    return this.sendRequest(type, { targetId, ...extra }, targetId);
   }
 
-  public async click(handle: SessionHandle, selector: string): Promise<void> {
-    await this.sendRequest("CLICK", { targetId: handle.targetId, selector });
-  }
-
-  public async pressKey(handle: SessionHandle, selector: string, key: string): Promise<void> {
-    await this.sendRequest("PRESS_KEY", { targetId: handle.targetId, selector, key });
-  }
-
-  public async setInputFiles(_handle: SessionHandle, _selector: string, _filePaths: string[]): Promise<void> {}
-
-  private async sendRequest<T>(type: string, payload: Record<string, unknown>): Promise<T> {
-    if (!this.activeClient) {
+  private async sendRequest<T>(type: string, payload: Record<string, unknown>, targetId?: string): Promise<T> {
+    const targetRoute = targetId ? this.registry.findClientForTarget(targetId) : null;
+    const client = targetRoute?.client ?? this.registry.getPrimary();
+    if (!client) {
       throw new BrowserConnectionError(`ws://127.0.0.1:${this.port}`, "Extension is not connected");
     }
+    const cleanPayload = targetRoute ? { ...payload, targetId: targetRoute.rawTabId } : payload;
+    return this.sendRequestToClient<T>(client.ws, type, cleanPayload);
+  }
+
+  private async sendRequestToClient<T>(ws: ServerWebSocket<unknown>, type: string, payload: Record<string, unknown>): Promise<T> {
     const id = ++this.messageCounter;
     return new Promise<T>((resolve, reject) => {
       this.pendingRequests.set(id, { resolve: resolve as (val: unknown) => void, reject });
-      this.activeClient!.send(JSON.stringify({ id, type, ...payload }));
+      ws.send(JSON.stringify({ id, type, ...payload }));
       setTimeout(() => {
         if (this.pendingRequests.has(id)) {
           this.pendingRequests.delete(id);
@@ -164,11 +178,12 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     });
   }
 
-  private handleIncomingMessage(raw: string): void {
+  private handleIncomingMessage(ws: ServerWebSocket<unknown>, raw: string): void {
     try {
       const msg = JSON.parse(raw);
       if (msg.type === "HANDSHAKE") {
-        this.profileName = msg.profileName || "Chrome Profile";
+        const client = this.registry.register(ws, msg);
+        ws.send(JSON.stringify({ type: "HANDSHAKE_ACK", success: true, serverGeneration: client.serverGeneration }));
         return;
       }
       if (msg.id && this.pendingRequests.has(msg.id)) {

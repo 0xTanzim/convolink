@@ -8,6 +8,9 @@
     "convolink": "./bin/convolink.ts",
     "convo": "./bin/convo.ts"
   },
+  "workspaces": [
+    "extensions/*"
+  ],
   "scripts": {
     "test": "bun test --parallel=1",
     "test:unit": "bun test tests/unit",

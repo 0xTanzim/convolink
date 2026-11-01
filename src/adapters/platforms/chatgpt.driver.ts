@@ -60,7 +60,27 @@ export class ChatGPTDriver implements PlatformPort {
     prompt: string,
     _files?: string[],
   ): Promise<TurnFingerprint> {
-    return browser.evaluate<TurnFingerprint>(handle, getChatGPTSubmitPromptExpr(prompt));
+    const fingerprint = await browser.evaluate<TurnFingerprint>(handle, getChatGPTSubmitPromptExpr(prompt));
+    const composerSelector = '#prompt-textarea, [aria-label="Ask ChatGPT"], form div.ProseMirror[contenteditable="true"]';
+    const isSent = await browser.evaluate<boolean>(
+      handle,
+      `(() => Boolean(document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"]')))()`,
+    );
+    if (!isSent) {
+      await browser.fillText(handle, composerSelector, prompt);
+      await browser.evaluate(
+        handle,
+        `(() => {
+          const send = document.querySelector('button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]');
+          if (send && !send.disabled && send.getAttribute('aria-disabled') !== 'true') send.click();
+          else {
+            const c = document.querySelector('${composerSelector}');
+            if (c) c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+          }
+        })()`,
+      );
+    }
+    return fingerprint;
   }
 
   public async awaitCompletion(
