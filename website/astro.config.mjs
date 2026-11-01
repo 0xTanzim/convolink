@@ -50,6 +50,7 @@ export default defineConfig({
         {
           label: "Agent & IDE Integrations",
           items: [
+            { label: "AI Coding Harnesses Matrix", slug: "integrations/ai-harnesses" },
             { label: "Model Context Protocol (MCP)", slug: "integrations/mcp" },
             { label: "Cursor & Claude Desktop", slug: "integrations/cursor-claude" },
           ],

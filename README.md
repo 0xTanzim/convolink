@@ -84,11 +84,17 @@ Allows local agents to borrow upstream web capabilities—**extended thinking (D
 #### One-Line Universal Installers
 ```bash
 # Linux (Ubuntu/Debian, Fedora, Arch, Alpine) & macOS:
-curl -fsSL https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.sh | bash
 
 # Windows Native (PowerShell):
-irm https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.ps1 | iex
 ```
+
+##### ℹ️ What does the 1-Line Installer actually do?
+- **Executable Wrapper:** Places a single lightweight shell wrapper at `~/.local/bin/convo` (Linux/macOS) or `%LOCALAPPDATA%\convolink\bin\convo.cmd` (Windows).
+- **Auto-Updating Execution:** Invokes `bunx -y convolink@latest "$@"` (or `npx -y convolink@latest "$@"`), automatically executing the latest published version without requiring manual upgrades.
+- **Zero Root / Zero Daemons:** Never prompts for `sudo`/Administrator rights, never runs background services, and never tampers with browser profiles or user data.
+- **Non-Destructive PATH:** Tests if `~/.local/bin` is in `$PATH`, and safely guides adding `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc`, `~/.zshrc`, or `~/.config/fish/config.fish`.
 
 #### Or Run with Package Managers
 ```bash
@@ -300,17 +306,26 @@ convo search "JWT refresh token rotation invariants" --limit 5
 
 ---
 
-## 🔌 IDE & Agent Integration (MCP in 30 Seconds)
+## 🔌 Universal AI Coding Harnesses Integration
 
-ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) server over `stdio` designed specifically for autonomous AI coding agents (Cursor, Windsurf, Claude Code, Antigravity).
+ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) server over `stdio` designed specifically for autonomous AI coding agents. It connects directly to all modern 2026 AI harnesses with zero background daemons.
 
-### 1. One-Line Agent Setup
-For **Claude Code**:
-```bash
-claude mcp add convolink -- bunx -y convolink@latest mcp
-```
+### 1. Harness Configuration Matrix
 
-For **Cursor** (`.cursor/mcp.json`) or **Claude Desktop**:
+| AI Coding Harness | Primary Configuration File | Registration / CLI Command |
+| :--- | :--- | :--- |
+| **Google Antigravity** | `~/.gemini/config/mcp_config.json`<br/>*(or `.agents/mcp_config.json`)* | Side Panel > `...` > **MCP Servers** |
+| **OpenAI Codex** | `~/.codex/config.toml` | `codex mcp add convolink -- bunx -y convolink@latest mcp` |
+| **Anthropic Claude Code** | `.claude/mcp.json` | `claude mcp add convolink -- bunx -y convolink@latest mcp` |
+| **Cursor IDE** | `.cursor/mcp.json`<br/>*(or `~/.cursor/mcp.json`)* | Settings > Features > **MCP** |
+| **Devin Desktop / Windsurf** | `~/.config/devin/mcp_config.json`<br/>*(or `.devin/mcp_config.json`)* | Cascade Menu > **Open MCP config file** |
+| **Cline / Roo Code** | Extension Global Storage | Extension Header > **MCP Servers** tab |
+| **CommandCode / OpenCode** | `.mcp/config.json` | Project Root Configuration |
+| **Aider & Shell Agents** | Native CLI Subshell | `convo ask` / `convo search` piped into prompts |
+
+*For complete step-by-step setup guides, schemas, and live docs, visit:*  
+👉 **[AI Coding Harnesses Guide (Web)](https://0xtanzim.github.io/convolink/integrations/ai-harnesses/)** • **[Raw Markdown for AI Crawlers](https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/AI_HARNESSES.md)**
+
 ```json
 {
   "mcpServers": {
@@ -321,22 +336,63 @@ For **Cursor** (`.cursor/mcp.json`) or **Claude Desktop**:
   }
 }
 ```
+*(You can also pass `--idle-timeout=15m` to customize ephemeral shutdown.)*
 
-*(You can also pass `--idle-timeout=10m` to customize ephemeral shutdown.)*
+---
 
-### 2. Autonomous 8-Tool Cognitive Suite
-ConvoLink exposes an ergonomic, domain-partitioned tool suite optimized for high agent accuracy without context bloat:
+## 🧰 Complete Tool Suites: 16 CLI Tools & 8 MCP Tools
+
+ConvoLink provides both a complete **16-command CLI suite** for terminal workflows and an **8-tool cognitive MCP suite** optimized for autonomous agents:
+
+### 1. The 16 Command-Line (CLI) Tools
+*Detailed Reference: [CLI Reference (Web)](https://0xtanzim.github.io/convolink/commands/overview/) • [Raw Markdown](https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/CLI_REFERENCE.md)*
+
+| # | Command | Primary Usage | Functional Purpose |
+| :- | :--- | :--- | :--- |
+| **1** | `doctor` | `convo doctor [--launch]` | Inspect CDP latency, open AI tabs, selector health, and host OS diagnostics. |
+| **2** | `list` | `convo list` | Discover and enumerate all active browser tabs on supported AI platforms. |
+| **3** | `ask` | `convo ask "<prompt>" [flags]` | Submit prompt to an AI tab, stream reply, and automatically extract code artifacts. |
+| **4** | `compare` | `convo compare "<prompt>" [flags]` | Broadcast task across multiple models in parallel with Stage 2 Arbiter consensus. |
+| **5** | `tab new` | `convo tab new <platform\|url>` | Spawn a clean background tab for an AI platform (e.g. `deepseek`) or URL. |
+| **6** | `tab close` | `convo tab close <targetId>` | Non-destructively terminate an idle tab without affecting the browser. |
+| **7** | `back` | `convo back [targetId]` | Navigate active browser tab backward in browser session history. |
+| **8** | `undo` | `convo undo [targetId]` | Recover from an accidental chat reset by rolling back to previous checkpoint URL. |
+| **9** | `history` | `convo history [targetId]` | Inspect timestamped session checkpoints and thread navigation history. |
+| **10** | `resume` | `convo resume <threadId>` | Rehydrate past conversation thread from SQLite ledger into live browser tab. |
+| **11** | `export` | `convo export <threadId> [--format]` | Dump durable conversation ledger into Markdown or structured JSON. |
+| **12** | `search` | `convo search <query> [--limit]` | Full-text FTS5 search across all past turns, prompts, and extracted code. |
+| **13** | `profile list` | `convo profile list` | Discover local Google Chrome, Brave, and Edge profiles with Google account emails. |
+| **14** | `profile select` | `convo profile select <id\|email>` | Persist selected browser profile in workspace `.convo/config.json`. |
+| **15** | `ext pair` | `convo ext pair [--rotate]` | Generate and display cryptographic token for zero-flag Companion Extension. |
+| **16** | `clean` | `convo clean` | Self-heal by terminating orphan ghost Chrome processes and stale mutex locks. |
+| **+** | `mcp` | `convo mcp [--idle-timeout]` | Launch Model Context Protocol (MCP) JSON-RPC 2.0 stdio server for agents. |
+
+---
+
+### 2. The 8 Composite MCP Cognitive Tools (for Autonomous Agents)
+*Detailed Reference: [MCP Reference (Web)](https://0xtanzim.github.io/convolink/integrations/mcp/) • [Raw Markdown](https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md)*
 
 | Tool | Autonomous Agent Role | Key Parameters |
 |:---|:---|:---|
-| `convo_ask` | Dispatch prompts to active web AI tab, stream responses, and auto-extract code artifacts (`// filepath:`). | `prompt`, `platform?`, `targetId?`, `think?`, `search?`, `extractArtifacts?` |
-| `convo_compare` | Multi-model consensus: broadcast across models in parallel with Stage 2 Arbiter synthesis. | `prompt`, `platforms?`, `arbitrate?`, `arbiter?` |
-| `convo_doctor` | Inspect connection health and open AI tabs. Auto-heals stale mutex locks when `fix: true`. | `fix?` |
+| `convo_ask` | Dispatch prompts to active web AI tab, stream responses, and auto-extract code artifacts (`// filepath:`). | `prompt`, `platform?`, `targetId?`, `writeFiles?`, `outDir?`, `newChat?`, `openTab?`, `think?`, `search?` |
+| `convo_compare` | Multi-model consensus: broadcast across models in parallel with Stage 2 Technical Arbiter synthesis. | `prompt`, `platforms?`, `arbitrate?`, `arbiter?` |
+| `convo_doctor` | Inspect connection health and open AI tabs. Pass `fix: true` to self-heal stale mutex locks and ghost processes. | `fix?` |
 | `convo_list_tabs` | Discover active AI tabs (ChatGPT, Claude, DeepSeek, Gemini) without window-focus theft. | *(none)* |
-| `convo_tab` | Tab lifecycle management: open new chat, close tab, navigate back, or undo previous prompt. | `action: "new" \| "close" \| "back" \| "undo"`, `platform?`, `targetId?` |
-| `convo_search` | Full-text search (SQLite FTS5) across past turns, decisions, and extracted code artifacts. | `query`, `limit?` |
-| `convo_thread` | Thread management: export conversation history to Markdown/JSON, resume, or view checkpoints. | `action: "export" \| "resume" \| "history"`, `threadId?`, `targetId?`, `format?` |
-| `convo_profile` | Multi-browser profile management: list discovered Chrome profiles or select active profile. | `action: "list" \| "select"`, `profileName?` |
+| `convo_tab` | Tab lifecycle management: spawn background tab (`new`), close tab (`close`), navigate back (`back`), or undo reset (`undo`). | `action: "new" \| "close" \| "back" \| "undo"`, `target?`, `targetId?` |
+| `convo_search` | Full-text search (SQLite FTS5) across historical turns, architectural decisions, and extracted code artifacts. | `query`, `limit?` |
+| `convo_thread` | Thread management: export conversation history to Markdown/JSON (`export`), resume thread (`resume`), or view checkpoints (`history`). | `action: "export" \| "resume" \| "history"`, `threadId?`, `targetId?`, `format?` |
+| `convo_profile` | Multi-browser profile management: discover Chrome/Edge/Brave profiles (`list`) or bind workspace to profile (`select`). | `action: "list" \| "select"`, `target?` |
+
+---
+
+## 🤖 Direct Ingestion Links for AI Web Crawlers
+
+If you are an AI agent, indexing bot, or automated crawler reading this repository, direct Markdown documentation is available at:
+- **AI Coding Harnesses Guide (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/AI_HARNESSES.md`
+- **16-Command CLI Reference (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/CLI_REFERENCE.md`
+- **8-Tool MCP Specification (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md`
+- **Architecture Masterplan (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/ARCHITECTURE.md`
+- **Architecture Decision Records (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/ADR.md`
 
 ---
 

@@ -1,6 +1,6 @@
 #!/bin/sh
 # install.sh — Universal POSIX installer for ConvoLink CLI
-# Usage: curl -fsSL https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.sh | sh
+# Usage: curl -fsSL https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.sh | sh
 set -e
 
 # TTY Formatting

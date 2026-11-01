@@ -1,51 +1,258 @@
 ---
-title: CLI Command Reference
-description: Complete reference for ConvoLink command-line interface.
+title: CLI Command Reference (All 16 Commands)
+description: Exhaustive reference for all 16 ConvoLink command-line tools, flags, options, and usage examples.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-ConvoLink provides a unified CLI exposed as both `convo` and `convolink`.
+ConvoLink provides a unified CLI exposed as both `convo` and `convolink`. Every command is designed for both human terminal interaction and scriptable autonomous agent pipelines.
 
-## Core Commands
+## The 16 Core Commands
 
-| Command | Usage | Description |
-| :--- | :--- | :--- |
-| `doctor` | `convo doctor [--launch]` | Audits CDP latency, open AI tabs, and selector health. |
-| `list` | `convo list` | Lists all active browser tabs on supported platforms. |
-| `ask` | `convo ask <prompt> [flags]` | Sends prompt to an AI tab, streams completion, and extracts artifacts. |
-| `compare` | `convo compare <prompt> [flags]` | Broadcasts prompt across models with Stage 2 arbitration. |
-| `tab new` | `convo tab new <platform\|url>` | Spawns a clean background tab for an AI platform or URL. |
-| `tab close` | `convo tab close <targetId>` | Closes a specific tab cleanly without touching browser. |
-| `back` | `convo back [targetId]` | Navigates active tab back in browser history. |
-| `undo` | `convo undo [targetId]` | Rollbacks an accidental chat reset to the previous conversation checkpoint. |
-| `history` | `convo history [targetId]` | Lists recent checkpoints and thread URLs. |
-| `resume` | `convo resume <threadId>` | Rehydrates a past conversation thread into a browser tab from SQLite. |
-| `search` | `convo search <query>` | SQLite FTS5 search across conversation ledger turns and code. |
-| `export` | `convo export <threadId>` | Exports a thread and code artifacts to Markdown/JSON. |
-| `profile` | `convo profile <list\|select>` | Manages and switches browser profiles. |
-| `ext` | `convo ext pair [--rotate]` | Manages extension pairing secrets for zero-flag mode. |
-| `clean` | `convo clean` | Terminates orphaned debug processes and clears stale locks. |
-| `mcp` | `convo mcp` | Runs JSON-RPC 2.0 MCP server over stdio. |
+| # | Command | Primary Usage | Functional Purpose |
+| :- | :--- | :--- | :--- |
+| **1** | `doctor` | `convo doctor [--launch]` | Inspect CDP latency, open AI tabs, selector health, and host OS diagnostics. |
+| **2** | `list` | `convo list` | Discover and enumerate all active browser tabs on supported AI platforms. |
+| **3** | `ask` | `convo ask "<prompt>" [flags]` | Submit prompt to an AI tab, stream reply, and automatically extract code artifacts. |
+| **4** | `compare` | `convo compare "<prompt>" [flags]` | Broadcast task across multiple models in parallel with Stage 2 Arbiter consensus. |
+| **5** | `tab new` | `convo tab new <platform\|url>` | Spawn a clean background tab for an AI platform (e.g. `deepseek`) or URL. |
+| **6** | `tab close` | `convo tab close <targetId>` | Non-destructively terminate an idle tab without affecting the browser. |
+| **7** | `back` | `convo back [targetId]` | Navigate active browser tab backward in browser session history. |
+| **8** | `undo` | `convo undo [targetId]` | Recover from an accidental chat reset by rolling back to previous checkpoint URL. |
+| **9** | `history` | `convo history [targetId]` | Inspect timestamped session checkpoints and thread navigation history. |
+| **10** | `resume` | `convo resume <threadId>` | Rehydrate past conversation thread from SQLite ledger into live browser tab. |
+| **11** | `export` | `convo export <threadId> [--format]` | Dump durable conversation ledger into Markdown or structured JSON. |
+| **12** | `search` | `convo search <query> [--limit]` | Full-text FTS5 search across all past turns, prompts, and extracted code. |
+| **13** | `profile list` | `convo profile list` | Discover local Google Chrome, Brave, and Edge profiles with Google account emails. |
+| **14** | `profile select` | `convo profile select <id\|email>` | Persist selected browser profile in workspace `.convo/config.json`. |
+| **15** | `ext pair` | `convo ext pair [--rotate]` | Generate and display cryptographic token for zero-flag Companion Extension. |
+| **16** | `clean` | `convo clean` | Self-heal by terminating orphan ghost Chrome processes and stale mutex locks. |
+| **+** | `mcp` | `convo mcp [--idle-timeout]` | Launch Model Context Protocol (MCP) JSON-RPC 2.0 stdio server for agents. |
 
 ---
 
-## Detailed Options for `convo ask`
+## Detailed Command Specifications & Flags
+
+### 1. `convo doctor`
+Audits system readiness, host environment (OS, distro, arch, libc), CDP remote debugging port 9222, open AI tabs, and DOM selector stability.
 
 ```bash
-convo ask "Implement the caching layer" --platform claude -w --out-dir .
+convo doctor
+# Or automatically launch browser with remote debugging if offline:
+convo doctor --launch
 ```
 
-### Flags
+| Flag | Type | Description |
+| :--- | :--- | :--- |
+| `--launch` | boolean | Attempts to start Chrome with remote debugging on port 9222 using the native TypeScript launcher. |
 
-| Flag | Shorthand | Type | Description |
+---
+
+### 2. `convo list`
+Lists all currently open tabs across supported frontier AI platforms (ChatGPT, Claude, DeepSeek, Gemini).
+
+```bash
+convo list
+```
+
+---
+
+### 3. `convo ask`
+Submits a prompt to an active or newly spawned browser tab, streams the response in real time, and optionally persists generated code blocks to the local workspace.
+
+```bash
+convo ask "Implement an LRU cache with TTL in TypeScript" \
+  --platform claude \
+  --think \
+  --write-files \
+  --out-dir ./src/cache
+```
+
+| Flag | Shorthand | Type | Default | Description |
+| :--- | :--- | :--- | :--- | :--- |
+| `--platform` | `-p` | string | *(auto)* | Target platform: `chatgpt`, `claude`, `deepseek`, `gemini`. |
+| `--targetId` | `-t`, `--target` | string | *(active)* | Target specific browser tab by CDP ID or shorthand (`#1`, `#2`). |
+| `--new` | `-n` | boolean | `false` | Resets active conversation to a fresh chat before submitting prompt. |
+| `--open-tab` | | boolean | `false` | Spawns a brand new background tab before submitting prompt. |
+| `--think` | | boolean | `false` | Toggles extended thinking / reasoning mode (e.g. DeepSeek R1, Claude Thinking, ChatGPT o-series). |
+| `--no-think` | | boolean | `false` | Explicitly disables thinking mode. |
+| `--search` | | boolean | `false` | Toggles live web search grounding (e.g. DeepSeek Search, ChatGPT Web Search). |
+| `--no-search` | | boolean | `false` | Explicitly disables web search mode. |
+| `--write-files` | `-w` | boolean | `false` | Extracts and writes code blocks tagged with `// filepath:` directly to disk. |
+| `--out-dir` | `-o` | path | `./artifacts` | Destination directory for extracted code files. |
+| `--transport` | | string | `raw-cdp` | Transport engine: `raw-cdp`, `extension-bridge`, `firefox-bidi`, `agent-browser`. |
+| `--timeout` | | number | `120000` | Maximum response timeout in milliseconds. |
+| `--no-continue` | | boolean | `false` | Disables automated multi-chunk stream continuation. |
+
+---
+
+### 4. `convo compare`
+Broadcasts a query to multiple models in parallel, records responses symmetrically, and optionally invokes Stage 2 Technical Arbiter consensus synthesis.
+
+```bash
+convo compare "Evaluate trade-offs between Raft and Paxos for distributed consensus" \
+  --platforms chatgpt,claude,deepseek,gemini \
+  --arbitrate \
+  --arbiter deepseek \
+  --out-dir ./comparison-results
+```
+
+| Flag | Type | Default | Description |
 | :--- | :--- | :--- | :--- |
-| `--platform` | `-p` | string | Target platform (`chatgpt`, `claude`, `deepseek`, `gemini`). |
-| `--targetId` | `-t` | string | Target a specific browser tab by CDP ID or shorthand (`#1`, `#2`). |
-| `--new` | `-n` | boolean | Start a fresh session before submitting. |
-| `--open-tab` | | boolean | Spawn a brand-new tab in the background before submitting. |
-| `--write-files` | `-w` | boolean | Extract files tagged with `// filepath:` to disk. |
-| `--out-dir` | `-o` | path | Destination directory for written files (default: `./artifacts`). |
-| `--think` | | boolean | Enable reasoning / deep-thinking mode (e.g. DeepSeek R1). |
-| `--transport` | | string | Engine: `raw-cdp` (default), `extension-bridge`, `firefox-bidi`. |
-| `--timeout` | | number | Milliseconds before request timeouts (default: `120000`). |
+| `--platforms` | string | `chatgpt,deepseek,gemini` | Comma-separated list of platforms to query in parallel. |
+| `--mode` | string | `parallel` | Execution schedule: `parallel` or `sequential`. |
+| `--arbitrate` | boolean | `false` | Triggers Stage 2 Technical Arbiter consensus synthesis. |
+| `--arbiter` | string | `deepseek` | Designates specific arbiter platform to evaluate all candidate solutions. |
+| `--out-dir` | path | `./artifacts` | Destination directory to save `REPORT.md` and namespaced artifacts. |
+| `--timeout` | number | `120000` | Timeout per model execution in milliseconds. |
+
+---
+
+### 5. `convo tab new`
+Spawns a new tab in the background without stealing operating system window focus.
+
+```bash
+# Spawn by platform alias:
+convo tab new deepseek
+convo tab new chatgpt
+convo tab new claude
+convo tab new gemini
+
+# Or spawn by custom URL:
+convo tab new https://chat.deepseek.com/
+```
+
+---
+
+### 6. `convo tab close`
+Closes an idle browser tab cleanly via CDP `/json/close`.
+
+```bash
+convo tab close 3F8C2A1B-4E9D-4C7B-8A1E-5F3D2C1B0A9E
+```
+
+---
+
+### 7. `convo back`
+Navigates the active browser tab back in session history.
+
+```bash
+convo back
+convo back <targetId>
+```
+
+---
+
+### 8. `convo undo`
+Rolls back an accidental chat reset or navigation by restoring the previous thread URL checkpoint recorded in the local session journal.
+
+```bash
+convo undo
+convo undo <targetId>
+```
+
+---
+
+### 9. `convo history`
+Displays timestamped URL checkpoints and navigation transitions recorded for a tab.
+
+```bash
+convo history
+convo history <targetId>
+```
+
+---
+
+### 10. `convo resume`
+Rehydrates a historical conversation thread from the persistent SQLite ledger back into a live browser tab.
+
+```bash
+convo resume 0192a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b
+```
+
+---
+
+### 11. `convo export`
+Exports a full conversation thread and its associated code artifacts from the SQLite ledger into Markdown or JSON format.
+
+```bash
+# Export as Markdown (default):
+convo export 0192a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b
+
+# Export as structured JSON:
+convo export 0192a3b4-5c6d-7e8f-9a0b-1c2d3e4f5a6b --format json
+```
+
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--format` | string | `markdown` | Output serialization: `markdown` or `json`. |
+
+---
+
+### 12. `convo search`
+Performs fast full-text search (SQLite FTS5) across all historical user prompts, assistant responses, and extracted code artifacts.
+
+```bash
+convo search "DistributedLock"
+convo search "SQLite WAL" --limit 5
+```
+
+| Flag | Type | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--limit` | number | `10` | Maximum number of matched turns to return. |
+
+---
+
+### 13. `convo profile list`
+Inspects local browser storage (`Local State`) to discover available user profiles and their associated Google account emails.
+
+```bash
+convo profile list
+```
+
+---
+
+### 14. `convo profile select`
+Binds the active project repository to a specific browser profile, persisting the choice in `.convo/config.json`.
+
+```bash
+# Select by numeric index from profile list:
+convo profile select 1
+
+# Or select by Google email:
+convo profile select developer@example.com
+```
+
+---
+
+### 15. `convo ext pair`
+Displays the cryptographic pairing token required to connect the ConvoLink Chrome/Firefox Companion Extension in zero-flag mode.
+
+```bash
+convo ext pair
+
+# Rotate pairing token immediately:
+convo ext pair --rotate
+```
+
+---
+
+### 16. `convo clean`
+Self-healing command that terminates orphan ghost Chrome processes and purges stale mutex lock files (`tab-*.lock`) older than the 180s TTL.
+
+```bash
+convo clean
+```
+
+---
+
+### `convo mcp`
+Launches the Model Context Protocol (MCP) JSON-RPC 2.0 stdio server, exposing the 8 cognitive browser tools to autonomous coding agents.
+
+```bash
+# Launch with default 15-minute idle auto-shutdown:
+convo mcp
+
+# Custom idle shutdown timeout:
+convo mcp --idle-timeout=30m
+```

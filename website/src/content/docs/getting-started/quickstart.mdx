@@ -11,9 +11,19 @@ Connect your local coding agent directly to your active browser tabs.
 
 1. **Run Instantly or Install Globally**
 
-   You can run ConvoLink instantly with zero setup, or install globally via Bun or npm:
+   You can run ConvoLink instantly with zero setup, install via the universal 1-line script, or install globally via Bun or npm:
 
    <Tabs>
+     <TabItem label="1-Line Universal (Recommended)">
+       ```bash
+       # Linux (Ubuntu, Debian, Fedora, Arch, Alpine) & macOS:
+       curl -fsSL https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.sh | bash
+
+       # Windows Native (PowerShell):
+       irm https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.ps1 | iex
+       ```
+       *Creates a standalone executable wrapper at `~/.local/bin/convo` (or Windows `%LOCALAPPDATA%\convolink\bin\convo.cmd`) that invokes `bunx -y convolink@latest`. Requires zero root/sudo and installs zero background daemons.*
+     </TabItem>
      <TabItem label="Instant (Zero Setup)">
        ```bash
        bunx -y convolink@latest doctor
@@ -21,11 +31,13 @@ Connect your local coding agent directly to your active browser tabs.
        npx -y convolink@latest doctor
        ```
      </TabItem>
-     <TabItem label="Global Install">
+     <TabItem label="Package Managers">
        ```bash
        bun add -g convolink
        # or via npm:
        npm install -g convolink
+       # or via pnpm:
+       pnpm add -g convolink
        ```
      </TabItem>
      <TabItem label="From Source">

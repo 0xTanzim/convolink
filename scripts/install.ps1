@@ -1,5 +1,5 @@
 # install.ps1 — Universal Windows PowerShell installer for ConvoLink CLI
-# Usage: irm https://raw.githubusercontent.com/AgentConversation/convolink/main/scripts/install.ps1 | iex
+# Usage: irm https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.ps1 | iex
 $ErrorActionPreference = "Stop"
 
 Write-Host "ConvoLink Universal Runtime Installer (Windows)" -ForegroundColor Cyan

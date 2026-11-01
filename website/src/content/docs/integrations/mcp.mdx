@@ -1,11 +1,11 @@
 ---
 title: Model Context Protocol (MCP) Server
-description: Native cognitive browser tools for autonomous AI coding agents.
+description: Native cognitive browser tools and JSON-RPC 2.0 schemas for autonomous AI coding agents.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) JSON-RPC 2.0 server over `stdio` designed specifically for autonomous AI coding agents (Cursor, Windsurf, Claude Code, Antigravity).
+ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) JSON-RPC 2.0 server over `stdio` designed specifically for autonomous AI coding agents (Google Antigravity, OpenAI Codex, Anthropic Claude Code, Cursor, Devin, Cline).
 
 Instead of maintaining a continuous background daemon, ConvoLink boots in `< 30ms` with `< 1MB` heap, resolves browser connections Just-In-Time (JIT) when tools are invoked, auto-shuts down after inactivity (`--idle-timeout=15m`), and guarantees zero stale mutex locks on exit.
 
@@ -21,24 +21,222 @@ bunx -y convolink@latest mcp
 convo mcp
 
 # Pass custom inactivity auto-shutdown timeout:
-bunx -y convolink@latest mcp --idle-timeout=10m
+bunx -y convolink@latest mcp --idle-timeout=30m
 ```
 
-## The Smart 8-Tool Cognitive Suite
+---
 
-ConvoLink exposes an ergonomic, domain-partitioned tool suite designed to balance complete agent capability against cognitive load and token bloat:
+## The 8 Composite MCP Cognitive Tools
 
-| Tool Name | Key Arguments | Outcome & Purpose |
-| :--- | :--- | :--- |
-| `convo_ask` | `prompt`, `platform?`, `targetId?`, `think?`, `search?`, `extractArtifacts?` | Submit prompt to an AI browser tab (ChatGPT, Claude, DeepSeek, Gemini). Supports deep reasoning (`think: true`), live web search (`search: true`), and auto-extracts code blocks (`// filepath:`) to local disk. |
-| `convo_compare` | `prompt`, `platforms?`, `arbitrate?`, `arbiter?` | Broadcast a task across multiple frontier models in parallel and synthesize an authoritative consensus via Stage 2 Technical Arbiter. |
-| `convo_doctor` | `fix?` | Inspect Chrome CDP port 9222 health, open AI tabs, and active browser profile. Pass `fix: true` to self-heal stale mutex locks and orphan processes. |
-| `convo_list_tabs` | *(none)* | Discover open AI browser tabs with targetId, platform, title, and current URL without window-focus theft. |
-| `convo_tab` | `action: "new" \| "close" \| "back" \| "undo"`, `platform?`, `targetId?` | Tab lifecycle management: spawn a background tab (`new`), close an idle tab (`close`), navigate back in history (`back`), or rollback an accidental reset (`undo`). |
-| `convo_search` | `query`, `limit?` | SQLite FTS5 full-text search across past conversation turns, prompts, and extracted code artifacts. |
-| `convo_thread` | `action: "export" \| "resume" \| "history"`, `threadId?`, `targetId?`, `format?` | Thread management: export history to Markdown/JSON (`export`), reopen a past conversation in the browser (`resume`), or inspect session checkpoints (`history`). |
-| `convo_profile` | `action: "list" \| "select"`, `target?` | Multi-profile management: list discovered Chrome profiles with Google accounts (`list`) or bind workspace to a specific profile (`select`). |
+Rather than exposing 50+ micro-tools that pollute the agent's context window, ConvoLink exposes an ergonomic, domain-partitioned suite of **8 composite tools**:
 
-<Aside type="tip">
-  Every tool provides actionable, self-correcting error messages. When a required parameter is missing or ambiguous, ConvoLink instructs the agent on the exact corrective syntax for the next turn.
-</Aside>
+```text
+┌────────────────────────────────────────────────────────────────────────┐
+│                        8 Composite MCP Tools                           │
+├────────────────────┬────────────────────┬──────────────────────────────┤
+│ convo_ask          │ convo_compare      │ convo_doctor                 │
+│ convo_list_tabs    │ convo_tab          │ convo_search                 │
+│ convo_thread       │ convo_profile      │                              │
+└────────────────────┴────────────────────┴──────────────────────────────┘
+```
+
+---
+
+### 1. `convo_ask`
+Submit a prompt to an AI browser tab (ChatGPT, Claude, DeepSeek, Gemini) with optional deep reasoning and web search grounding. Automatically extracts and persists generated code blocks to local workspace files.
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": { "type": "string", "description": "Prompt text to send to the browser AI" },
+    "platform": { "type": "string", "enum": ["chatgpt", "deepseek", "gemini", "claude"], "description": "Target AI platform" },
+    "targetId": { "type": "string", "description": "Optional targetId of a specific open browser tab" },
+    "writeFiles": { "type": "boolean", "description": "Whether to extract and persist code blocks to local workspace" },
+    "outDir": { "type": "string", "description": "Destination directory for extracted code blocks" },
+    "newChat": { "type": "boolean", "description": "Whether to reset conversation to a fresh chat first" },
+    "openTab": { "type": "boolean", "description": "Whether to spawn a new background tab" },
+    "think": { "type": "boolean", "description": "Toggle deep thinking/reasoning mode (DeepSeek R1, Claude Thinking, ChatGPT o-series)" },
+    "search": { "type": "boolean", "description": "Toggle live web search/DeepSearch grounding" }
+  },
+  "required": ["prompt"]
+}
+```
+
+#### Sample JSON-RPC Request
+```json
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "convo_ask",
+    "arguments": {
+      "prompt": "Provide the complete TypeScript implementation of our event bus with strict typing.",
+      "platform": "claude",
+      "think": true,
+      "writeFiles": true,
+      "outDir": "./src/events"
+    }
+  }
+}
+```
+
+---
+
+### 2. `convo_compare`
+Benchmark a task across multiple frontier models in parallel and optionally synthesize a unified consensus solution via Technical Arbiter.
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "prompt": { "type": "string", "description": "The task or prompt to compare across models" },
+    "platforms": {
+      "type": "array",
+      "items": { "type": "string", "enum": ["chatgpt", "deepseek", "gemini", "claude"] },
+      "description": "Models to compare"
+    },
+    "arbitrate": { "type": "boolean", "description": "Execute stage 2 consensus synthesis via Technical Arbiter" },
+    "arbiter": { "type": "string", "enum": ["chatgpt", "deepseek", "gemini", "claude"], "description": "Designate arbiter platform" }
+  },
+  "required": ["prompt"]
+}
+```
+
+---
+
+### 3. `convo_doctor`
+Check ConvoLink health, Chrome remote debugging port 9222, open AI tabs, selector readiness, and active browser profiles.
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "fix": {
+      "type": "boolean",
+      "description": "When true, automatically terminates orphan ghost browser processes and clears stale lockfiles to self-heal. Default: false"
+    }
+  }
+}
+```
+
+---
+
+### 4. `convo_list_tabs`
+Inspect all open browser tabs without stealing operating system window focus. Returns `targetId`, `platform`, `title`, and current `url`.
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {}
+}
+```
+
+#### Output Format
+```text
+• [CHATGPT] Architecture Discussion - ChatGPT (Target: A16BE3..., URL: https://chatgpt.com/c/...)
+• [CLAUDE] Concurrency Refactoring - Claude (Target: 44F12A..., URL: https://claude.ai/chat/...)
+• [DEEPSEEK] Algorithmic Optimization - DeepSeek (Target: 713AD6..., URL: https://chat.deepseek.com/a/...)
+```
+
+---
+
+### 5. `convo_tab`
+Lifecycle management for browser tabs: spawn a clean background tab (`new`), close an idle tab (`close`), navigate back (`back`), or rollback an accidental reset (`undo`).
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["new", "close", "back", "undo"],
+      "description": "Tab action to perform"
+    },
+    "target": {
+      "type": "string",
+      "description": "Platform name ('deepseek' | 'chatgpt' | 'gemini' | 'claude') or full URL for action 'new'"
+    },
+    "targetId": {
+      "type": "string",
+      "description": "Target ID of the tab for actions 'close', 'back', or 'undo'"
+    }
+  },
+  "required": ["action"]
+}
+```
+
+---
+
+### 6. `convo_search`
+Execute full-text FTS5 search across all historical conversation turns and extracted code snippets in the local SQLite ledger.
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "query": { "type": "string", "description": "Search query or keywords" },
+    "limit": { "type": "number", "description": "Maximum number of results (default: 10)" }
+  },
+  "required": ["query"]
+}
+```
+
+---
+
+### 7. `convo_thread`
+Manage conversation threads: export thread history as Markdown or JSON (`export`), reopen a saved thread from SQLite into an active browser tab (`resume`), or inspect session checkpoints (`history`).
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": ["export", "resume", "history"],
+      "description": "Thread action to perform"
+    },
+    "threadId": { "type": "string", "description": "Thread ID for 'export' or 'resume'" },
+    "targetId": { "type": "string", "description": "Tab targetId for 'history'" },
+    "format": {
+      "type": "string",
+      "enum": ["markdown", "json"],
+      "description": "Export format for action 'export' (default: markdown)"
+    }
+  },
+  "required": ["action"]
+}
+```
+
+---
+
+### 8. `convo_profile`
+Inspect and manage host browser profiles (Google Chrome, Edge, Brave): discover profiles and account emails (`list`), or bind the active workspace to a specific profile (`select`).
+
+#### Input Schema
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": { "type": "string", "enum": ["list", "select"], "description": "Profile action (default: 'list')" },
+    "target": { "type": "string", "description": "Profile index (e.g. '1'), account email, or name for action 'select'" }
+  }
+}
+```
+
+---
+
+## Architectural Guardrails for Autonomous Agents
+
+1. **Non-Blocking PolicyGate:** Prompts sent through `convo_ask` automatically sanitize sensitive secrets (`sk-...`, `ghp_...`, AWS keys, `.env` blocks) into `[REDACTED_SECRET]` before transmission.
+2. **PID-Aware Mutex Locking:** Every tab operation acquires an exclusive, non-blocking lock. If another agent is streaming to a tab, ConvoLink advises targeting a different tab or waiting for the stream to settle.
+3. **Zero Window-Focus Theft:** CDP `Emulation.setFocusEmulationEnabled` and `Page.setWebLifecycleState` are applied silently so background tabs continue streaming without stealing focus from the developer's active editor.
+4. **Self-Correcting Guidance:** Every tool error returns an actionable remediation message teaching the agent how to correct its arguments on the very next turn.
