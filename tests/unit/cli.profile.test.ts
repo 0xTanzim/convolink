@@ -22,7 +22,27 @@ describe("CLI Profile Operations (convo profile)", () => {
     }
   });
 
-  it("returns error with helpful shell comment tip when select target is omitted", async () => {
+  it("handles profile list --json and outputs structured JSON for agents", async () => {
+    let output = "";
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => { output += args.join(" ") + "\n"; };
+
+    try {
+      const code = await handleProfile(["list", "--json"]);
+      expect(code).toBe(0);
+      const parsed = JSON.parse(output.trim());
+      expect(Array.isArray(parsed)).toBe(true);
+      if (parsed.length > 0) {
+        expect(parsed[0].index).toBe(1);
+        expect(parsed[0].browser).toBeDefined();
+        expect(parsed[0].name).toBeDefined();
+      }
+    } finally {
+      console.log = origLog;
+    }
+  });
+
+  it("returns error with helpful shell comment tip when select target is omitted in non-interactive mode", async () => {
     let errOutput = "";
     const origErr = console.error;
     console.error = (...args: unknown[]) => { errOutput += args.join(" ") + "\n"; };

@@ -9,6 +9,27 @@ export async function handleProfile(args: string[]): Promise<number> {
   const profiles = await discovery.discoverProfiles();
 
   if (sub === "list") {
+    if (args.includes("--json") || args.includes("-j")) {
+      const jsonList = profiles.map((p, i) => {
+        const isActive = Boolean(
+          (currentConfig?.profileEmail && p.email === currentConfig.profileEmail) ||
+          (currentConfig?.profilePath && p.userDataDir === currentConfig.profilePath),
+        );
+        return {
+          index: i + 1,
+          browser: p.browser,
+          name: p.name,
+          email: p.email,
+          profileId: p.profileId,
+          userDataDir: p.userDataDir,
+          isActive,
+          isRecommended: i === 0,
+        };
+      });
+      console.log(JSON.stringify(jsonList, null, 2));
+      return 0;
+    }
+
     console.log("📁 Discovered Browser Profiles:\n");
     profiles.forEach((p, i) => {
       const idx = i + 1;
