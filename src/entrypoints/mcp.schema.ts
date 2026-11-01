@@ -103,4 +103,20 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       required: ["threadId"],
     },
   },
+  {
+    name: "convo_profile_list",
+    description: "Discover all installed browser profiles on disk (Google Chrome, Edge, Brave, ConvoLink profiles) and check workspace configuration. Use this before asking the user which profile to bind.",
+    inputSchema: { type: "object", properties: {} },
+  },
+  {
+    name: "convo_profile_select",
+    description: "Select and persist the active browser profile for this workspace in .convo/config.json. Accepts profile index (e.g. '1'), email, or name.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        target: { type: "string", description: "Profile index (e.g. '1'), account email, or name to select" },
+      },
+      required: ["target"],
+    },
+  },
 ];

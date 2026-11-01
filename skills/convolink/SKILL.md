@@ -81,6 +81,14 @@ convo profile select developer@example.com
 
 Once selected, ConvoLink saves `.convo/config.json` at the project root, automatically targeting that profile with **zero prompts** on subsequent calls.
 
+### 2.1 Multi-Agent Human-in-the-Loop (HITL) Protocol
+When setting up ConvoLink in a new workspace or when `.convo/config.json` is missing, AI coding agents MUST NOT guess or silently bind profiles. Follow the native elicitation pattern for your environment:
+
+- **Antigravity Agents:** Call `convo profile list` (or `convo_profile_list` MCP tool), then invoke the native `ask_question` tool to present an interactive choice modal to the human with detected profiles and emails. Call `convo profile select <choice>` upon selection.
+- **Claude Code CLI:** When Claude Code invokes ConvoLink, invoke Claude's native `AskUserQuestion` tool with the profile options. Once the user picks with arrow keys or number, call `convo profile select <choice>`.
+- **OpenCode / Codex / Pi / Cursor / Cline:** Check `convo_profile_list` and trigger the client's native question/confirmation card before executing queries.
+- **Direct Terminal Humans:** Running `convo ask` interactively automatically renders a numbered prompt with 1-click Enter default.
+
 To purge any stray ghost browser processes or temporary debug directories:
 ```bash
 convo clean

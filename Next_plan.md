@@ -35,6 +35,7 @@ We established the **Zero "Ghost Browser" Law** (`AGENTS.md` and `docs/ADR.md` A
 | **Ghost Cleanup Service** | `GhostCleanupService` identifies and purges ghost directories while strictly protecting real user profiles; wired to `convo clean`. | ✅ Verified (`tests/unit/ghost-cleanup.test.ts`) |
 | **Companion Extension Bridge** | Manifest V3 extension (`extensions/convolink-companion/`) + WebSocket adapter (`ExtensionBridgeAdapter`) for zero-flag everyday Chrome connectivity. | ✅ Verified (`tests/unit/extension-bridge.test.ts`) |
 | **Fedora Debug Script Fix** | `scripts/fedora-chrome-debug.sh` updated to inspect running Chrome sessions and guide user consent without spawning unauthenticated ghost profiles. | ✅ Verified live |
+| **HITL Profile Elicitation** | Multi-agent interactive selection across Antigravity (`ask_question`), Claude Code (`AskUserQuestion`), OpenCode, Codex, Pi, and MCP (`convo_profile_list`, `convo_profile_select`). | ✅ Verified (`tests/unit/mcp.test.ts`, `tests/unit/cli.prompt.test.ts`) |
 
 ---
 

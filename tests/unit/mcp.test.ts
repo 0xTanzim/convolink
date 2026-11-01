@@ -265,4 +265,37 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(parsed.id).toBe(100);
     expect(parsed.result).toEqual({});
   });
+
+  it("handles convo_profile_list tool and returns profile catalog for agent elicitation", async () => {
+    const server = createTestServer();
+    const response = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 20,
+      method: "tools/call",
+      params: { name: "convo_profile_list" },
+    });
+
+    expect(response?.id).toBe(20);
+    expect(response?.result?.content).toBeDefined();
+    const text = response?.result?.content?.[0]?.text;
+    expect(text).toContain("Browser Profiles");
+  });
+
+  it("handles convo_profile_select tool and persists choice to .convo/config.json", async () => {
+    const server = createTestServer();
+    const response = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 21,
+      method: "tools/call",
+      params: {
+        name: "convo_profile_select",
+        arguments: { target: "1" },
+      },
+    });
+
+    expect(response?.id).toBe(21);
+    expect(response?.result?.content).toBeDefined();
+    const text = response?.result?.content?.[0]?.text;
+    expect(text).toContain("Saved active profile");
+  });
 });

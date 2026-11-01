@@ -1,5 +1,7 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { PlatformId } from "../core/ports/platform.port.js";
+import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
+import { ConfigService } from "../core/services/config.service.js";
 export { MCP_TOOLS, type McpToolDefinition } from "./mcp.schema.js";
 
 export interface McpToolExecutionResult {
@@ -80,6 +82,48 @@ export async function executeMcpTool(
         const format = args.format === "json" ? "json" : "markdown";
         const output = await orchestrator.exportThread(threadId, format);
         return { text: output };
+      }
+      case "convo_profile_list": {
+        const discovery = new BrowserDiscoveryService();
+        const profiles = await discovery.discoverProfiles();
+        const configService = new ConfigService();
+        const config = await configService.loadConfig();
+
+        const lines = ["Discovered Browser Profiles:"];
+        profiles.forEach((p, idx) => {
+          const num = idx + 1;
+          const isActive = (config?.profileEmail && p.email === config.profileEmail) ||
+            (config?.profilePath && p.userDataDir === config.profilePath);
+          const activeTag = isActive ? " [ACTIVE IN THIS WORKSPACE]" : "";
+          const emailTag = p.email ? ` <${p.email}>` : "";
+          lines.push(`  ${num}) [${p.browser}] ${p.name}${emailTag}${activeTag}`);
+          lines.push(`     Path: ${p.userDataDir}`);
+        });
+
+        lines.push("\n💡 Agent Instruction: Use your native question UI (e.g. ask_question or AskUserQuestion) to let the human user select which profile to link, then call convo_profile_select with their choice.");
+        return { text: lines.join("\n") };
+      }
+      case "convo_profile_select": {
+        const target = typeof args.target === "string" ? args.target.trim() : "";
+        if (!target) return { text: "Error: target argument is required.", isError: true };
+        const discovery = new BrowserDiscoveryService();
+        const profiles = await discovery.discoverProfiles();
+        const idxMatch = target.match(/^#?(\d+)$/);
+        const matched = idxMatch && idxMatch[1]
+          ? profiles[parseInt(idxMatch[1], 10) - 1]
+          : profiles.find((p) => p.email.toLowerCase().includes(target.toLowerCase()) || p.name.toLowerCase().includes(target.toLowerCase()));
+
+        if (!matched) return { text: `Error: No profile matched '${target}'. Run convo_profile_list to see options.`, isError: true };
+
+        const configService = new ConfigService();
+        await configService.updateConfig({
+          profileId: matched.profileId,
+          profileEmail: matched.email,
+          profilePath: matched.userDataDir,
+        });
+
+        const email = matched.email ? ` <${matched.email}>` : "";
+        return { text: `Saved active profile for this repository into .convo/config.json: ${matched.name}${email} (${matched.browser})` };
       }
       default:
         return { text: `Unknown tool: ${name}`, isError: true };
