@@ -1,4 +1,4 @@
-export type BrowserAdapterId = "raw-cdp" | "agent-browser" | "firefox-bidi";
+export type BrowserAdapterId = "raw-cdp" | "agent-browser" | "firefox-bidi" | "extension-bridge";
 export type BrowserProtocol = "cdp" | "webdriver-bidi";
 export type BrowserFamily = "chromium" | "firefox" | "webkit" | "unknown";
 

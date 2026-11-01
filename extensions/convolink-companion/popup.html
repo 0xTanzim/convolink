@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      width: 280px;
+      padding: 16px;
+      margin: 0;
+      color: #1e293b;
+      background: #f8fafc;
+    }
+    h3 {
+      margin: 0 0 8px 0;
+      font-size: 15px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 9999px;
+      font-size: 11px;
+      font-weight: 600;
+    }
+    .online { background: #dcfce7; color: #166534; }
+    .offline { background: #fee2e2; color: #991b1b; }
+    .info {
+      font-size: 12px;
+      color: #64748b;
+      line-height: 1.4;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+<body>
+  <h3>🔗 ConvoLink Companion</h3>
+  <div id="statusBadge" class="badge online">Checking bridge...</div>
+  <p class="info">
+    Provides zero-flag, authenticated CDP connection from your everyday Chrome profile to local AI coding agents.
+  </p>
+  <div class="info" style="font-size: 11px;">Bridge Endpoint: ws://127.0.0.1:9224</div>
+  <script src="popup.js"></script>
+</body>
+</html>

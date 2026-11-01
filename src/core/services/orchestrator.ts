@@ -48,7 +48,12 @@ export class SessionOrchestrator {
   }
 
   public async doctor(): Promise<DoctorReport> {
-    const tabs = await this.listTabs();
+    let tabs: DiscoveredTab[] = [];
+    try {
+      tabs = await this.listTabs();
+    } catch {
+      // Browser offline or unreachable; runDoctorAudit will capture transport health
+    }
     return runDoctorAudit(this.browser, tabs, (url) => TabResolver.findDriver(url, this.drivers), this.lockService);
   }
 

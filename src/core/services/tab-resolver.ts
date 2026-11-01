@@ -1,7 +1,7 @@
 import type { PlatformId, PlatformPort } from "../ports/platform.port.js";
 import type { TabDescriptor } from "../ports/browser.port.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
-import { TabNotFoundError } from "../errors/bridge-errors.js";
+import { AmbiguousTabError, TabNotFoundError } from "../errors/bridge-errors.js";
 
 export class TabResolver {
   public static toDiscoveredTab(raw: TabDescriptor, drivers: readonly PlatformPort[]): DiscoveredTab {
@@ -20,21 +20,42 @@ export class TabResolver {
   }
 
   public static resolveTargetTab(
-    options: { targetId?: string; platform?: PlatformId; prompt?: string },
+    options: { targetId?: string; platform?: PlatformId; prompt?: string; disallowAmbiguous?: boolean },
     tabs: DiscoveredTab[],
   ): DiscoveredTab {
     if (options.targetId) {
-      const found = tabs.find((t) => t.targetId === options.targetId);
-      if (!found) throw new TabNotFoundError(`targetId:${options.targetId}`);
-      return found;
+      return this.resolveByTargetId(options.targetId, tabs);
     }
     if (options.platform) {
-      const found = tabs.find((t) => t.platformId === options.platform);
-      if (!found) throw new TabNotFoundError(`platform:${options.platform}`);
-      return found;
+      const matching = tabs.filter((t) => t.platformId === options.platform);
+      if (matching.length === 0) throw new TabNotFoundError(`platform:${options.platform}`);
+      if (options.disallowAmbiguous && matching.length > 1) {
+        throw new AmbiguousTabError(`platform '${options.platform}'`, matching);
+      }
+      return matching[0]!;
     }
-    const supported = tabs.find((t) => t.platformId !== null);
-    if (!supported) throw new TabNotFoundError("No active tabs with supported AI platform found");
-    return supported;
+    const supported = tabs.filter((t) => t.platformId !== null);
+    if (supported.length === 0) throw new TabNotFoundError("No active tabs with supported AI platform found");
+    if (options.disallowAmbiguous && supported.length > 1) {
+      throw new AmbiguousTabError("multiple open AI tabs", supported);
+    }
+    return supported[0]!;
+  }
+
+  private static resolveByTargetId(targetId: string, tabs: DiscoveredTab[]): DiscoveredTab {
+    const trimmed = targetId.trim();
+    // Shorthand index matching: #1, @2, 1
+    const indexMatch = trimmed.match(/^[#@]?(\d+)$/);
+    if (indexMatch && indexMatch[1]) {
+      const idx = parseInt(indexMatch[1], 10);
+      if (idx >= 1 && idx <= tabs.length) {
+        return tabs[idx - 1]!;
+      }
+      throw new TabNotFoundError("index", targetId);
+    }
+
+    const found = tabs.find((t) => t.targetId === trimmed);
+    if (!found) throw new TabNotFoundError(undefined, targetId);
+    return found;
   }
 }

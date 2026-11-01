@@ -7,7 +7,8 @@ export type BridgeErrorCode =
   | "ERR_LOCK_ACQUISITION"
   | "ERR_AUTH_CHALLENGE"
   | "ERR_POLICY_VIOLATION"
-  | "ERR_PLATFORM_NOT_FOUND";
+  | "ERR_PLATFORM_NOT_FOUND"
+  | "ERR_AMBIGUOUS_TAB";
 
 export class BridgeError extends Error {
   public readonly code: BridgeErrorCode;
@@ -112,5 +113,26 @@ export class PlatformDriverNotFoundError extends BridgeError {
   constructor(url: string) {
     super(`No platform driver registered matching URL: ${url}`, "ERR_PLATFORM_NOT_FOUND", { url });
     this.url = url;
+  }
+}
+
+export interface DiscoveredTabCandidate {
+  readonly targetId: string;
+  readonly title: string;
+  readonly url: string;
+  readonly platformId?: string | null;
+}
+
+export class AmbiguousTabError extends BridgeError {
+  public readonly candidates: readonly DiscoveredTabCandidate[];
+
+  constructor(reason: string, candidates: readonly DiscoveredTabCandidate[]) {
+    const list = candidates.map((c, i) => `#${i + 1} [${c.platformId ?? "OTHER"}] ${c.title} (${c.targetId})`).join("\n  • ");
+    super(
+      `Multiple matching tabs found (${reason}). Disambiguation required:\n  • ${list}\nSpecify --targetId or shorthand index (e.g. -t #1).`,
+      "ERR_AMBIGUOUS_TAB",
+      { reason, candidatesCount: candidates.length },
+    );
+    this.candidates = candidates;
   }
 }

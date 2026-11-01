@@ -13,6 +13,7 @@ Usage:
   convo resume <threadId>        Rehydrate and re-open saved thread from persistent SQLite ledger
   convo export <threadId>        Export structured conversation ledger (Markdown or JSON)
   convo search <query>           Full-text search across historical conversation turns and code
+  convo clean                    Purge stray ghost browser processes and temporary debug profiles
   convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio
 
 Options for ask:

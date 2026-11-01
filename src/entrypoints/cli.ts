@@ -11,6 +11,7 @@ import {
   handleResume,
   handleExport,
   handleSearch,
+  handleClean,
 } from "./cli.ops.js";
 import { handleAsk, handleCompare } from "./cli.query.js";
 
@@ -45,6 +46,8 @@ export async function runCli(args: string[]): Promise<number> {
       return handleExport(container.orchestrator, args.slice(1));
     case "search":
       return handleSearch(container.orchestrator, args.slice(1).join(" "));
+    case "clean":
+      return handleClean();
     case "mcp":
       await runMcpServer();
       return 0;

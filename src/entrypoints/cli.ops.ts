@@ -1,4 +1,6 @@
 import type { createContainer } from "../container.js";
+import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
+import { GhostCleanupService } from "../adapters/browsers/ghost-cleanup.js";
 export { handleHistory, handleResume, handleExport, handleSearch } from "./cli.storage.js";
 
 type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
@@ -16,6 +18,21 @@ export async function handleDoctor(orchestrator: Orchestrator, args: string[]): 
     const report = await orchestrator.doctor();
     console.log(`[CDP Transport] Status: ${report.transportHealth.ok ? "ONLINE" : "OFFLINE"} (Latency: ${report.transportHealth.latencyMs}ms)`);
     console.log(`[Tabs] Found ${report.totalTabs} total open tab(s), ${report.supportedTabs} supported AI tab(s).\n`);
+
+    if (!report.transportHealth.ok) {
+      const discovery = new BrowserDiscoveryService();
+      const profiles = await discovery.discoverProfiles();
+      console.log("📁 Discovered Local Browser Profiles on Disk:");
+      for (const p of profiles) {
+        const emailTag = p.email ? ` <${p.email}>` : "";
+        console.log(`  • [${p.browser}] ${p.name}${emailTag} (${p.profileId})`);
+      }
+      console.log("\n💡 Remediation:");
+      console.log("  1. If Chrome is already open, go to: chrome://inspect/#remote-debugging to enable debugging on your active session.");
+      console.log("  2. Or use the ConvoLink Chrome Companion Extension (zero-flag bridge).");
+      console.log("  3. Run 'convo clean' to terminate any accidentally created ghost instances.\n");
+      return 1;
+    }
 
     for (const tab of report.tabs) {
       const platformBadge = tab.platformId ? `[${tab.platformId.toUpperCase()}]` : "[UNSUPPORTED]";
@@ -65,7 +82,21 @@ export async function handleTab(orchestrator: Orchestrator, args: string[]): Pro
 }
 
 export async function handleUndo(orchestrator: Orchestrator, targetId?: string): Promise<number> {
-  const restored = await orchestrator.undo(targetId);
-  console.log(restored ? `↩️ Restored previous conversation: ${restored.restoredUrl}` : "No previous checkpoint found to restore.");
+  try {
+    const restored = await orchestrator.undo(targetId);
+    console.log(restored ? `↩️ Restored previous conversation: ${restored.restoredUrl}` : "No previous checkpoint found to restore.");
+  } catch {
+    console.log("No previous checkpoint found to restore.");
+  }
+  return 0;
+}
+
+export async function handleClean(): Promise<number> {
+  const cleaner = new GhostCleanupService();
+  const killed = await cleaner.killGhostProcesses();
+  const purged = await cleaner.purgeGhostDirectories();
+  console.log("🧹 Ghost Cleanup Complete:");
+  console.log(`  • Terminated ${killed} stray ghost browser process(es)`);
+  console.log(`  • Purged ${purged.length} temporary ghost profile directory/directories`);
   return 0;
 }

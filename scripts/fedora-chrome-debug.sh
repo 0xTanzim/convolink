@@ -13,43 +13,17 @@ if curl -s --max-time 1 "${DEBUG_URL}" >/dev/null 2>&1; then
   exit 0
 fi
 
-echo "🚀 Chrome is not listening on port ${PORT}. Attempting launch..."
-
-# Locate Chrome binary
-CHROME_BIN=""
-for candidate in \
-  "google-chrome" \
-  "google-chrome-stable" \
-  "chromium" \
-  "chromium-browser" \
-  "/usr/bin/google-chrome" \
-  "/usr/bin/chromium-browser"; do
-  if command -v "${candidate}" >/dev/null 2>&1; then
-    CHROME_BIN="${candidate}"
-    break
-  fi
-done
-
-if [[ -z "${CHROME_BIN}" ]]; then
-  echo "❌ Error: Google Chrome or Chromium executable not found on PATH." >&2
-  echo "Please install Google Chrome or specify CHROME_BIN explicitly." >&2
+# Check if an existing Chrome process is running without debugging port
+CHROME_PIDS=$(pgrep -f "chrome" 2>/dev/null || true)
+if [[ -n "${CHROME_PIDS}" ]]; then
+  echo "ℹ️ Chrome is currently running, but remote debugging is not enabled on port ${PORT}."
+  echo ""
+  echo "👉 To connect to your existing logged-in session without losing accounts or cookies:"
+  echo "   1. In your active Chrome tab, open: chrome://inspect/#remote-debugging"
+  echo "   2. Enable remote debugging and approve connection."
+  echo "   3. Or use the ConvoLink Chrome Companion Extension (zero-flag bridge)."
   exit 1
 fi
 
-echo "Launching ${CHROME_BIN} on port ${PORT}..."
-"${CHROME_BIN}" --remote-debugging-port="${PORT}" --restore-last-session >/dev/null 2>&1 &
-
-# Wait up to 5 seconds for CDP socket to become ready
-ATTEMPTS=0
-MAX_ATTEMPTS=10
-while [[ ${ATTEMPTS} -lt ${MAX_ATTEMPTS} ]]; do
-  if curl -s --max-time 1 "${DEBUG_URL}" >/dev/null 2>&1; then
-    echo "✅ Chrome launched and listening on port ${PORT}!"
-    exit 0
-  fi
-  sleep 0.5
-  ATTEMPTS=$((ATTEMPTS + 1))
-done
-
-echo "⚠️ Timed out waiting for Chrome to bind to port ${PORT}." >&2
+echo "⚠️ Google Chrome is not running. Please start your everyday Chrome browser."
 exit 1

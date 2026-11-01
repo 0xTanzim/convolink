@@ -1,6 +1,7 @@
 import { RawCdpAdapter } from "./adapters/browsers/raw-cdp.adapter.js";
 import { AgentBrowserAdapter } from "./adapters/browsers/agent-browser.adapter.js";
 import { FirefoxBidiAdapter } from "./adapters/browsers/firefox-bidi.adapter.js";
+import { ExtensionBridgeAdapter } from "./adapters/browsers/extension-bridge.adapter.js";
 import { DeepSeekDriver } from "./adapters/platforms/deepseek.driver.js";
 import { ChatGPTDriver } from "./adapters/platforms/chatgpt.driver.js";
 import { GeminiDriver } from "./adapters/platforms/gemini.driver.js";
@@ -50,7 +51,9 @@ export function createContainer(options?: ContainerOptions): AppContainer {
       ? new AgentBrowserAdapter(port)
       : transport === "firefox-bidi"
         ? new FirefoxBidiAdapter(port)
-        : new RawCdpAdapter(endpoint)
+        : transport === "extension-bridge"
+          ? new ExtensionBridgeAdapter(port === 9222 ? 9224 : port)
+          : new RawCdpAdapter(endpoint)
   );
 
   const drivers: readonly PlatformPort[] = [
