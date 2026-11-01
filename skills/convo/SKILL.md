@@ -65,9 +65,32 @@ convolink doctor
 
 ---
 
-## 2. Core Agent Workflows
+## 2. Multi-Profile Management (`convo profile`)
 
-### 2.1 Ingesting Specifications & Resolving Doubts (`convo ask`)
+ConvoLink automatically discovers real local browser profiles (Everyday Chrome, Work Profiles, Edge, Brave) and eliminates the "ghost browser" trap.
+
+```bash
+# List all discovered profiles and see which is active for this repository
+convo profile list
+
+# Select and persist active profile for this project (.convo/config.json)
+convo profile select #1
+# Or select by email/name:
+convo profile select avigilzack@gmail.com
+```
+
+Once selected, ConvoLink saves `.convo/config.json` at the project root, automatically targeting that profile with **zero prompts** on subsequent calls.
+
+To purge any stray ghost browser processes or temporary debug directories:
+```bash
+convo clean
+```
+
+---
+
+## 3. Core Agent Workflows
+
+### 3.1 Ingesting Specifications & Resolving Doubts (`convo ask`)
 Query the upstream project conversation for architectural specs, flow instructions, or to resolve ambiguous implementation decisions:
 ```bash
 # Ingest next milestone specifications from the active architecture thread
@@ -75,10 +98,20 @@ convo ask --platform claude "What are the exact transition rules and event schem
 
 # Resolve agent doubt or ambiguous boundary condition
 convo ask --platform chatgpt "During implementation of auth, should we reject expired tokens immediately or issue a grace period? What was our agreed architecture?"
+
+# Target specific tab using shorthand index:
+convo ask -t "#1" "Analyze this function"
+convo ask -t "@2" "Review this algorithm"
 ```
-Or target a specific tab by its unique CDP `targetId`:
+
+### 3.2 Borrowing Upstream Capabilities (`--think` & `--search`)
+Delegate difficult reasoning or fetch current web documentation through upstream subscription features without per-token charges:
 ```bash
-convo ask --targetId 713AD61E2ACB2C39A39AE3EE887A30E3 "Analyze this function"
+# Force extended reasoning / deep thinking mode
+convo ask -p deepseek "Prove why square root of 2 is irrational" --think
+
+# Leverage upstream live web search grounding
+convo ask -p chatgpt "What is the latest RFC release for WebAuthn in 2026?" --search
 ```
 
 ### 2.2 Writing Multi-File Code Artifacts to Disk (`-w` / `--write-files`)

@@ -140,23 +140,41 @@ bun install
 bun link # Optional: makes `convo` and `convolink` globally accessible
 ```
 
-### 2. Launch Chrome with Remote Debugging
-Launch Chrome with remote debugging enabled on port `9222`:
+### 2. Connect Your Real Browser (Zero "Ghost Browsers")
 
+ConvoLink adheres to the **Zero Ghost Browser Law**: it never spawns blank, unauthenticated browser profiles. You have two ways to connect:
+
+#### Option A: Direct CDP / User-Consented Debugging (Default)
+In Chrome 144+, open `chrome://inspect/#remote-debugging` in your everyday Chrome and enable remote debugging.
+
+Or launch your persistent AI profile:
 ```bash
 # On Linux (Fedora / Ubuntu / Debian):
 ./scripts/fedora-chrome-debug.sh
 
-# Or on macOS:
-/Applications/Google\ Chrome.app/Contents/MacOS/Google\ Chrome --remote-debugging-port=9222 &
-
-# Or on Windows (PowerShell):
-Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222"
+# Or with custom profile:
+google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/convolink/profiles/zack-ai" &
 ```
 
-> **Note:** Open your favorite AI platforms ([ChatGPT](https://chatgpt.com), [Claude](https://claude.ai), [DeepSeek](https://chat.deepseek.com), [Gemini](https://gemini.google.com)) in tabs and log in.
+#### Option B: ConvoLink Chrome Companion Extension (Zero Flags)
+For a 100% zero-flag connection to your everyday browser without restarting Chrome:
+1. Open Chrome $\rightarrow$ `chrome://extensions/` $\rightarrow$ enable **Developer mode**.
+2. Click **Load unpacked** $\rightarrow$ select `extensions/convolink-companion`.
+3. Use `--transport extension-bridge` with any command.
 
-### 3. Verify Health (`convo doctor`)
+### 3. Multi-Profile Management (`convo profile`)
+ConvoLink automatically discovers real local profiles (Google Chrome, Edge, Brave, and saved profiles):
+```bash
+# List all discovered profiles and accounts:
+convo profile list
+
+# Select active profile for this repository (persisted in .convo/config.json):
+convo profile select #1
+# Or select by email:
+convo profile select avigilzack@gmail.com
+```
+
+### 4. Verify Health (`convo doctor`)
 Check CDP transport connectivity and detect your open AI tabs:
 
 ```bash

@@ -310,3 +310,30 @@ Autonomous coding agents (Claude Desktop, Cursor, Antigravity) need native JSON-
 
 ### Consequences
 - Seamless IDE agent integration with zero `stdio` deadlocks.
+
+---
+
+## ADR-017: Multi-Profile Discovery, Zero-Ghost Browser Law, and Repository Profile Persistence
+
+### Status
+Accepted
+
+### Context
+Starting in Google Chrome 136+, Chromium security mitigations block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles. Naive automation tools circumvent this by spawning Chrome with an ad-hoc `--user-data-dir`, creating an unauthenticated "ghost browser" with zero cookies, zero saved Google accounts, and zero active AI conversations. Furthermore, developers maintain multiple profiles (e.g. personal `kdptanzim0@gmail.com` vs. dedicated AI profile `avigilzack@gmail.com`), creating risks of cross-account data leakage or repetitive interactive prompts.
+
+### Decision
+1. **Zero-Ghost Browser Law:** ConvoLink will never spawn an empty, unauthenticated browser instance as its default connection strategy. It attaches exclusively to existing authenticated sessions or guides the user explicitly.
+2. **Multi-Profile Discovery Engine (`BrowserDiscoveryService`):** Parse `Local State` JSON files across Chrome, Chromium, Edge, and Brave to discover installed profile IDs, display names, and Google account emails without network requests.
+3. **Repository-Level Configuration (`.convo/config.json`):** Provide `ConfigService` to persist project-specific profile selections (`convo profile select <#index|email>`). Next CLI/MCP invocations in the project read `.convo/config.json` automatically with zero prompts.
+4. **4-Tier Connection Engine:**
+   - *Tier 1:* Dynamic ports via `DevToolsActivePort` (Chrome 144+ user-consented debugging `chrome://inspect/#remote-debugging`).
+   - *Tier 2:* Standard configured CDP ports (9222, 9229, custom).
+   - *Tier 3:* ConvoLink Chrome Companion Extension (`extensions/convolink-companion/`) via local WebSocket server (`ws://127.0.0.1:9224`) for 100% zero-flag, zero-restart everyday Chrome connectivity.
+   - *Tier 4:* Dedicated persistent profile (`~/.config/convolink/profiles/`) only upon explicit user command.
+5. **Tab Disambiguation Guard:** `TabResolver` supports shorthand index targeting (`#1`, `#2`, `@1`) and strictly rejects ambiguous requests with `AmbiguousTabError` instead of guessing.
+6. **Ghost Cleanup Safeguard (`GhostCleanupService` & `convo clean`):** Safely kills stray debug processes and purges temporary directories while strictly protecting real user configuration paths.
+
+### Consequences
+- Full preservation of day-long R&D conversations and authenticated accounts.
+- Zero cross-account contamination.
+- Frictionless one-time configuration with repository portability.
