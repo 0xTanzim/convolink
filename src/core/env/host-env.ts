@@ -59,33 +59,72 @@ export class HostEnv {
    * Locates Google Chrome or Chromium executable on the host system.
    */
   public static findChromeExecutable(): string | null {
+    return this.findBrowserExecutable("Google Chrome");
+  }
+
+  /**
+   * Locates a browser executable dynamically based on browser name (Brave, Edge, Chrome, Chromium).
+   */
+  public static findBrowserExecutable(browserName = "Google Chrome"): string | null {
     const platform = os.platform();
+    const lower = browserName.toLowerCase();
 
     if (platform === "linux") {
-      const candidates = [
-        "/usr/bin/google-chrome",
-        "/usr/bin/google-chrome-stable",
-        "/usr/bin/chromium",
-        "/usr/bin/chromium-browser",
-      ];
+      let candidates: string[] = [];
+      if (lower.includes("brave")) {
+        candidates = ["/usr/bin/brave-browser", "/usr/bin/brave-browser-stable", "/usr/bin/brave"];
+      } else if (lower.includes("edge")) {
+        candidates = ["/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable"];
+      } else {
+        candidates = [
+          "/usr/bin/google-chrome",
+          "/usr/bin/google-chrome-stable",
+          "/usr/bin/chromium",
+          "/usr/bin/chromium-browser",
+        ];
+      }
       for (const p of candidates) {
         if (fs.existsSync(p)) return p;
       }
     } else if (platform === "darwin") {
-      const macPath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+      let macPath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
+      if (lower.includes("brave")) {
+        macPath = "/Applications/Brave Browser.app/Contents/MacOS/Brave Browser";
+      } else if (lower.includes("edge")) {
+        macPath = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
+      }
       if (fs.existsSync(macPath)) return macPath;
     } else if (platform === "win32") {
       const programFiles = process.env["PROGRAMFILES"] || "C:\\Program Files";
       const programFilesX86 = process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
-      const winCandidates = [
-        path.join(programFiles, "Google", "Chrome", "Application", "chrome.exe"),
-        path.join(programFilesX86, "Google", "Chrome", "Application", "chrome.exe"),
-      ];
-      for (const p of winCandidates) {
-        if (fs.existsSync(p)) return p;
+      let subPath = path.join("Google", "Chrome", "Application", "chrome.exe");
+      if (lower.includes("brave")) {
+        subPath = path.join("BraveSoftware", "Brave-Browser", "Application", "brave.exe");
+      } else if (lower.includes("edge")) {
+        subPath = path.join("Microsoft", "Edge", "Application", "msedge.exe");
+      }
+      for (const root of [programFiles, programFilesX86]) {
+        const full = path.join(root, subPath);
+        if (fs.existsSync(full)) return full;
       }
     }
 
+    // Generic fallback: try finding any installed browser
+    return this.findAnyInstalledBrowser();
+  }
+
+  private static findAnyInstalledBrowser(): string | null {
+    if (os.platform() === "linux") {
+      const fallbackList = [
+        "/usr/bin/google-chrome",
+        "/usr/bin/brave-browser",
+        "/usr/bin/microsoft-edge",
+        "/usr/bin/chromium",
+      ];
+      for (const p of fallbackList) {
+        if (fs.existsSync(p)) return p;
+      }
+    }
     return null;
   }
 }

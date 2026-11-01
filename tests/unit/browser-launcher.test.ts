@@ -68,4 +68,53 @@ describe("BrowserLauncherService (Detached Daemon)", () => {
     const success = await launcher.ensureBrowserRunning({ port: 9222 });
     expect(success).toBe(false);
   });
+
+  it("passes --profile-directory and --no-first-run to bypass profile picker", async () => {
+    let capturedArgs: string[] = [];
+    let checked = false;
+
+    const launcher = new BrowserLauncherService({
+      findBinary: (browser) => `/usr/bin/${browser?.toLowerCase() || "google-chrome"}`,
+      checkPort: async () => {
+        if (!checked) {
+          checked = true;
+          return false;
+        }
+        return true;
+      },
+      spawnProcess: (_bin, args) => {
+        capturedArgs = args;
+      },
+    });
+
+    await launcher.ensureBrowserRunning({
+      profilePath: "/tmp/fake-brave",
+      profileDirectory: "Profile 1",
+      browser: "Brave",
+    });
+
+    expect(capturedArgs).toContain("--user-data-dir=/tmp/fake-brave");
+    expect(capturedArgs).toContain("--profile-directory=Profile 1");
+    expect(capturedArgs).toContain("--no-first-run");
+  });
+
+  it("detects when profile directory is locked by a living process", () => {
+    const launcher = new BrowserLauncherService();
+    // Test with non-existent dir
+    const notLocked = launcher.isProfileLocked("/tmp/nonexistent-profile-12345");
+    expect(notLocked.locked).toBe(false);
+
+    // Test with current process PID via a temporary lock
+    const tmpDir = `/tmp/test-profile-lock-${Date.now()}`;
+    const fs = require("node:fs");
+    fs.mkdirSync(tmpDir, { recursive: true });
+    try {
+      fs.symlinkSync(`hostname-${process.pid}`, `${tmpDir}/SingletonLock`);
+      const locked = launcher.isProfileLocked(tmpDir);
+      expect(locked.locked).toBe(true);
+      expect(locked.pid).toBe(process.pid);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+  });
 });

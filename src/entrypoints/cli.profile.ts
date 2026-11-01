@@ -72,6 +72,7 @@ export async function handleProfile(args: string[]): Promise<number> {
       profileId: matched.profileId,
       profileEmail: matched.email,
       profilePath: matched.userDataDir,
+      browser: matched.browser,
     });
 
     const email = matched.email ? ` <${matched.email}>` : "";

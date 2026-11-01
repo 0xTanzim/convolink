@@ -21,7 +21,11 @@ export async function handleAsk(
 
   const config = await ensureProjectProfile({ profileArg: parsed.profile });
   const launcher = new BrowserLauncherService();
-  await launcher.ensureBrowserRunning({ profilePath: config?.profilePath });
+  await launcher.ensureBrowserRunning({
+    profilePath: config?.profilePath,
+    profileDirectory: config?.profileId,
+    browser: config?.browser,
+  });
 
   try {
     const result = await orchestrator.ask({
@@ -74,9 +78,13 @@ export async function handleCompare(
     return 1;
   }
 
-  await ensureProjectProfile({ profileArg: parsed.profile });
+  const config = await ensureProjectProfile({ profileArg: parsed.profile });
   const launcher = new BrowserLauncherService();
-  await launcher.ensureBrowserRunning();
+  await launcher.ensureBrowserRunning({
+    profilePath: config?.profilePath,
+    profileDirectory: config?.profileId,
+    browser: config?.browser,
+  });
   try {
     const report = await orchestrator.compare({
       prompt, platforms: parsed.platforms, mode: parsed.mode, timeoutMs: parsed.timeoutMs,

@@ -1,8 +1,10 @@
 import { spawn } from "node:child_process";
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
 
 export interface LauncherDependencies {
-  findBinary?: () => string | null;
+  findBinary?: (browserName?: string) => string | null;
   checkPort?: (port: number) => Promise<boolean>;
   spawnProcess?: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => void;
 }
@@ -10,17 +12,19 @@ export interface LauncherDependencies {
 export interface EnsureBrowserOptions {
   port?: number;
   profilePath?: string;
+  profileDirectory?: string;
+  browser?: string;
   timeoutMs?: number;
   pollIntervalMs?: number;
 }
 
 export class BrowserLauncherService {
-  private readonly findBinary: () => string | null;
+  private readonly findBinary: (browserName?: string) => string | null;
   private readonly portChecker: (port: number) => Promise<boolean>;
   private readonly spawner: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => void;
 
   public constructor(deps: LauncherDependencies = {}) {
-    this.findBinary = deps.findBinary ?? (() => HostEnv.findChromeExecutable());
+    this.findBinary = deps.findBinary ?? ((b) => HostEnv.findBrowserExecutable(b));
     this.portChecker = deps.checkPort ?? ((port) => this.checkPort(port));
     this.spawner =
       deps.spawnProcess ??
@@ -41,18 +45,42 @@ export class BrowserLauncherService {
     }
   }
 
+  public isProfileLocked(profilePath?: string): { locked: boolean; pid?: number } {
+    if (!profilePath) return { locked: false };
+    const lockFile = path.join(profilePath, "SingletonLock");
+    try {
+      const target = fs.readlinkSync(lockFile);
+      const parts = target.split("-");
+      const pidStr = parts[parts.length - 1];
+      const pid = pidStr ? parseInt(pidStr, 10) : undefined;
+      if (pid && !isNaN(pid)) {
+        try {
+          process.kill(pid, 0);
+          return { locked: true, pid };
+        } catch {
+          return { locked: false };
+        }
+      }
+    } catch {}
+    return { locked: false };
+  }
+
   public async ensureBrowserRunning(options: EnsureBrowserOptions = {}): Promise<boolean> {
     const port = options.port ?? 9222;
     if (await this.portChecker(port)) {
       return true;
     }
 
-    const binary = this.findBinary();
+    const binary = this.findBinary(options.browser);
     if (!binary) return false;
 
     const args = [`--remote-debugging-port=${port}`];
     if (options.profilePath) {
       args.push(`--user-data-dir=${options.profilePath}`);
+    }
+    if (options.profileDirectory) {
+      args.push(`--profile-directory=${options.profileDirectory}`);
+      args.push("--no-first-run");
     }
 
     this.spawner(binary, args, { detached: true, stdio: "ignore" });
@@ -66,6 +94,20 @@ export class BrowserLauncherService {
       if (await this.portChecker(port)) {
         return true;
       }
+    }
+
+    // Check if the failure was caused by a running browser instance locking the profile
+    const lock = this.isProfileLocked(options.profilePath);
+    if (lock.locked) {
+      console.error(
+        `\n⚠️ Profile '${options.profilePath}' is currently open in another process (PID ${lock.pid}) without remote debugging enabled.`,
+      );
+      console.error(
+        `💡 Chromium ignores --remote-debugging-port when attaching to an already-running browser instance.`,
+      );
+      console.error(
+        `💡 To fix: Close that browser window and retry, or use a dedicated ConvoLink profile ('convo profile select 1').\n`,
+      );
     }
 
     return false;

@@ -46,6 +46,7 @@ export async function ensureProjectProfile(
         profileId: matched.profileId,
         profileEmail: matched.email,
         profilePath: matched.userDataDir,
+        browser: matched.browser,
       };
       await configService.updateConfig(config);
       return config;
@@ -65,6 +66,7 @@ export async function ensureProjectProfile(
       profileId: primary.profileId,
       profileEmail: primary.email,
       profilePath: primary.userDataDir,
+      browser: primary.browser,
     };
     await configService.updateConfig(config);
     return config;
@@ -89,6 +91,7 @@ export async function ensureProjectProfile(
     profileId: chosen.profileId,
     profileEmail: chosen.email,
     profilePath: chosen.userDataDir,
+    browser: chosen.browser,
   };
   await configService.updateConfig(config);
 

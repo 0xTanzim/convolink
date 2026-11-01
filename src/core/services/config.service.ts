@@ -6,6 +6,7 @@ export interface ConvoProjectConfig {
   readonly profileId?: string;
   readonly profileEmail?: string;
   readonly profilePath?: string;
+  readonly browser?: string;
   readonly preferredPlatform?: "chatgpt" | "deepseek" | "gemini" | "claude";
   readonly transport?: "raw-cdp" | "agent-browser" | "firefox-bidi" | "extension-bridge";
   readonly cdpPort?: number;
