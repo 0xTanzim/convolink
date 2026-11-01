@@ -39,6 +39,9 @@ jobs:
       - name: Typecheck TypeScript
         run: bun run typecheck
 
+      - name: Ensure packaging dependencies
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq zip
+
       - name: Build extension packages for Chrome and Firefox
         run: bun run build:extension
 

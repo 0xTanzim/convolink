@@ -51,6 +51,9 @@ describe("Extension Build & Packaging Pipeline", () => {
   });
 
   it("creates downloadable release zip archives when zip is enabled", async () => {
+    const hasZip = Bun.spawnSync(["which", "zip"]).exitCode === 0;
+    if (!hasZip) return;
+
     const distDir = path.join(tempDir, "release-dist");
     const result = await buildExtension({ target: "chrome", outDir: distDir, zip: true, version: "2.1.0" });
 

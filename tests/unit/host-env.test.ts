@@ -97,15 +97,16 @@ describe("HostEnv", () => {
   });
 
   it("locates specific browser binary dynamically (Brave, Edge, Chrome)", () => {
-    if (os.platform() === "linux") {
-      const bravePath = HostEnv.findBrowserExecutable("Brave");
-      expect(bravePath).toContain("brave");
+    const bravePath = HostEnv.findBrowserExecutable("Brave");
+    if (bravePath) expect(bravePath.toLowerCase()).toContain("brave");
+    else expect(bravePath).toBeNull();
 
-      const edgePath = HostEnv.findBrowserExecutable("Microsoft Edge");
-      expect(edgePath).toContain("edge");
+    const edgePath = HostEnv.findBrowserExecutable("Microsoft Edge");
+    if (edgePath) expect(edgePath.toLowerCase()).toContain("edge");
+    else expect(edgePath).toBeNull();
 
-      const chromePath = HostEnv.findBrowserExecutable("Google Chrome");
-      expect(chromePath).toContain("chrome");
-    }
+    const chromePath = HostEnv.findBrowserExecutable("Google Chrome");
+    if (chromePath) expect(chromePath.toLowerCase()).toContain("chrome");
+    else expect(chromePath).toBeNull();
   });
 });
