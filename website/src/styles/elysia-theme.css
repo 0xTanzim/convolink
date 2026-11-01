@@ -1,39 +1,102 @@
-/* ConvoLink Documentation — Elysia-Inspired Modern Theme */
+/* ConvoLink Documentation — Elysia-Inspired Modern Theme (Dual Light/Dark Architecture) */
 
 :root {
   --sl-font: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --sl-font-mono: "JetBrains Mono", "Fira Code", monospace;
 
-  /* Elysia Palette Accents */
   --color-rose: #f43f5e;
   --color-violet: #8b5cf6;
   --color-cyan: #38bdf8;
   --color-amber: #f59e0b;
-
-  --sl-color-accent-low: #1e112a;
-  --sl-color-accent: #f43f5e;
-  --sl-color-accent-high: #fda4af;
-
-  --sl-color-white: #f8fafc;
-  --sl-color-gray-1: #e2e8f0;
-  --sl-color-gray-2: #94a3b8;
-  --sl-color-gray-3: #64748b;
-  --sl-color-gray-4: #334155;
-  --sl-color-gray-5: #1e293b;
-  --sl-color-gray-6: #0f172a;
-  --sl-color-black: #08090d;
 }
 
+/* 🌙 Dark Mode (Default Theme) */
+:root,
 :root[data-theme='dark'] {
+  --sl-color-accent: #f43f5e;
+  --sl-color-accent-low: rgba(244, 63, 94, 0.15);
+  --sl-color-accent-high: #fda4af;
+
   --sl-color-bg: #08090e;
-  --sl-color-bg-nav: rgba(8, 9, 14, 0.85);
+  --sl-color-bg-nav: rgba(8, 9, 14, 0.82);
   --sl-color-bg-sidebar: #08090e;
   --sl-color-hairline: rgba(255, 255, 255, 0.08);
+
+  /* ConvoLink Design Tokens — Dark */
+  --convo-body-bg: #08090e;
+  --convo-header-bg: rgba(8, 9, 14, 0.8);
+  --convo-header-border: rgba(255, 255, 255, 0.08);
+  --convo-border: rgba(255, 255, 255, 0.08);
+  --convo-border-hover: rgba(244, 63, 94, 0.4);
+  --convo-card-bg: rgba(15, 17, 26, 0.65);
+  --convo-card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.5);
+  --convo-card-shadow-hover: 0 8px 30px -4px rgba(244, 63, 94, 0.25);
+  --convo-heading-gradient: linear-gradient(135deg, #ffffff 30%, #fbcfe8 65%, #c084fc 100%);
+  --convo-glow-1: radial-gradient(circle at 40% 40%, rgba(244, 63, 94, 0.12) 0%, rgba(139, 92, 246, 0.10) 40%, rgba(56, 189, 248, 0.06) 70%, transparent 100%);
+  --convo-glow-2: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, rgba(56, 189, 248, 0.05) 50%, transparent 80%);
+
+  /* Tabs Tokens — Dark */
+  --convo-tablist-bg: rgba(15, 17, 26, 0.85);
+  --convo-tab-color: #94a3b8;
+  --convo-tab-hover-color: #f8fafc;
+  --convo-tab-hover-bg: rgba(255, 255, 255, 0.06);
+  --convo-tab-active-color: #ffffff;
+  --convo-tab-active-bg: rgba(244, 63, 94, 0.18);
+  --convo-tab-active-border: rgba(244, 63, 94, 0.45);
+  --convo-tab-active-shadow: 0 2px 10px rgba(244, 63, 94, 0.25);
+  --convo-panel-bg: rgba(15, 17, 26, 0.45);
+
+  /* Table Tokens — Dark */
+  --convo-table-header-bg: rgba(255, 255, 255, 0.04);
+  --convo-table-border: rgba(255, 255, 255, 0.08);
+  --convo-table-row-hover: rgba(255, 255, 255, 0.02);
+}
+
+/* ☀️ Light Mode */
+:root[data-theme='light'] {
+  --sl-color-accent: #e11d48;
+  --sl-color-accent-low: #ffe4e6;
+  --sl-color-accent-high: #9f1239;
+
+  --sl-color-bg: #f8fafc;
+  --sl-color-bg-nav: rgba(255, 255, 255, 0.88);
+  --sl-color-bg-sidebar: #f8fafc;
+  --sl-color-hairline: rgba(0, 0, 0, 0.08);
+
+  /* ConvoLink Design Tokens — Light */
+  --convo-body-bg: #f8fafc;
+  --convo-header-bg: rgba(255, 255, 255, 0.85);
+  --convo-header-border: rgba(0, 0, 0, 0.08);
+  --convo-border: rgba(0, 0, 0, 0.09);
+  --convo-border-hover: rgba(225, 29, 72, 0.4);
+  --convo-card-bg: #ffffff;
+  --convo-card-shadow: 0 2px 12px -2px rgba(0, 0, 0, 0.06), 0 1px 4px -1px rgba(0, 0, 0, 0.04);
+  --convo-card-shadow-hover: 0 8px 24px -4px rgba(225, 29, 72, 0.16);
+  --convo-heading-gradient: linear-gradient(135deg, #0f172a 20%, #4338ca 65%, #be185d 100%);
+  --convo-glow-1: radial-gradient(circle at 40% 40%, rgba(244, 63, 94, 0.05) 0%, rgba(139, 92, 246, 0.04) 40%, rgba(56, 189, 248, 0.03) 70%, transparent 100%);
+  --convo-glow-2: radial-gradient(circle, rgba(139, 92, 246, 0.04) 0%, rgba(56, 189, 248, 0.03) 50%, transparent 80%);
+
+  /* Tabs Tokens — Light */
+  --convo-tablist-bg: #f1f5f9;
+  --convo-tab-color: #475569;
+  --convo-tab-hover-color: #0f172a;
+  --convo-tab-hover-bg: rgba(0, 0, 0, 0.04);
+  --convo-tab-active-color: #be185d;
+  --convo-tab-active-bg: #ffffff;
+  --convo-tab-active-border: rgba(225, 29, 72, 0.25);
+  --convo-tab-active-shadow: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 2px rgba(0, 0, 0, 0.04);
+  --convo-panel-bg: #ffffff;
+
+  /* Table Tokens — Light */
+  --convo-table-header-bg: #f1f5f9;
+  --convo-table-border: #e2e8f0;
+  --convo-table-row-hover: #f8fafc;
 }
 
 /* Background Glowing Ambient Gradient Mesh */
 body {
-  background-color: #08090e;
+  background-color: var(--convo-body-bg) !important;
+  color: var(--sl-color-text);
   position: relative;
   overflow-x: hidden;
 }
@@ -46,7 +109,7 @@ body::before {
   transform: translateX(-50%);
   width: 900px;
   height: 500px;
-  background: radial-gradient(circle at 40% 40%, rgba(244, 63, 94, 0.12) 0%, rgba(139, 92, 246, 0.10) 40%, rgba(56, 189, 248, 0.06) 70%, transparent 100%);
+  background: var(--convo-glow-1);
   filter: blur(90px);
   pointer-events: none;
   z-index: -1;
@@ -59,7 +122,7 @@ body::after {
   right: -100px;
   width: 600px;
   height: 600px;
-  background: radial-gradient(circle, rgba(139, 92, 246, 0.08) 0%, rgba(56, 189, 248, 0.05) 50%, transparent 80%);
+  background: var(--convo-glow-2);
   filter: blur(120px);
   pointer-events: none;
   z-index: -1;
@@ -69,15 +132,15 @@ body::after {
 header.header {
   backdrop-filter: blur(20px);
   -webkit-backdrop-filter: blur(20px);
-  background: rgba(8, 9, 14, 0.75) !important;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08) !important;
+  background: var(--convo-header-bg) !important;
+  border-bottom: 1px solid var(--convo-header-border) !important;
 }
 
 /* Gradient Text Utilities */
 .gradient-text,
 h1, 
 .hero h1 {
-  background: linear-gradient(135deg, #ffffff 30%, #fbcfe8 65%, #c084fc 100%);
+  background: var(--convo-heading-gradient);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   font-weight: 800;
@@ -93,53 +156,55 @@ h1,
 
 /* Sidebar Navigation */
 nav.sidebar {
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
+  border-right: 1px solid var(--convo-border) !important;
+  background: var(--sl-color-bg-sidebar) !important;
 }
 
 .sidebar a[aria-current="page"] {
-  background: linear-gradient(90deg, rgba(244, 63, 94, 0.15) 0%, transparent 100%);
-  border-left: 2px solid #f43f5e;
-  color: #fff !important;
+  background: var(--sl-color-accent-low) !important;
+  border-left: 2px solid var(--sl-color-accent) !important;
+  color: var(--sl-color-accent) !important;
   font-weight: 600;
 }
 
-/* Cards & CardGrid — Elysia Glass Style */
+/* Cards & CardGrid — Glass Style */
 .card {
-  background: rgba(15, 17, 26, 0.6) !important;
+  background: var(--convo-card-bg) !important;
   backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.08) !important;
+  border: 1px solid var(--convo-border) !important;
   border-radius: 12px !important;
+  box-shadow: var(--convo-card-shadow) !important;
   transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
   position: relative;
   overflow: hidden;
 }
 
 .card:hover {
-  border-color: rgba(244, 63, 94, 0.35) !important;
-  box-shadow: 0 8px 30px -8px rgba(244, 63, 94, 0.2) !important;
+  border-color: var(--convo-border-hover) !important;
+  box-shadow: var(--convo-card-shadow-hover) !important;
   transform: translateY(-2px);
 }
 
 /* Callout / Aside Styling */
 .starlight-aside {
   border-radius: 10px !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  border: 1px solid var(--convo-border) !important;
   backdrop-filter: blur(8px);
 }
 
 .starlight-aside--note {
-  background: rgba(30, 41, 59, 0.4) !important;
+  background: rgba(56, 189, 248, 0.08) !important;
   border-left: 3px solid #38bdf8 !important;
 }
 
 .starlight-aside--tip {
-  background: rgba(16, 37, 33, 0.4) !important;
+  background: rgba(16, 185, 129, 0.08) !important;
   border-left: 3px solid #10b981 !important;
 }
 
 .starlight-aside--caution,
 .starlight-aside--danger {
-  background: rgba(69, 10, 10, 0.4) !important;
+  background: rgba(244, 63, 94, 0.08) !important;
   border-left: 3px solid #f43f5e !important;
 }
 
@@ -147,12 +212,8 @@ nav.sidebar {
 .expressive-code {
   border-radius: 12px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.09) !important;
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5);
-}
-
-.expressive-code pre {
-  background: #0b0d14 !important;
+  border: 1px solid var(--convo-border) !important;
+  box-shadow: var(--convo-card-shadow);
 }
 
 /* Hero Button Enhancements */
@@ -172,15 +233,16 @@ nav.sidebar {
 }
 
 .hero .action.secondary {
-  border: 1px solid rgba(255, 255, 255, 0.15) !important;
-  background: rgba(255, 255, 255, 0.04) !important;
+  border: 1px solid var(--convo-border) !important;
+  background: var(--convo-tablist-bg) !important;
+  color: var(--sl-color-text) !important;
   backdrop-filter: blur(10px);
   border-radius: 8px;
 }
 
 .hero .action.secondary:hover {
-  border-color: rgba(255, 255, 255, 0.35) !important;
-  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: var(--convo-border-hover) !important;
+  color: var(--sl-color-accent) !important;
 }
 
 /* Badges */
@@ -190,4 +252,133 @@ nav.sidebar {
   letter-spacing: 0.05em;
   border-radius: 6px;
   padding: 0.15rem 0.5rem;
+}
+
+/* 🎛️ Ultra-Polished Segmented Control Tabs */
+starlight-tabs {
+  display: block;
+  margin: 1.5rem 0 2rem;
+}
+
+starlight-tabs [role="tablist"] {
+  display: flex !important;
+  align-items: center;
+  gap: 0.35rem !important;
+  padding: 0.35rem !important;
+  background: var(--convo-tablist-bg) !important;
+  border: 1px solid var(--convo-border) !important;
+  border-radius: 12px !important;
+  overflow-x: auto !important;
+  scrollbar-width: none !important;
+  list-style: none !important;
+  margin: 0 0 0.875rem 0 !important;
+}
+
+starlight-tabs [role="tablist"]::-webkit-scrollbar {
+  display: none;
+}
+
+starlight-tabs .tab {
+  margin: 0 !important;
+  padding: 0 !important;
+  white-space: nowrap !important;
+  flex-shrink: 0 !important;
+}
+
+starlight-tabs [role="tab"] {
+  display: inline-flex !important;
+  align-items: center !important;
+  padding: 0.45rem 0.95rem !important;
+  font-size: 0.85rem !important;
+  font-weight: 500 !important;
+  line-height: 1.25 !important;
+  color: var(--convo-tab-color) !important;
+  border-radius: 8px !important;
+  text-decoration: none !important;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1) !important;
+  border: 1px solid transparent !important;
+  outline: none !important;
+}
+
+starlight-tabs [role="tab"]:hover {
+  color: var(--convo-tab-hover-color) !important;
+  background: var(--convo-tab-hover-bg) !important;
+}
+
+starlight-tabs [role="tab"][aria-selected="true"] {
+  color: var(--convo-tab-active-color) !important;
+  background: var(--convo-tab-active-bg) !important;
+  font-weight: 600 !important;
+  box-shadow: var(--convo-tab-active-shadow) !important;
+  border-color: var(--convo-tab-active-border) !important;
+}
+
+starlight-tabs [role="tabpanel"] {
+  background: var(--convo-panel-bg) !important;
+  border: 1px solid var(--convo-border) !important;
+  border-radius: 12px !important;
+  padding: 1.25rem 1.5rem !important;
+  box-shadow: var(--convo-card-shadow) !important;
+  outline: none !important;
+}
+
+/* 📊 Responsive, Modern Tables */
+.sl-markdown-content table {
+  display: table !important;
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 0 !important;
+  border: 1px solid var(--convo-table-border) !important;
+  border-radius: 10px !important;
+  overflow: hidden !important;
+  margin: 1.5rem 0 !important;
+}
+
+.sl-markdown-content thead th {
+  background: var(--convo-table-header-bg) !important;
+  color: var(--sl-color-text) !important;
+  font-weight: 600 !important;
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid var(--convo-table-border) !important;
+  text-align: left !important;
+}
+
+.sl-markdown-content tbody td {
+  padding: 0.75rem 1rem !important;
+  border-bottom: 1px solid var(--convo-table-border) !important;
+  color: var(--sl-color-text) !important;
+  vertical-align: top !important;
+}
+
+.sl-markdown-content tbody tr:last-child td {
+  border-bottom: none !important;
+}
+
+.sl-markdown-content tbody tr:hover td {
+  background: var(--convo-table-row-hover) !important;
+}
+
+/* 🔽 Sleek Collapsible Guides */
+details {
+  border: 1px solid var(--convo-border) !important;
+  border-radius: 10px !important;
+  padding: 0.85rem 1.25rem !important;
+  background: var(--convo-panel-bg) !important;
+  margin: 0.75rem 0 !important;
+  transition: all 0.2s ease !important;
+}
+
+details[open] {
+  border-color: var(--convo-border-hover) !important;
+  box-shadow: var(--convo-card-shadow) !important;
+}
+
+summary {
+  cursor: pointer !important;
+  font-weight: 600 !important;
+  color: var(--sl-color-text) !important;
+}
+
+summary:hover {
+  color: var(--sl-color-accent) !important;
 }
