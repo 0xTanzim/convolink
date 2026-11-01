@@ -1,11 +1,13 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
+import mermaid from "astro-mermaid";
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://0xtanzim.github.io",
   base: "/convolink",
   integrations: [
+    mermaid(),
     starlight({
       title: "ConvoLink",
       description: "Autonomous AI conversation runtime linking web models (ChatGPT, Claude, DeepSeek, Gemini) to local development workflows.",
@@ -26,6 +28,7 @@ export default defineConfig({
             { label: "Overview", slug: "index" },
             { label: "60-Second Quickstart", slug: "getting-started/quickstart" },
             { label: "Zero Ghost Browser Setup", slug: "getting-started/browser-connection" },
+            { label: "Linux Environment Setup", slug: "getting-started/linux-setup" },
           ],
         },
         {
@@ -55,6 +58,8 @@ export default defineConfig({
           label: "Architecture & Security",
           items: [
             { label: "Three Architectural Pillars", slug: "architecture/three-pillars" },
+            { label: "Upstream Capability Borrowing", slug: "architecture/capability-borrowing" },
+            { label: "Architecture Decision Records (ADRs)", slug: "architecture/adr" },
             { label: "Operational Safety & Mutex", slug: "architecture/safety-mutex" },
             { label: "Stream Settling Detection", slug: "architecture/stream-settling" },
           ],

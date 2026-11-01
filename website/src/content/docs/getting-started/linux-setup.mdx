@@ -1,0 +1,52 @@
+---
+title: Linux Environment & Fedora Setup
+description: Optimal configuration for Linux environments, XDG runtime directories, tmpfs mutexes, and SELinux.
+---
+
+import { Steps, Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+ConvoLink is built with first-class support for modern Linux distributions (Fedora, Ubuntu, Debian, Arch).
+
+## Runtime Environment & Filesystem Topology
+
+Under `AGENTS.md` §4, ConvoLink conforms strictly to the **XDG Base Directory Specification**:
+
+| Directory | Default Path | Purpose | Storage Medium |
+| :--- | :--- | :--- | :--- |
+| `$XDG_RUNTIME_DIR/convolink/` | `/run/user/<UID>/convolink/` | PID-Aware Mutex Locks | `tmpfs` (RAM) |
+| `$XDG_DATA_HOME/convolink/` | `~/.local/share/convolink/` | SQLite FTS5 Ledger | Persistent SSD/HDD |
+| `$XDG_CONFIG_HOME/convolink/` | `~/.config/convolink/` | Pairing Tokens & Active Profiles | Persistent SSD/HDD |
+
+### Why `tmpfs` for Mutex Locks?
+1. **Zero SSD Wear:** Rapid lock acquisition and release during multi-model comparisons write to RAM, not physical storage.
+2. **Reboot Cleanliness:** In the event of a system crash or power loss, RAM is flushed immediately, eliminating stale locks.
+
+---
+
+## Native Fedora / Ubuntu Helper Script
+
+ConvoLink provides a native diagnostic and launch helper located at `scripts/fedora-chrome-debug.sh`.
+
+```bash
+# Verify active CDP session or launch persistent profile:
+./scripts/fedora-chrome-debug.sh
+```
+
+The script performs the following checks:
+1. Inspects whether Google Chrome is already listening on `127.0.0.1:9222`.
+2. Inspects `chrome://inspect/#remote-debugging` dynamic port assignments.
+3. Launches a persistent profile at `~/.config/convolink/profiles/ai-profile` if no active session is detected.
+
+---
+
+## Docker Clean-Room Testing with SELinux
+
+If you run ConvoLink test suites or builds inside Docker containers on Fedora/RHEL:
+
+<Aside type="caution">
+  Fedora enforces SELinux volume isolation. When mounting the project workspace into a container, always append the `:z` volume label:
+  ```bash
+  docker run --rm -v "$PWD:/workspace:z" -w /workspace node:24-bookworm bun test
+  ```
+  Omitting `:z` causes `EACCES: Permission denied` errors when opening `package.json`.
+</Aside>

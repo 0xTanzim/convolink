@@ -1,0 +1,53 @@
+---
+title: Upstream Capability Borrowing
+description: How local coding agents access deep thinking, web search grounding, and multi-model consensus without per-token API fees.
+---
+
+import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
+
+Local coding agents typically operate under two constraints:
+1. They run cost-effective or smaller local models that struggle with complex concurrency or distributed architecture.
+2. They incur metered per-token API charges every time high-tier models or search tools are called.
+
+ConvoLink introduces **Upstream Capability Borrowing**: your local coding agent programmatically leverages your existing authenticated web subscriptions (**ChatGPT Plus, Claude Pro, DeepSeek, Gemini Advanced**).
+
+## The Borrowing Matrix
+
+<CardGrid>
+  <Card title="Extended Thinking / Reasoning" icon="star">
+    **Deep Concurrency & Algorithmic Analysis**  
+    Pass `--think` to trigger extended reasoning chains (e.g. DeepSeek R1). The local agent receives thorough, multi-step invariant evaluations that small local models cannot generate.
+  </Card>
+
+  <Card title="Live Web Search Grounding" icon="magnifier">
+    **Latest Library Releases & Breaking Changes**  
+    Upstream web AI models (ChatGPT Search, Gemini Grounding) possess real-time internet access. Local agents borrow this to research undocumented library bugs and API migrations.
+  </Card>
+
+  <Card title="Multi-Model Consensus" icon="random">
+    **Cross-Validation Without API Fees**  
+    Execute `convo compare` across 4 frontier models simultaneously. Synthesize architectural consensus using a Stage 2 Arbiter with zero additional per-token invoices.
+  </Card>
+
+  <Card title="Living Mental Model" icon="document">
+    **Direct Access to Upstream R&D**  
+    Instead of isolated prompts, the agent directly interacts with the conversation thread holding days of technical discussions, rejected approaches, and architectural decisions.
+  </Card>
+</CardGrid>
+
+---
+
+## Practical Examples
+
+### Borrowing DeepSeek R1 Reasoning
+```bash
+convo ask --platform deepseek \
+  "Design a lock-free ring buffer for low-latency audio processing in C++. Provide memory orderings (acquire/release) and edge-case proofs." \
+  --think
+```
+
+### Borrowing Live Web Search Grounding
+```bash
+convo ask --platform chatgpt \
+  "Investigate breaking changes in @open-telemetry/sdk-trace-base v1.30. Check official documentation and provide an updated adapter snippet."
+```

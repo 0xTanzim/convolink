@@ -1,0 +1,42 @@
+---
+title: Architecture Decision Records (ADRs)
+description: Formal engineering records governing ConvoLink's hexagonal architecture and operational contracts.
+---
+
+import { Aside, Card, CardGrid } from '@astrojs/starlight/components';
+
+ConvoLink is engineered according to 17 formal Architecture Decision Records (ADR-001 through ADR-017).
+
+## Summary of Core Decisions
+
+### ADR-001: Hexagonal Ports & Adapters with Zero-Dependency Native CDP
+- **Decision:** Isolate all business orchestration, locking, comparison, and policy services in `src/core/` with strictly zero browser or network imports (**The Zero-Import Isolation Law**).
+- **Consequence:** `src/core/` can be tested in-memory in under 100ms. Zero heavy external runtime frameworks (Playwright was pruned).
+
+### ADR-002: 3-Signal Streaming Settling & In-Page DOM Extraction
+- **Decision:** Generation is declared complete only when three independent signals coincide: Action Container State (stop button/spinner absent), Thinking Transition (reasoning accordions finalized), and Quiescence Window (zero DOM mutations for $\ge$ 400ms).
+- **Consequence:** Prevents stream cutoffs during silent calculation phases in DeepSeek R1 and OpenAI o1/o3.
+
+### ADR-003: Ordered Selector Fallback Chains with Layout Telemetry
+- **Decision:** Web AI DOM structures change weekly. ConvoLink platform drivers define an ordered fallback array of semantic CSS selectors, resolving dynamically via in-page probes.
+- **Consequence:** Resilient against A/B testing and upstream markup updates.
+
+### ADR-004: Multi-File Code Extraction with Path Traversal Containment
+- **Decision:** When upstream models tag code blocks with `// filepath: path/to/file.ts`, `WorkspaceFileSinkAdapter` parses them and enforces strict path containment against the target directory.
+- **Consequence:** Prevents directory traversal attacks (`../../etc/passwd`) while providing automated workspace hydration.
+
+### ADR-005: PID-Aware `tmpfs` Mutex Locking
+- **Decision:** Concurrent prompt collisions are prevented via lock files in `$XDG_RUNTIME_DIR/convolink/` (RAM-backed `tmpfs`).
+- **Consequence:** Eliminates SSD wear. Dead locks from crashed processes are automatically reclaimed using `process.kill(pid, 0)`.
+
+### ADR-006: SQLite FTS5 Ledger with WAL Mode
+- **Decision:** Conversation turns are indexed symmetrically (user prompts + assistant responses) into SQLite FTS5 with Write-Ahead Logging (`PRAGMA journal_mode = WAL`).
+- **Consequence:** Millisecond full-text search across days of accumulated R&D history.
+
+### ADR-007: Non-Blocking Outbound PolicyGate
+- **Decision:** Sensitive secrets (OpenAI keys, GitHub PATs, AWS secrets, `.env` pairs) are automatically scrubbed to `[REDACTED_SECRET]` before transmission. Destructive command detection never pauses stdio.
+- **Consequence:** Safe automated execution without deadlocking parent coding agents.
+
+### ADR-017: Zero "Ghost Browser" Guarantee & 4-Tier Connection Engine
+- **Decision:** Starting in Chrome 136+, `--remote-debugging-port` is blocked on default profiles. ConvoLink forbids spawning blank "ghost" profiles, connecting instead via dynamic `DevToolsActivePort`, active CDP ports, or our **Companion Extension Bridge**.
+- **Consequence:** 100% preservation of developer cookies, Google accounts, and web subscriptions.
