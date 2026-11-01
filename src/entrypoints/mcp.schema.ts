@@ -11,7 +11,7 @@ export interface McpToolDefinition {
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
   {
     name: "convo_ask",
-    description: "Submit a prompt to an active or background AI browser tab (ChatGPT, DeepSeek, Gemini, Claude) and retrieve the complete generated response and extracted code blocks.",
+    description: "Submit a prompt to an AI browser tab (ChatGPT, DeepSeek, Gemini, Claude) with deep reasoning and web grounding. Automatically extracts and persists generated code blocks to local workspace files.",
     inputSchema: {
       type: "object",
       properties: {
@@ -22,66 +22,57 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         outDir: { type: "string", description: "Destination directory for extracted code blocks" },
         newChat: { type: "boolean", description: "Whether to reset conversation to a fresh chat first" },
         openTab: { type: "boolean", description: "Whether to spawn a new background tab" },
-        think: { type: "boolean", description: "Toggle deep thinking mode (e.g. DeepSeek R1)" },
-        search: { type: "boolean", description: "Toggle web search grounding" },
+        think: { type: "boolean", description: "Toggle deep thinking/reasoning mode (e.g. DeepSeek Reasoner, Claude Thinking, ChatGPT o-series)" },
+        search: { type: "boolean", description: "Toggle live web search/DeepSearch grounding" },
       },
       required: ["prompt"],
     },
   },
   {
     name: "convo_compare",
-    description: "Broadcast a prompt across multiple models in parallel, benchmark their outputs, and optionally synthesize a unified consensus solution via Technical Arbiter.",
+    description: "Benchmark a task across multiple frontier models in parallel and optionally synthesize a unified consensus solution via Technical Arbiter.",
     inputSchema: {
       type: "object",
       properties: {
         prompt: { type: "string", description: "The task or prompt to compare across models" },
-        platforms: { type: "array", items: { type: "string" }, description: "List of platforms (default: chatgpt, deepseek, gemini)" },
+        platforms: { type: "array", items: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"] }, description: "Models to compare" },
         arbitrate: { type: "boolean", description: "Execute stage 2 consensus synthesis via Technical Arbiter" },
-        arbiter: { type: "string", description: "Designate arbiter platform (e.g. deepseek)" },
+        arbiter: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Designate arbiter platform" },
       },
       required: ["prompt"],
     },
   },
   {
+    name: "convo_doctor",
+    description: "Check ConvoLink health, Chrome remote debugging port 9222, open AI tabs, selector readiness, and active browser profiles. Pass fix: true to automatically purge ghost Chrome processes and stale mutex locks.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        fix: { type: "boolean", description: "When true, automatically terminates orphan ghost browser processes and clears stale lockfiles to self-heal. Default: false" },
+      },
+    },
+  },
+  {
     name: "convo_list_tabs",
-    description: "List all open browser tabs with their targetId, platform, title, and thread URLs.",
+    description: "Inspect all open browser tabs. Returns targetId, platform, title, and current URL. Always call this first before managing tabs.",
     inputSchema: { type: "object", properties: {} },
   },
   {
-    name: "convo_tab_new",
-    description: "Spawn a fresh background browser tab for an AI platform or URL.",
+    name: "convo_tab",
+    description: "Manage browser tabs: spawn a new background AI tab ('new'), close an idle tab ('close'), navigate back ('back'), or rollback accidental chat resets ('undo').",
     inputSchema: {
       type: "object",
       properties: {
-        target: { type: "string", description: "Platform name (deepseek | chatgpt | gemini | claude) or full URL" },
+        action: { type: "string", enum: ["new", "close", "back", "undo"], description: "Tab action to perform" },
+        target: { type: "string", description: "Platform name ('deepseek' | 'chatgpt' | 'gemini' | 'claude') or full URL for action 'new'" },
+        targetId: { type: "string", description: "Target ID of the tab for actions 'close', 'back', or 'undo'" },
       },
-      required: ["target"],
-    },
-  },
-  {
-    name: "convo_tab_close",
-    description: "Close a specific browser tab by targetId.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        targetId: { type: "string", description: "The tab targetId to close" },
-      },
-      required: ["targetId"],
-    },
-  },
-  {
-    name: "convo_undo",
-    description: "Rollback the active conversation to its prior checkpoint URL, undoing accidental navigation or chat resets.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        targetId: { type: "string", description: "Optional targetId of the tab to undo" },
-      },
+      required: ["action"],
     },
   },
   {
     name: "convo_search",
-    description: "Perform full-text search across historical conversation turns and code blocks in the SQLite ledger.",
+    description: "Execute full-text FTS5 search across all historical conversation turns and extracted code snippets in the local SQLite ledger.",
     inputSchema: {
       type: "object",
       properties: {
@@ -92,31 +83,28 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     },
   },
   {
-    name: "convo_export",
-    description: "Export full conversation history and extracted code blocks for a thread ID as Markdown or JSON.",
+    name: "convo_thread",
+    description: "Manage conversation threads: export thread history as Markdown or JSON ('export'), reopen a saved thread from SQLite into an active browser tab ('resume'), or inspect session checkpoints ('history').",
     inputSchema: {
       type: "object",
       properties: {
-        threadId: { type: "string", description: "The thread ID to export" },
-        format: { type: "string", enum: ["markdown", "json"], description: "Export format (default: markdown)" },
+        action: { type: "string", enum: ["export", "resume", "history"], description: "Thread action to perform" },
+        threadId: { type: "string", description: "Thread ID for 'export' or 'resume'" },
+        targetId: { type: "string", description: "Tab targetId for 'history'" },
+        format: { type: "string", enum: ["markdown", "json"], description: "Export format for action 'export' (default: markdown)" },
       },
-      required: ["threadId"],
+      required: ["action"],
     },
   },
   {
-    name: "convo_profile_list",
-    description: "Discover all installed browser profiles on disk (Google Chrome, Edge, Brave, ConvoLink profiles) and check workspace configuration. Use this before asking the user which profile to bind.",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "convo_profile_select",
-    description: "Select and persist the active browser profile for this workspace in .convo/config.json. Accepts profile index (e.g. '1'), email, or name.",
+    name: "convo_profile",
+    description: "Inspect and manage host browser profiles (Google Chrome, Edge, Brave): discover profiles and account emails ('list'), or bind the active workspace to a specific profile ('select').",
     inputSchema: {
       type: "object",
       properties: {
-        target: { type: "string", description: "Profile index (e.g. '1'), account email, or name to select" },
+        action: { type: "string", enum: ["list", "select"], description: "Profile action (default: 'list')" },
+        target: { type: "string", description: "Profile index (e.g. '1'), account email, or name for action 'select'" },
       },
-      required: ["target"],
     },
   },
 ];

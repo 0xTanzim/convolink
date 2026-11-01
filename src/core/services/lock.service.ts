@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { HostEnv } from "../env/host-env.js";
 import { LockAcquisitionError } from "../errors/bridge-errors.js";
 
@@ -25,7 +26,6 @@ export class LockService {
   public async acquireLock(targetId: string, ttlMs: number = LockService.DEFAULT_TTL_MS): Promise<LockHandle> {
     HostEnv.ensureDirs();
     const lockPath = HostEnv.getTabLockPath(targetId);
-
     if (fs.existsSync(lockPath)) {
       this.evaluateExistingLock(targetId, lockPath);
     }
@@ -38,19 +38,12 @@ export class LockService {
     };
 
     try {
-      // Use wx flag for atomic file creation
       fs.writeFileSync(lockPath, JSON.stringify(payload, null, 2), { flag: "wx", mode: 0o600 });
-    } catch (err: unknown) {
-      // If another process raced us to create the file
+    } catch {
       throw new LockAcquisitionError(targetId, -1, lockPath);
     }
 
-    return {
-      targetId,
-      lockPath,
-      pid: process.pid,
-      acquiredAt: payload.acquiredAt,
-    };
+    return { targetId, lockPath, pid: process.pid, acquiredAt: payload.acquiredAt };
   }
 
   /**
@@ -58,12 +51,8 @@ export class LockService {
    */
   public async releaseLock(handle: LockHandle): Promise<void> {
     try {
-      if (fs.existsSync(handle.lockPath)) {
-        fs.unlinkSync(handle.lockPath);
-      }
-    } catch {
-      // Ignore cleanup error if already removed
-    }
+      if (fs.existsSync(handle.lockPath)) fs.unlinkSync(handle.lockPath);
+    } catch {}
   }
 
   /**
@@ -72,10 +61,8 @@ export class LockService {
   public isLocked(targetId: string): boolean {
     const lockPath = HostEnv.getTabLockPath(targetId);
     if (!fs.existsSync(lockPath)) return false;
-
     try {
-      const raw = fs.readFileSync(lockPath, "utf8");
-      const payload: LockPayload = JSON.parse(raw);
+      const payload: LockPayload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
       if (Date.now() > payload.expiresAt) return false;
       return this.isProcessAlive(payload.pid);
     } catch {
@@ -111,14 +98,9 @@ export class LockService {
   public async renewLock(handle: LockHandle, extensionMs: number = LockService.DEFAULT_TTL_MS): Promise<void> {
     if (!fs.existsSync(handle.lockPath)) return;
     try {
-      const raw = fs.readFileSync(handle.lockPath, "utf8");
-      const payload: LockPayload = JSON.parse(raw);
+      const payload: LockPayload = JSON.parse(fs.readFileSync(handle.lockPath, "utf8"));
       if (payload.pid !== process.pid) return;
-
-      const updated: LockPayload = {
-        ...payload,
-        expiresAt: Date.now() + extensionMs,
-      };
+      const updated: LockPayload = { ...payload, expiresAt: Date.now() + extensionMs };
       fs.writeFileSync(handle.lockPath, JSON.stringify(updated, null, 2), "utf8");
     } catch {}
   }
@@ -129,33 +111,53 @@ export class LockService {
   private evaluateExistingLock(targetId: string, lockPath: string): void {
     let payload: LockPayload | null = null;
     try {
-      const content = fs.readFileSync(lockPath, "utf8");
-      payload = JSON.parse(content);
+      payload = JSON.parse(fs.readFileSync(lockPath, "utf8"));
     } catch {
       console.warn(`[LockService] Reclaimed corrupt tab lock for target '${targetId}' at '${lockPath}'`);
-      try {
-        fs.unlinkSync(lockPath);
-      } catch {}
+      try { fs.unlinkSync(lockPath); } catch {}
       return;
     }
 
     if (!payload) return;
-
     const isExpired = Date.now() > payload.expiresAt;
     const isOwnerAlive = this.isProcessAlive(payload.pid);
 
     if (isExpired || !isOwnerAlive) {
-      console.warn(
-        `[LockService] Reclaimed stale tab lock for target '${targetId}' (held by pid ${payload.pid}, expired=${isExpired}, pidAlive=${isOwnerAlive})`,
-      );
-      try {
-        fs.unlinkSync(lockPath);
-      } catch {}
+      console.warn(`[LockService] Reclaimed stale tab lock for target '${targetId}' (held by pid ${payload.pid}, expired=${isExpired}, pidAlive=${isOwnerAlive})`);
+      try { fs.unlinkSync(lockPath); } catch {}
       return;
     }
 
-    // Active lock exists
     throw new LockAcquisitionError(targetId, payload.pid, lockPath);
+  }
+
+  /**
+   * Releases temporary tab locks matching process PID from the runtime lock directory.
+   */
+  public static cleanupProcessLocks(pid: number = process.pid): number {
+    const lockDir = HostEnv.getLockDir();
+    if (!fs.existsSync(lockDir)) return 0;
+    let count = 0;
+    try {
+      const files = fs.readdirSync(lockDir);
+      for (const file of files) {
+        if (!file.startsWith("tab-") || !file.endsWith(".lock")) continue;
+        const filePath = path.join(lockDir, file);
+        try {
+          const raw = fs.readFileSync(filePath, "utf8");
+          const payload = JSON.parse(raw);
+          if (payload?.pid === pid) {
+            fs.unlinkSync(filePath);
+            count++;
+          }
+        } catch {}
+      }
+    } catch {}
+    return count;
+  }
+
+  public cleanupProcessLocks(pid?: number): number {
+    return LockService.cleanupProcessLocks(pid);
   }
 
   /**
@@ -173,3 +175,4 @@ export class LockService {
     }
   }
 }
+

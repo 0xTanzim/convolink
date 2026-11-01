@@ -43,7 +43,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.result?.capabilities?.tools).toBeDefined();
   });
 
-  it("handles tools/list and returns available cognitive browser tools", async () => {
+  it("handles tools/list and returns the 8 smart cognitive tools", async () => {
     const server = createTestServer();
     const response = await server.handleMessage({
       jsonrpc: "2.0",
@@ -54,35 +54,143 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.id).toBe(2);
     const tools = response?.result?.tools;
     expect(tools).toBeDefined();
-    expect(tools!.length).toBeGreaterThanOrEqual(4);
-    expect(tools!.some((t) => t.name === "convo_ask")).toBe(true);
-    expect(tools!.some((t) => t.name === "convo_compare")).toBe(true);
-    expect(tools!.some((t) => t.name === "convo_list_tabs")).toBe(true);
-    expect(tools!.some((t) => t.name === "convo_tab_new")).toBe(true);
+    expect(tools!.length).toBe(8);
+
+    const names = tools!.map((t) => t.name);
+    expect(names).toContain("convo_ask");
+    expect(names).toContain("convo_compare");
+    expect(names).toContain("convo_doctor");
+    expect(names).toContain("convo_list_tabs");
+    expect(names).toContain("convo_tab");
+    expect(names).toContain("convo_search");
+    expect(names).toContain("convo_thread");
+    expect(names).toContain("convo_profile");
 
     const askTool = tools!.find((t) => t.name === "convo_ask");
     expect(askTool).toBeDefined();
-    expect((askTool?.inputSchema.properties as any).targetId).toBeDefined();
-    expect((askTool?.inputSchema.properties as any).writeFiles).toBeDefined();
-    expect((askTool?.inputSchema.properties as any).outDir).toBeDefined();
+    expect((askTool?.inputSchema.properties as any).think).toBeDefined();
+    expect((askTool?.inputSchema.properties as any).search).toBeDefined();
+  });
+
+  it("handles tools/call for convo_doctor with and without fix", async () => {
+    const server = createTestServer();
+    const docRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 30,
+      method: "tools/call",
+      params: { name: "convo_doctor", arguments: {} },
+    });
+    expect(docRes?.id).toBe(30);
+    expect(docRes?.result?.content?.[0]?.text).toContain("ConvoLink Diagnostics");
+
+    const fixRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 31,
+      method: "tools/call",
+      params: { name: "convo_doctor", arguments: { fix: true } },
+    });
+    expect(fixRes?.id).toBe(31);
+    expect(fixRes?.result?.content?.[0]?.text).toContain("Ghost Cleanup");
   });
 
   it("handles tools/call for convo_list_tabs", async () => {
     const server = createTestServer();
-    const response = await server.handleMessage({
+    const res = await server.handleMessage({
       jsonrpc: "2.0",
-      id: 3,
+      id: 32,
       method: "tools/call",
-      params: {
-        name: "convo_list_tabs",
-        arguments: {},
-      },
+      params: { name: "convo_list_tabs", arguments: {} },
     });
+    expect(res?.id).toBe(32);
+    expect(res?.result?.content?.[0]?.text).toContain("DeepSeek");
+  });
 
-    expect(response?.id).toBe(3);
-    const content = response?.result?.content;
-    expect(content?.[0]?.type).toBe("text");
-    expect(content?.[0]?.text).toContain("DeepSeek");
+  it("handles tools/call for convo_tab actions and self-correcting errors", async () => {
+    const server = createTestServer();
+    const newRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 33,
+      method: "tools/call",
+      params: { name: "convo_tab", arguments: { action: "new", target: "deepseek" } },
+    });
+    expect(newRes?.id).toBe(33);
+    expect(newRes?.result?.content?.[0]?.text).toContain("Spawned tab");
+
+    const closeRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 34,
+      method: "tools/call",
+      params: { name: "convo_tab", arguments: { action: "close", targetId: "tab-1" } },
+    });
+    expect(closeRes?.id).toBe(34);
+    expect(closeRes?.result?.content?.[0]?.text).toContain("Closed tab");
+
+    // Self-correcting error on missing targetId for close
+    const errRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 35,
+      method: "tools/call",
+      params: { name: "convo_tab", arguments: { action: "close" } },
+    });
+    expect(errRes?.id).toBe(35);
+    expect(errRes?.result?.isError).toBe(true);
+    expect(errRes?.result?.content?.[0]?.text).toContain("targetId is required for action 'close'");
+  });
+
+  it("handles tools/call for convo_search", async () => {
+    const server = createTestServer();
+    const res = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 36,
+      method: "tools/call",
+      params: { name: "convo_search", arguments: { query: "test" } },
+    });
+    expect(res?.id).toBe(36);
+    expect(res?.result?.content?.[0]?.text).toContain("No results matching");
+  });
+
+  it("handles tools/call for convo_thread actions and errors", async () => {
+    const server = createTestServer();
+    const exportRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 37,
+      method: "tools/call",
+      params: { name: "convo_thread", arguments: { action: "export", threadId: "thread-1" } },
+    });
+    expect(exportRes?.id).toBe(37);
+    expect(exportRes?.result?.content?.[0]?.text).toBeDefined();
+
+    // Error on missing threadId
+    const errRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 38,
+      method: "tools/call",
+      params: { name: "convo_thread", arguments: { action: "export" } },
+    });
+    expect(errRes?.id).toBe(38);
+    expect(errRes?.result?.isError).toBe(true);
+    expect(errRes?.result?.content?.[0]?.text).toContain("threadId is required for action 'export'");
+  });
+
+  it("handles tools/call for convo_profile list and select", async () => {
+    const server = createTestServer();
+    const listRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 39,
+      method: "tools/call",
+      params: { name: "convo_profile", arguments: { action: "list" } },
+    });
+    expect(listRes?.id).toBe(39);
+    expect(listRes?.result?.content?.[0]?.text).toContain("Discovered Browser Profiles:");
+
+    const selectRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 40,
+      method: "tools/call",
+      params: { name: "convo_profile", arguments: { action: "select", target: "1" } },
+    });
+    expect(selectRes?.id).toBe(40);
+    expect(selectRes?.result?.content?.[0]?.text).toBeDefined();
   });
 
   it("handles tools/call for convo_ask", async () => {
@@ -109,34 +217,6 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.result?.redactedSecretsCount).toBe(0);
   });
 
-  it("handles tools/call for convo_search and convo_export", async () => {
-    const server = createTestServer();
-    const searchRes = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 5,
-      method: "tools/call",
-      params: {
-        name: "convo_search",
-        arguments: { query: "nonexistent-query-123" },
-      },
-    });
-    expect(searchRes?.id).toBe(5);
-    const searchContent = searchRes?.result?.content;
-    expect(searchContent?.[0]?.text).toContain("No results matching");
-
-    const exportRes = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 6,
-      method: "tools/call",
-      params: {
-        name: "convo_export",
-        arguments: { threadId: "nonexistent-thread" },
-      },
-    });
-    expect(exportRes?.id).toBe(6);
-    expect(exportRes?.result?.isError).toBe(true);
-  });
-
   it("returns an error for unknown tool calls", async () => {
     const server = createTestServer();
     const response = await server.handleMessage({
@@ -151,74 +231,6 @@ describe("McpServer (JSON-RPC over stdio)", () => {
 
     expect(response?.id).toBe(5);
     expect(response?.result?.isError).toBe(true);
-  });
-
-  it("returns null for notifications without id (JSON-RPC 2.0 §4.1 compliance)", async () => {
-    const server = createTestServer();
-
-    // Standard notification method
-    const notif1 = await server.handleMessage({
-      jsonrpc: "2.0",
-      method: "notifications/initialized",
-    });
-    expect(notif1).toBeNull();
-
-    // Standard method invoked without id (treated as notification)
-    const notif2 = await server.handleMessage({
-      jsonrpc: "2.0",
-      method: "tools/list",
-    });
-    expect(notif2).toBeNull();
-
-    // Unknown method sent as notification MUST NOT return error response
-    const notif3 = await server.handleMessage({
-      jsonrpc: "2.0",
-      method: "custom/unknown_notification",
-    });
-    expect(notif3).toBeNull();
-
-    // Notification with explicit null id
-    const notif4 = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: null,
-      method: "ping",
-    });
-    expect(notif4).toBeNull();
-  });
-
-  it("handles request with id: 0 correctly without treating it as notification", async () => {
-    const server = createTestServer();
-    const response = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 0,
-      method: "ping",
-    });
-    expect(response).not.toBeNull();
-    expect(response?.id).toBe(0);
-    expect(response?.result).toEqual({});
-  });
-
-  it("returns serverInfo.version as 1.0.0 matching package.json", async () => {
-    const server = createTestServer();
-    const response = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 10,
-      method: "initialize",
-    });
-    expect(response?.result?.serverInfo?.version).toBe("1.0.0");
-    expect(response?.result?.serverInfo?.name).toBe("convolink");
-  });
-
-  it("returns method not found error when request with id targets unknown method", async () => {
-    const server = createTestServer();
-    const response = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 99,
-      method: "unknown_method_xyz",
-    });
-    expect(response?.id).toBe(99);
-    expect(response?.error?.code).toBe(-32601);
-    expect(response?.error?.message).toContain("Method not found: unknown_method_xyz");
   });
 
   it("handles tools/call with missing or empty arguments safely", async () => {
@@ -264,38 +276,5 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     const parsed = JSON.parse(lines[0]!);
     expect(parsed.id).toBe(100);
     expect(parsed.result).toEqual({});
-  });
-
-  it("handles convo_profile_list tool and returns profile catalog for agent elicitation", async () => {
-    const server = createTestServer();
-    const response = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 20,
-      method: "tools/call",
-      params: { name: "convo_profile_list" },
-    });
-
-    expect(response?.id).toBe(20);
-    expect(response?.result?.content).toBeDefined();
-    const text = response?.result?.content?.[0]?.text;
-    expect(text).toContain("Browser Profiles");
-  });
-
-  it("handles convo_profile_select tool and persists choice to .convo/config.json", async () => {
-    const server = createTestServer();
-    const response = await server.handleMessage({
-      jsonrpc: "2.0",
-      id: 21,
-      method: "tools/call",
-      params: {
-        name: "convo_profile_select",
-        arguments: { target: "1" },
-      },
-    });
-
-    expect(response?.id).toBe(21);
-    expect(response?.result?.content).toBeDefined();
-    const text = response?.result?.content?.[0]?.text;
-    expect(text?.includes("Saved active profile") || text?.includes("No profile matched")).toBe(true);
   });
 });

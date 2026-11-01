@@ -16,7 +16,7 @@ ConvoLink provides a zero-friction bridge connecting local autonomous coding age
 3. **Automated Packaging & Release Automation (`v1.0.0` Live):**
    - Packaged and published official `v1.0.0` release on GitHub: [https://github.com/0xTanzim/convolink/releases/tag/v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0)
    - Full automated CI/CD pipeline (`.github/workflows/extension-release.yml`) with automated version bumping, `bun test` verification, typechecking, and multi-browser ZIP artifact distribution.
-4. **Ironclad Test Suite:** **286 tests passing 100%** (0 failures, 1,555 assertions) with zero TypeScript typecheck errors.
+4. **Ironclad Test Suite:** **309 tests passing 100%** (0 failures, 1,880 assertions) with zero TypeScript typecheck errors.
 
 ---
 
@@ -36,6 +36,9 @@ ConvoLink provides a zero-friction bridge connecting local autonomous coding age
 | **Docker Clean-Room CI** | Full CI workflow verified inside isolated `node:24-bookworm` container with SELinux `:z` mount. | ✅ Done | Container test run log |
 | **GitHub Actions Pipeline** | Complete workflow (`extension-release.yml`) builds, tests, typechecks, and uploads all ZIP artifacts. | ✅ Done | GitHub Run ID: `41275404532` |
 | **Official `v1.0.0` Release** | Published on GitHub Releases with 4 attached ZIP assets for Chrome and Firefox. | ✅ Done | GitHub Tag: `v1.0.0` |
+| **Ephemeral MCP Architecture** | Static handshake schemas (<15MB RAM, ~25ms boot), JIT multi-profile discovery on `tools/call`, `--idle-timeout` auto-shutdown, and tmpfs lock cleanup on SIGTERM/EOF. | ✅ Done | `tests/unit/mcp.test.ts`, `tests/unit/mcp-lifecycle.test.ts`, `tests/unit/mcp-challenger.stress.test.ts` |
+| **Autonomous 8-Tool MCP Suite** | Redesigned cognitive MCP catalog (`convo_ask`, `convo_compare`, `convo_doctor`, `convo_list_tabs`, `convo_tab`, `convo_search`, `convo_thread`, `convo_profile`) tailored for autonomous AI agents based on 2026 cognitive load research with actionable error hints. | ✅ Done | `src/entrypoints/mcp.schema.ts`, `src/entrypoints/mcp.tools.ts`, `tests/unit/mcp.test.ts` |
+| **Standalone npm Packaging** | `scripts/build-dist.ts` compiling standalone ESM binaries (`dist/cli.js`, `dist/mcp.js`), dual-pass stdin deadlock resolution, package manifest (`bin`, `files`, `.npmignore`), 84.3 kB clean tarball. | ✅ Done | `tests/unit/build-dist.test.ts` |
 
 ---
 

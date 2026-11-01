@@ -1,0 +1,19 @@
+# Non-dist development workspaces
+website/
+extensions/
+
+# Test suites & fixtures
+tests/
+
+# Scripts & tooling
+scripts/
+bin/
+
+# Teamwork agent metadata & internal docs
+.agents/
+.github/
+docs/
+
+# Operational logs & local ledgers
+*.log
+.convo/

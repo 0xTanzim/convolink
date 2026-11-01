@@ -68,3 +68,8 @@ export async function runCli(args: string[]): Promise<number> {
       return 1;
   }
 }
+
+if (import.meta.main) {
+  const exitCode = await runCli(process.argv.slice(2));
+  process.exit(exitCode);
+}

@@ -174,3 +174,19 @@ A task or pull request is strictly incomplete until all of the following criteri
 4. **Architectural Guard Check:** No files in `src/core/` import any non-core or browser package.
 5. **Lint & Code Style:** Strict compliance with formatting rules, no unused variables, early returns applied, and module line limits respected (< 200 lines per file, < 80 lines per function).
 6. **Regression Protection:** Any bug fix includes a regression test reproducing the exact failure mode (e.g., stale lock recovery, code indentation preservation, or background tab drift).
+7. **Temporal & Spec Verification:** All external dependencies, runtime targets, and third-party APIs are verified against the active system calendar date (current year/month, e.g. November 2026) using live search tools (Tavily/web search) rather than stale model memory.
+
+---
+
+## 7. Temporal Grounding & Live Research Mandates (Iron Law)
+
+Stale, obsolete, or hallucinated knowledge is treated as a structural defect. All agents and contributors MUST adhere strictly to real-time temporal grounding and active web search:
+
+### 7.1 Mandatory System Date Verification (Zero-Assumption Clock)
+- **Check System Time First:** Before reasoning about temporal dependencies, active library versions, or current software ecosystem state, inspect the system environment / metadata clock (e.g. running in November 2026).
+- **No Training-Cutoff Assumptions:** Under no circumstances may an agent assume the current date based on model training cutoffs or fall back to obsolete years (2023, 2024, or 2025). The host system clock is the sole authority for "today".
+
+### 7.2 Proactive Search & Anti-Staleness Discipline
+- **Mandatory Web Search for R&D:** Whenever investigating external libraries, bleeding-edge APIs, runtime changes, package deprecations, or real-world facts, active tool search is mandatory. Proactively invoke `tavily_search` or `search_web`.
+- **Temporal Query Anchoring:** When executing web searches or documentation crawls, actively qualify search queries with the current year and month (e.g. `"2026"`, `"November 2026"`, or latest active release tags) to strictly filter out superseded architectural patterns and outdated tutorials.
+- **Never Serve Deprecated Patterns:** If a framework, dependency, or runtime has evolved, providing outdated syntax or obsolete patterns without verifying current live status is strictly prohibited. If real-time data cannot be verified, explicitly research first before answering.

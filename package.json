@@ -3,10 +3,24 @@
   "version": "1.0.0",
   "description": "Autonomous AI conversation runtime linking web models (ChatGPT, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, and non-blocking security gating",
   "type": "module",
-  "main": "src/index.ts",
+  "main": "./dist/cli.js",
+  "mcpName": "convolink",
   "bin": {
-    "convolink": "./bin/convolink.ts",
-    "convo": "./bin/convo.ts"
+    "convolink": "dist/cli.js",
+    "convo": "dist/cli.js",
+    "convolink-mcp": "dist/mcp.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "bun": ">=1.2.0"
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
   },
   "workspaces": [
     "extensions/*",
@@ -20,8 +34,11 @@
     "convolink": "bun run bin/convolink.ts",
     "convo": "bun run bin/convo.ts",
     "bridge": "bun run bin/convolink.ts",
+    "build": "bun run scripts/build-dist.ts",
+    "build:dist": "bun run scripts/build-dist.ts",
     "build:extension": "bun run scripts/build-extension.ts",
     "build:docs": "bun run --cwd website build",
+    "prepublishOnly": "bun run build:dist",
     "release": "bun run scripts/release.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -1,20 +1,12 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
-import { MCP_TOOLS, executeMcpTool, type McpToolDefinition } from "./mcp.tools.js";
+import { MCP_TOOLS, type McpToolDefinition } from "./mcp.schema.js";
 
-export interface McpServerInfo {
-  readonly name: string;
-  readonly version: string;
-}
-
-export interface McpCapabilities {
-  readonly tools?: Record<string, unknown>;
-  readonly [key: string]: unknown;
-}
-
-export interface McpContentItem {
-  readonly type: string;
-  readonly text: string;
-}
+export interface McpServerInfo { readonly name: string; readonly version: string; }
+export interface McpCapabilities { readonly tools?: Record<string, unknown>; readonly [key: string]: unknown; }
+export interface McpContentItem { readonly type: string; readonly text: string; }
+export interface JsonRpcError { readonly code: number; readonly message: string; readonly data?: unknown; }
+export interface McpToolCallParams { readonly name?: string; readonly arguments?: Record<string, unknown>; readonly [key: string]: unknown; }
+export type JsonRpcParams = McpToolCallParams | Record<string, unknown> | unknown[];
 
 export interface JsonRpcResult {
   readonly protocolVersion?: string;
@@ -25,20 +17,6 @@ export interface JsonRpcResult {
   readonly isError?: boolean;
   readonly [key: string]: unknown;
 }
-
-export interface JsonRpcError {
-  readonly code: number;
-  readonly message: string;
-  readonly data?: unknown;
-}
-
-export interface McpToolCallParams {
-  readonly name?: string;
-  readonly arguments?: Record<string, unknown>;
-  readonly [key: string]: unknown;
-}
-
-export type JsonRpcParams = McpToolCallParams | Record<string, unknown> | unknown[];
 
 export interface JsonRpcRequest {
   readonly jsonrpc: string;
@@ -54,18 +32,39 @@ export interface JsonRpcResponse {
   readonly error?: JsonRpcError;
 }
 
-export class McpServer {
-  private readonly orchestrator: SessionOrchestrator;
+export type OrchestratorProvider =
+  | SessionOrchestrator
+  | (() => Promise<SessionOrchestrator> | SessionOrchestrator);
 
-  public constructor(orchestrator: SessionOrchestrator) {
-    this.orchestrator = orchestrator;
+export interface McpServerOptions {
+  readonly orchestrator?: OrchestratorProvider;
+  readonly onActivity?: () => void;
+}
+
+export class McpServer {
+  private readonly provider?: OrchestratorProvider;
+  private readonly onActivity?: () => void;
+  private resolvedOrchestrator: SessionOrchestrator | null = null;
+
+  public constructor(providerOrOptions?: OrchestratorProvider | McpServerOptions) {
+    if (typeof providerOrOptions === "function" || (providerOrOptions && "ask" in providerOrOptions)) {
+      this.provider = providerOrOptions as OrchestratorProvider;
+    } else if (providerOrOptions && typeof providerOrOptions === "object") {
+      this.provider = providerOrOptions.orchestrator;
+      this.onActivity = providerOrOptions.onActivity;
+    }
+  }
+
+  private async getOrchestrator(): Promise<SessionOrchestrator> {
+    if (this.resolvedOrchestrator) return this.resolvedOrchestrator;
+    if (!this.provider) throw new Error("McpServer: No orchestrator or orchestratorProvider configured");
+    this.resolvedOrchestrator = typeof this.provider === "function" ? await this.provider() : this.provider;
+    return this.resolvedOrchestrator;
   }
 
   public async handleMessage(req: JsonRpcRequest): Promise<JsonRpcResponse | null> {
-    // JSON-RPC 2.0 §4.1: Notifications have no id; server must not respond
-    if (req.id === undefined || req.id === null) {
-      return null;
-    }
+    this.onActivity?.();
+    if (req.id === undefined || req.id === null) return null;
 
     switch (req.method) {
       case "initialize":
@@ -88,7 +87,9 @@ export class McpServer {
         const name = typeof params?.name === "string" ? params.name : "";
         const toolArgs = params?.arguments && typeof params.arguments === "object" && !Array.isArray(params.arguments)
           ? params.arguments : {};
-        const toolResult = await executeMcpTool(this.orchestrator, name, toolArgs);
+        const orchestrator = await this.getOrchestrator();
+        const { executeMcpTool } = await import("./mcp.tools.js");
+        const toolResult = await executeMcpTool(orchestrator, name, toolArgs);
         return {
           jsonrpc: "2.0",
           id: req.id,

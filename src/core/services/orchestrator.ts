@@ -4,7 +4,7 @@ import type { PolicyGatePort } from "../ports/policy.port.js";
 import type { ThreadStore, SearchResult, WorkspaceSinkPort } from "../ports/storage.port.js";
 import type { LockHandle, LockService } from "./lock.service.js";
 import type { ArtifactService } from "./artifact.service.js";
-import type { StateJournalService } from "./journal.service.js";
+import type { SessionCheckpoint, StateJournalService } from "./journal.service.js";
 import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import { TabManagerService } from "./tab-manager.service.js";
 import { TabResolver } from "./tab-resolver.js";
@@ -61,6 +61,7 @@ export class SessionOrchestrator {
     return this.tabManager.createTab(platformOrUrl);
   }
   public closeTab(targetId: string): Promise<void> { return this.tabManager.closeTab(targetId); }
+  public getHistory(targetId?: string): readonly SessionCheckpoint[] { return this.journalService?.list(targetId) ?? []; }
 
   public async startNewChat(targetId?: string, platform?: PlatformId): Promise<DiscoveredTab> {
     const tabs = await this.listTabs();
