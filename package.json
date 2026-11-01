@@ -1,7 +1,33 @@
 {
   "name": "convolink",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Autonomous AI conversation runtime linking web models (ChatGPT, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, and non-blocking security gating",
+  "license": "MIT",
+  "author": "Tanzim Hossain <tanzimhossain2@gmail.com> (https://github.com/0xTanzim)",
+  "homepage": "https://0xtanzim.github.io/convolink/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0xTanzim/convolink.git"
+  },
+  "bugs": {
+    "url": "https://github.com/0xTanzim/convolink/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "agent",
+    "cursor",
+    "claude-code",
+    "antigravity",
+    "windsurf",
+    "chatgpt",
+    "claude",
+    "deepseek",
+    "gemini",
+    "browser-automation",
+    "cdp",
+    "ai-agents"
+  ],
   "type": "module",
   "main": "./dist/cli.js",
   "mcpName": "convolink",

@@ -3,12 +3,14 @@
 > **Your AI Architect and Coding Agent. Finally Connected.**  
 > *Your web chat holds the architectural masterplan. Your IDE agent has the hands to write code. ConvoLink connects them directly—eliminating the exhausting human copy-paste relay.*
 
+[![npm version](https://img.shields.io/npm/v/convolink.svg?logo=npm)](https://www.npmjs.com/package/convolink)
+[![npm downloads](https://img.shields.io/npm/dm/convolink.svg)](https://www.npmjs.com/package/convolink)
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-286%20passing%20(bun:test)-success)](https://bun.sh)
-[![Release](https://img.shields.io/badge/Release-v1.0.0-purple?logo=github)](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0)
+[![Tests](https://img.shields.io/badge/Tests-309%20passing%20(bun:test)-success)](https://bun.sh)
+[![Release](https://img.shields.io/badge/Release-v1.0.1-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
 [![Documentation](https://img.shields.io/badge/Documentation-Live%20Site-blue)](https://0xtanzim.github.io/convolink/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 ---
 
@@ -232,6 +234,10 @@ Visit our official documentation site for complete architectural guides, ADR-001
 
 ---
 
-## 📄 License
+## 📄 Maintainer & License
 
-MIT © 2026 Tanzim & ConvoLink Contributors.
+- **Maintainer:** Tanzim Hossain ([@0xTanzim](https://github.com/0xTanzim) • `tanzimhossain2@gmail.com`)
+- **npm Registry:** [`convolink` on npm](https://www.npmjs.com/package/convolink)
+- **Repository:** [https://github.com/0xTanzim/convolink](https://github.com/0xTanzim/convolink)
+- **Issues & Support:** [https://github.com/0xTanzim/convolink/issues](https://github.com/0xTanzim/convolink/issues)
+- **License:** MIT © 2026 Tanzim Hossain & ConvoLink Contributors. See [LICENSE](LICENSE) for details.

@@ -11,15 +11,21 @@ ConvoLink provides a unified CLI exposed as both `convo` and `convolink`.
 
 | Command | Usage | Description |
 | :--- | :--- | :--- |
-| `doctor` | `convo doctor [--launch]` | Audits CDP latency and detects open AI tabs. |
+| `doctor` | `convo doctor [--launch]` | Audits CDP latency, open AI tabs, and selector health. |
 | `list` | `convo list` | Lists all active browser tabs on supported platforms. |
-| `ask` | `convo ask <prompt> [flags]` | Sends prompt to an AI tab, streams completion. |
-| `compare` | `convo compare <prompt> [flags]` | Broadcasts prompt across models with arbitration. |
-| `search` | `convo search <query>` | SQLite FTS5 search across conversation ledger turns. |
+| `ask` | `convo ask <prompt> [flags]` | Sends prompt to an AI tab, streams completion, and extracts artifacts. |
+| `compare` | `convo compare <prompt> [flags]` | Broadcasts prompt across models with Stage 2 arbitration. |
+| `tab new` | `convo tab new <platform\|url>` | Spawns a clean background tab for an AI platform or URL. |
+| `tab close` | `convo tab close <targetId>` | Closes a specific tab cleanly without touching browser. |
+| `back` | `convo back [targetId]` | Navigates active tab back in browser history. |
+| `undo` | `convo undo [targetId]` | Rollbacks an accidental chat reset to the previous conversation checkpoint. |
+| `history` | `convo history [targetId]` | Lists recent checkpoints and thread URLs. |
+| `resume` | `convo resume <threadId>` | Rehydrates a past conversation thread into a browser tab from SQLite. |
+| `search` | `convo search <query>` | SQLite FTS5 search across conversation ledger turns and code. |
 | `export` | `convo export <threadId>` | Exports a thread and code artifacts to Markdown/JSON. |
 | `profile` | `convo profile <list\|select>` | Manages and switches browser profiles. |
-| `ext` | `convo ext pair [--rotate]` | Manages extension pairing secrets. |
-| `clean` | `convo clean` | Terminates orphaned debug processes safely. |
+| `ext` | `convo ext pair [--rotate]` | Manages extension pairing secrets for zero-flag mode. |
+| `clean` | `convo clean` | Terminates orphaned debug processes and clears stale locks. |
 | `mcp` | `convo mcp` | Runs JSON-RPC 2.0 MCP server over stdio. |
 
 ---

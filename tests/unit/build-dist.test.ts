@@ -35,6 +35,14 @@ describe("Milestone 6: Standalone Dist Bundling & npm Packaging", () => {
       expect(pkg.publishConfig.access).toBe("public");
       expect(pkg.publishConfig.registry).toBe("https://registry.npmjs.org/");
 
+      expect(pkg.license).toBe("MIT");
+      expect(pkg.author).toContain("Tanzim Hossain");
+      expect(pkg.repository).toBeDefined();
+      expect(pkg.homepage).toBe("https://0xtanzim.github.io/convolink/");
+      expect(pkg.bugs?.url).toBeDefined();
+      expect(Array.isArray(pkg.keywords)).toBe(true);
+      expect(pkg.keywords).toContain("mcp");
+
       expect(pkg.scripts).toBeDefined();
       expect(pkg.scripts["build:dist"]).toBe("bun run scripts/build-dist.ts");
       expect(pkg.scripts.prepublishOnly).toBe("bun run build:dist");

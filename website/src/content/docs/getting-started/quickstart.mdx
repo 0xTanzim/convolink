@@ -9,16 +9,33 @@ Connect your local coding agent directly to your active browser tabs.
 
 <Steps>
 
-1. **Install ConvoLink**
+1. **Run Instantly or Install Globally**
 
-   Clone the repository and install dependencies using [Bun](https://bun.sh):
+   You can run ConvoLink instantly with zero setup, or install globally via Bun or npm:
 
-   ```bash
-   git clone https://github.com/0xTanzim/convolink.git
-   cd convolink
-   bun install
-   bun link # Exposes `convo` and `convolink` globally
-   ```
+   <Tabs>
+     <TabItem label="Instant (Zero Setup)">
+       ```bash
+       bunx -y convolink@latest doctor
+       # or via npx:
+       npx -y convolink@latest doctor
+       ```
+     </TabItem>
+     <TabItem label="Global Install">
+       ```bash
+       bun add -g convolink
+       # or via npm:
+       npm install -g convolink
+       ```
+     </TabItem>
+     <TabItem label="From Source">
+       ```bash
+       git clone https://github.com/0xTanzim/convolink.git
+       cd convolink
+       bun install && bun link
+       ```
+     </TabItem>
+   </Tabs>
 
 2. **Connect Your Real Browser**
 

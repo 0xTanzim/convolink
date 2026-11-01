@@ -1,32 +1,44 @@
 ---
 title: Model Context Protocol (MCP) Server
-description: Native cognitive browser tools for modern AI agents.
+description: Native cognitive browser tools for autonomous AI coding agents.
 ---
 
-import { Tabs, TabItem } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-ConvoLink includes a native JSON-RPC 2.0 Model Context Protocol (MCP) server over `stdio` (`bin/convolink-mcp.ts`).
+ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) JSON-RPC 2.0 server over `stdio` designed specifically for autonomous AI coding agents (Cursor, Windsurf, Claude Code, Antigravity).
 
-When integrated into an MCP-compliant agent (Cursor, Claude Desktop, Antigravity), the agent gains direct cognitive tools to interact with your live browser tabs.
+Instead of maintaining a continuous background daemon, ConvoLink boots in `< 30ms` with `< 1MB` heap, resolves browser connections Just-In-Time (JIT) when tools are invoked, auto-shuts down after inactivity (`--idle-timeout=15m`), and guarantees zero stale mutex locks on exit.
 
-## Exposed Tools
+## Running ConvoLink MCP
 
-| Tool Name | Parameters | Description |
-| :--- | :--- | :--- |
-| `convo_ask` | `prompt`, `platform`, `targetId`, `think` | Submits prompt to browser tab and streams result. |
-| `convo_compare` | `prompt`, `platforms`, `arbitrate` | Runs multi-model cross-validation and arbitration. |
-| `convo_list_tabs` | none | Lists open AI tabs and their readiness status. |
-| `convo_search` | `query`, `limit` | Full-text searches the local SQLite FTS5 conversation ledger. |
-| `convo_profile_list`| none | Lists discovered local browser profiles. |
-| `convo_profile_select`| `profileId` | Links project workspace to a specific browser profile. |
-| `convo_export` | `threadId`, `format` | Exports thread turns and code artifacts. |
-
-## Running the Server Directly
-
-You can start the MCP stdio server with:
+You can launch the MCP server directly via `bunx` or `npx` with zero installation required:
 
 ```bash
-bun run bin/convolink-mcp.ts
-# or via CLI:
+# Instant run via bunx:
+bunx -y convolink@latest mcp
+
+# Or via global CLI:
 convo mcp
+
+# Pass custom inactivity auto-shutdown timeout:
+bunx -y convolink@latest mcp --idle-timeout=10m
 ```
+
+## The Smart 8-Tool Cognitive Suite
+
+ConvoLink exposes an ergonomic, domain-partitioned tool suite designed to balance complete agent capability against cognitive load and token bloat:
+
+| Tool Name | Key Arguments | Outcome & Purpose |
+| :--- | :--- | :--- |
+| `convo_ask` | `prompt`, `platform?`, `targetId?`, `think?`, `search?`, `extractArtifacts?` | Submit prompt to an AI browser tab (ChatGPT, Claude, DeepSeek, Gemini). Supports deep reasoning (`think: true`), live web search (`search: true`), and auto-extracts code blocks (`// filepath:`) to local disk. |
+| `convo_compare` | `prompt`, `platforms?`, `arbitrate?`, `arbiter?` | Broadcast a task across multiple frontier models in parallel and synthesize an authoritative consensus via Stage 2 Technical Arbiter. |
+| `convo_doctor` | `fix?` | Inspect Chrome CDP port 9222 health, open AI tabs, and active browser profile. Pass `fix: true` to self-heal stale mutex locks and orphan processes. |
+| `convo_list_tabs` | *(none)* | Discover open AI browser tabs with targetId, platform, title, and current URL without window-focus theft. |
+| `convo_tab` | `action: "new" \| "close" \| "back" \| "undo"`, `platform?`, `targetId?` | Tab lifecycle management: spawn a background tab (`new`), close an idle tab (`close`), navigate back in history (`back`), or rollback an accidental reset (`undo`). |
+| `convo_search` | `query`, `limit?` | SQLite FTS5 full-text search across past conversation turns, prompts, and extracted code artifacts. |
+| `convo_thread` | `action: "export" \| "resume" \| "history"`, `threadId?`, `targetId?`, `format?` | Thread management: export history to Markdown/JSON (`export`), reopen a past conversation in the browser (`resume`), or inspect session checkpoints (`history`). |
+| `convo_profile` | `action: "list" \| "select"`, `target?` | Multi-profile management: list discovered Chrome profiles with Google accounts (`list`) or bind workspace to a specific profile (`select`). |
+
+<Aside type="tip">
+  Every tool provides actionable, self-correcting error messages. When a required parameter is missing or ambiguous, ConvoLink instructs the agent on the exact corrective syntax for the next turn.
+</Aside>

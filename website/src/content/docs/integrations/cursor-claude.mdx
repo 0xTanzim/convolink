@@ -1,37 +1,48 @@
 ---
-title: Cursor & Claude Desktop Integration
-description: 30-second setup for your favorite agentic IDEs.
+title: Agentic IDE Integration (Cursor, Claude, Windsurf)
+description: 30-second setup for your favorite agentic IDEs and CLI coding agents.
 ---
 
 import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
 
-Connect ConvoLink to your agentic coding environments in 30 seconds.
+Connect ConvoLink directly to your autonomous coding agents in under 30 seconds using standard `bunx` or `npx` execution.
 
 <Tabs>
+  <TabItem label="Claude Code">
+    <Steps>
+    1. Run the one-line Claude Code CLI command:
+
+       ```bash
+       claude mcp add convolink -- bunx -y convolink@latest mcp
+       ```
+    2. Claude Code immediately discovers the 8 cognitive browser tools: `convo_ask`, `convo_compare`, `convo_doctor`, `convo_list_tabs`, `convo_tab`, `convo_search`, `convo_thread`, and `convo_profile`.
+    </Steps>
+  </TabItem>
+
   <TabItem label="Cursor IDE">
     <Steps>
-    1. Open your Cursor project settings or global configuration (`~/.cursor/mcp.json`).
+    1. Open your Cursor project settings or global configuration (`.cursor/mcp.json` or `~/.cursor/mcp.json`).
     2. Add the ConvoLink server configuration:
 
        ```json
        {
          "mcpServers": {
            "convolink": {
-             "command": "bun",
-             "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+             "command": "bunx",
+             "args": ["-y", "convolink@latest", "mcp"]
            }
          }
        }
        ```
-    3. Restart Cursor or reload the MCP server list.
+    3. Restart Cursor or reload the MCP server list from Settings > Features > MCP.
     </Steps>
   </TabItem>
 
   <TabItem label="Claude Desktop">
     <Steps>
-    1. Open your Claude Desktop configuration:
-       - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+    1. Open your Claude Desktop configuration file:
        - **Linux:** `~/.config/Claude/claude_desktop_config.json`
+       - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
        - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
     2. Add the ConvoLink entry:
 
@@ -39,17 +50,31 @@ Connect ConvoLink to your agentic coding environments in 30 seconds.
        {
          "mcpServers": {
            "convolink": {
-             "command": "bun",
-             "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+             "command": "bunx",
+             "args": ["-y", "convolink@latest", "mcp"]
            }
          }
        }
        ```
-    3. Restart Claude Desktop. You will see the hammer icon with ConvoLink tools.
+    3. Restart Claude Desktop. You will see the hammer icon with ConvoLink tools active.
     </Steps>
   </TabItem>
 
-  <TabItem label="Antigravity / Gemini CLI">
-    Add the MCP server to your settings or execute commands via the global `convo` CLI.
+  <TabItem label="Windsurf / Antigravity">
+    <Steps>
+    1. Open your workspace's MCP settings configuration (`~/.codeium/windsurf/mcp_config.json` or Antigravity settings).
+    2. Register the ConvoLink command:
+
+       ```json
+       {
+         "mcpServers": {
+           "convolink": {
+             "command": "bunx",
+             "args": ["-y", "convolink@latest", "mcp"]
+           }
+         }
+       }
+       ```
+    </Steps>
   </TabItem>
 </Tabs>
