@@ -2,6 +2,7 @@ import type { createContainer } from "../container.js";
 import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
 import { GhostCleanupService } from "../adapters/browsers/ghost-cleanup.js";
 export { handleHistory, handleResume, handleExport, handleSearch } from "./cli.storage.js";
+export { handleProfile } from "./cli.profile.js";
 
 type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
 

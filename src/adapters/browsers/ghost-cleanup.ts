@@ -73,6 +73,7 @@ export class GhostCleanupService {
     const realEdge = path.join(home, ".config/microsoft-edge").toLowerCase();
     const realBrave = path.join(home, ".config/bravesoftware").toLowerCase();
     const realChromium = path.join(home, ".config/chromium").toLowerCase();
+    const savedProfiles = path.join(home, ".config/convolink/profiles").toLowerCase();
 
     return (
       lower === realChrome ||
@@ -80,7 +81,8 @@ export class GhostCleanupService {
       lower === realBrave ||
       lower === realChromium ||
       lower.startsWith(realChrome + path.sep) ||
-      lower.startsWith(realEdge + path.sep)
+      lower.startsWith(realEdge + path.sep) ||
+      lower.startsWith(savedProfiles)
     );
   }
 

@@ -27,6 +27,19 @@ export class BrowserDiscoveryService {
     const home = os.homedir();
     const dirs: string[] = [];
 
+    // Automatically scan saved ConvoLink profiles (~/.config/convolink/profiles/*)
+    const savedProfilesRoot = path.join(home, ".config/convolink/profiles");
+    if (fs.existsSync(savedProfilesRoot)) {
+      try {
+        const subdirs = fs.readdirSync(savedProfilesRoot, { withFileTypes: true });
+        for (const sub of subdirs) {
+          if (sub.isDirectory() || sub.isSymbolicLink()) {
+            dirs.push(path.join(savedProfilesRoot, sub.name));
+          }
+        }
+      } catch {}
+    }
+
     if (process.platform === "linux") {
       dirs.push(
         path.join(home, ".config/google-chrome"),
@@ -157,6 +170,10 @@ export class BrowserDiscoveryService {
 
   private inferBrowserName(dirPath: string): string {
     const lower = dirPath.toLowerCase();
+    if (lower.includes("convolink/profiles/")) {
+      const base = path.basename(dirPath);
+      return `ConvoLink Profile (${base})`;
+    }
     if (lower.includes("edge")) return "Microsoft Edge";
     if (lower.includes("brave")) return "Brave";
     if (lower.includes("chromium")) return "Chromium";
