@@ -169,7 +169,7 @@ ConvoLink automatically discovers real local profiles (Google Chrome, Edge, Brav
 convo profile list
 
 # Select active profile for this repository (persisted in .convo/config.json):
-convo profile select #1
+convo profile select 1
 # Or select by email:
 convo profile select developer@example.com
 ```

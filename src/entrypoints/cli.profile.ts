@@ -20,14 +20,15 @@ export async function handleProfile(args: string[]): Promise<number> {
       console.log(`  #${idx} [${p.browser}] ${p.name}${email}${activeBadge}`);
       console.log(`     Path: ${p.userDataDir}`);
     });
-    console.log("\n💡 To set active profile for this project: convo profile select <#index|email>");
+    console.log("\n💡 To set active profile for this project: convo profile select <number|email> (e.g. convo profile select 1)");
     return 0;
   }
 
   if (sub === "select") {
     const target = args[1];
     if (!target) {
-      console.error("Error: Please provide profile #index, name, or email to select.");
+      console.error("Error: Please provide profile number, name, or email to select (e.g. convo profile select 1).");
+      console.error("💡 Tip: If using #, pass '1' or quote '#1' so bash does not treat '#' as a comment.");
       return 1;
     }
 
