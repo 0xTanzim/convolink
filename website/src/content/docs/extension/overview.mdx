@@ -3,7 +3,7 @@ title: Chrome & Firefox Companion Extension
 description: Zero-flag browser integration for ConvoLink.
 ---
 
-import { Tabs, TabItem, Badge, Steps } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Badge } from '@astrojs/starlight/components';
 
 The **ConvoLink Companion Extension** bridges local autonomous coding agents to your active browser tabs without restarting your browser, launching debug flags, or triggering yellow warning banners.
 
@@ -25,26 +25,28 @@ Download pre-built packages directly from [GitHub Releases v1.0.0](https://githu
 
 <Tabs>
   <TabItem label="Chromium (Chrome, Brave, Edge)">
-    <Steps>
-    1. Download `convolink-companion-chrome.zip` and extract it to a local folder.
-    2. Open your browser and navigate to `chrome://extensions/`.
-    3. Toggle **Developer mode** in the top-right corner.
-    4. Click **Load unpacked** and select the extracted folder.
-    </Steps>
+
+  1. Download `convolink-companion-chrome.zip` and extract it to a local folder.
+  2. Open your browser and navigate to `chrome://extensions/`.
+  3. Toggle **Developer mode** in the top-right corner.
+  4. Click **Load unpacked** and select the extracted folder.
+
   </TabItem>
   <TabItem label="Mozilla Firefox">
-    <Steps>
-    1. Download `convolink-companion-firefox.zip` and extract it.
-    2. Navigate to `about:debugging#/runtime/this-firefox`.
-    3. Click **Load Temporary Add-on...** and select `manifest.json`.
-    </Steps>
+
+  1. Download `convolink-companion-firefox.zip` and extract it.
+  2. Navigate to `about:debugging#/runtime/this-firefox`.
+  3. Click **Load Temporary Add-on** and select `manifest.json`.
+
   </TabItem>
   <TabItem label="Build From Source">
-    ```bash
-    # Build both Chrome and Firefox packages locally using Bun:
-    bun run build:extension
-    # Output created in extensions/convolink-companion/.output/ and dist/
-    ```
+
+```bash
+# Build both Chrome and Firefox packages locally using Bun:
+bun run build:extension
+# Output created in extensions/convolink-companion/.output/ and dist/
+```
+
   </TabItem>
 </Tabs>
 

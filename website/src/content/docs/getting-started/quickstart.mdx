@@ -3,13 +3,11 @@ title: 60-Second Quickstart
 description: Get up and running with ConvoLink in under a minute.
 ---
 
-import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 Connect your local coding agent directly to your active browser tabs.
 
-<Steps>
-
-1. **Run Instantly or Install Globally**
+### 1. Run Instantly or Install Globally
 
    You can run ConvoLink instantly with zero setup, install via the universal 1-line script, or install globally via Bun or npm:
 
@@ -49,54 +47,52 @@ Connect your local coding agent directly to your active browser tabs.
      </TabItem>
    </Tabs>
 
-2. **Connect Your Real Browser**
+### 2. Connect Your Real Browser
 
-   <Tabs>
-     <TabItem label="Path A: Companion Extension (Recommended)">
-       Download and install the zero-flag extension from [GitHub Releases v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0):
-       - Chromium (`convolink-companion-chrome.zip`) for Chrome, Brave, and Edge.
-       - Firefox (`convolink-companion-firefox.zip`) for Mozilla Firefox.
+<Tabs>
+  <TabItem label="Path A: Companion Extension (Recommended)">
+    Download and install the zero-flag extension from [GitHub Releases v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0):
+    - Chromium (`convolink-companion-chrome.zip`) for Chrome, Brave, and Edge.
+    - Firefox (`convolink-companion-firefox.zip`) for Mozilla Firefox.
 
-       Load the unpacked folder into `chrome://extensions` or `about:debugging`, then pair:
-       ```bash
-       convo ext pair
-       ```
-     </TabItem>
-     <TabItem label="Path B: Direct CDP Inspection">
-       Enable remote debugging via `chrome://inspect/#remote-debugging` in your browser, or start Chrome with:
-       ```bash
-       google-chrome --remote-debugging-port=9222
-       ```
-     </TabItem>
-   </Tabs>
+    Load the unpacked folder into `chrome://extensions` or `about:debugging`, then pair:
+    ```bash
+    convo ext pair
+    ```
+  </TabItem>
+  <TabItem label="Path B: Direct CDP Inspection">
+    Enable remote debugging via `chrome://inspect/#remote-debugging` in your browser, or start Chrome with:
+    ```bash
+    google-chrome --remote-debugging-port=9222
+    ```
+  </TabItem>
+</Tabs>
 
-3. **Verify Connection Health**
+### 3. Verify Connection Health
 
-   Run `convo doctor` to test protocol latency and detect all open AI tabs:
+Run `convo doctor` to test protocol latency and detect all open AI tabs:
 
-   ```bash
-   convo doctor
-   ```
+```bash
+convo doctor
+```
 
-   ```text
-   🔍 Running ConvoLink Doctor...
-   [CDP Transport] Status: ONLINE (Latency: 1ms)
-   [Tabs] Found 4 supported AI tab(s):
-     • [CHATGPT] Architecture Discussion - ChatGPT (TargetId: A16BE3...) ✅ READY
-     • [CLAUDE] Concurrency Refactoring - Claude (TargetId: 44F12A...) ✅ READY
-     • [DEEPSEEK] Algorithmic Optimization - DeepSeek (TargetId: 713AD6...) ✅ READY
-     • [GEMINI] Cloud Deployment Strategy - Gemini (TargetId: 837BDC...) ✅ READY
-   ```
+```text
+🔍 Running ConvoLink Doctor...
+[CDP Transport] Status: ONLINE (Latency: 1ms)
+[Tabs] Found 4 supported AI tab(s):
+  • [CHATGPT] Architecture Discussion - ChatGPT (TargetId: A16BE3...) ✅ READY
+  • [CLAUDE] Concurrency Refactoring - Claude (TargetId: 44F12A...) ✅ READY
+  • [DEEPSEEK] Algorithmic Optimization - DeepSeek (TargetId: 713AD6...) ✅ READY
+  • [GEMINI] Cloud Deployment Strategy - Gemini (TargetId: 837BDC...) ✅ READY
+```
 
-4. **Submit Your First Query**
+### 4. Submit Your First Query
 
-   Ask your upstream architect for specifications directly from the terminal:
+Ask your upstream architect for specifications directly from the terminal:
 
-   ```bash
-   convo ask --platform chatgpt "Explain the data model for our user authentication service."
-   ```
-
-</Steps>
+```bash
+convo ask --platform chatgpt "Explain the data model for our user authentication service."
+```
 
 <Aside type="tip">
   You can target specific tabs with shorthand `#1`, `#2` or by specifying `--platform claude`.

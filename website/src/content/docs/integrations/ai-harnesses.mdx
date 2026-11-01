@@ -3,7 +3,7 @@ title: AI Coding Harnesses (Antigravity, Codex, Claude, Cursor)
 description: Connect ConvoLink to Google Antigravity, OpenAI Codex, Anthropic Claude Code, Cursor, Devin, Cline, and other autonomous coding harnesses.
 ---
 
-import { Tabs, TabItem, Steps, Aside } from '@astrojs/starlight/components';
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
 ConvoLink is built from the ground up to integrate seamlessly with every modern AI coding agent and execution harness. Whether you use terminal-first agent loops or full-featured agentic IDEs, ConvoLink provides standard Model Context Protocol (MCP) JSON-RPC 2.0 communication over `stdio`.
 
@@ -27,7 +27,7 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
 <Tabs>
   <TabItem label="Google Antigravity">
     **Antigravity 2.0 / CLI / IDE:**
-    <Steps>
+
     1. Open your workspace or global Antigravity MCP configuration:
        - **Workspace level:** `.agents/mcp_config.json` (recommended for repository teams)
        - **User global:** `~/.gemini/config/mcp_config.json` (or `~/.gemini/antigravity/mcp_config.json`)
@@ -43,12 +43,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        }
        ```
     3. Alternatively, use the Antigravity UI: Click the side panel menu (`...`) > **MCP Servers** > **Manage MCP Servers** > **View raw config**, and paste the configuration above.
-    </Steps>
   </TabItem>
 
   <TabItem label="OpenAI Codex">
     **OpenAI Codex CLI:**
-    <Steps>
+
     1. **1-Command Registration (CLI):**
        ```bash
        codex mcp add convolink -- bunx -y convolink@latest mcp
@@ -61,12 +60,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        disabled = false
        ```
     3. Codex automatically registers all 8 cognitive browser tools: `convo_ask`, `convo_compare`, `convo_doctor`, `convo_list_tabs`, `convo_tab`, `convo_search`, `convo_thread`, and `convo_profile`.
-    </Steps>
   </TabItem>
 
   <TabItem label="Anthropic Claude Code">
     **Terminal Coding Agent:**
-    <Steps>
+
     1. **Automatic CLI Addition:**
        ```bash
        claude mcp add convolink -- bunx -y convolink@latest mcp
@@ -83,12 +81,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        }
        ```
     3. Claude Code detects the server on next launch, allowing it to invoke web models, retrieve architectural invariants, and search past session turns directly during terminal loops.
-    </Steps>
   </TabItem>
 
   <TabItem label="Cursor IDE">
     **Composer & Agentic Chat:**
-    <Steps>
+
     1. Open `.cursor/mcp.json` at the root of your project (or global `~/.cursor/mcp.json`):
        ```json
        {
@@ -102,12 +99,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        ```
     2. Go to **Cursor Settings** > **Features** > **MCP** and confirm that `convolink` displays a green status indicator.
     3. In Composer or Chat, mention `@convolink` or let the model autonomously call `convo_ask` when questions about the architectural masterplan arise.
-    </Steps>
   </TabItem>
 
   <TabItem label="Devin / Windsurf">
     **Devin Desktop & Windsurf Cascade:**
-    <Steps>
+
     1. Open the Cascade panel menu (`...`) and click **Open MCP config file**.
     2. In `~/.config/devin/mcp_config.json` (or `.devin/mcp_config.json` / `~/.codeium/windsurf/mcp_config.json`), insert:
        ```json
@@ -121,12 +117,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        }
        ```
     3. Save the file. Cascade immediately discovers the ConvoLink tool suite.
-    </Steps>
   </TabItem>
 
   <TabItem label="Cline & Roo Code">
     **VS Code Extension:**
-    <Steps>
+
     1. Open the **Cline** or **Roo Code** extension pane in VS Code.
     2. Click the **MCP Servers** icon in the header, then switch to the **Config** tab.
     3. Add the ConvoLink server configuration:
@@ -141,12 +136,11 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        }
        ```
     4. Cline will show `convolink` connected with 8 active tools.
-    </Steps>
   </TabItem>
 
   <TabItem label="CommandCode & OpenCode">
     **Open-Source Agentic CLI:**
-    <Steps>
+
     1. Create or edit `.mcp/config.json` in your repository:
        ```json
        {
@@ -159,7 +153,6 @@ ConvoLink is built from the ground up to integrate seamlessly with every modern 
        }
        ```
     2. Launch `commandcode` or `opencode`; the runtime links seamlessly over standard input/output.
-    </Steps>
   </TabItem>
 
   <TabItem label="Aider / Shell Agents">

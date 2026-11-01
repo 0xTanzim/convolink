@@ -382,3 +382,25 @@ summary {
 summary:hover {
   color: var(--sl-color-accent) !important;
 }
+
+
+/* 📐 Modern Mermaid Diagram Container */
+.convo-mermaid-diagram {
+  display: flex !important;
+  justify-content: center !important;
+  align-items: center !important;
+  width: 100% !important;
+  margin: 1.75rem 0 2rem !important;
+  padding: 1.5rem 1rem !important;
+  background: var(--convo-card-bg) !important;
+  border: 1px solid var(--convo-border) !important;
+  border-radius: 12px !important;
+  box-shadow: var(--convo-card-shadow) !important;
+  backdrop-filter: blur(12px) !important;
+  overflow-x: auto !important;
+}
+
+.convo-mermaid-diagram svg {
+  max-width: 100% !important;
+  height: auto !important;
+}

@@ -1,13 +1,12 @@
 import { defineConfig } from "astro/config";
 import starlight from "@astrojs/starlight";
-import mermaid from "astro-mermaid";
 
 // https://astro.build/config
 export default defineConfig({
   site: "https://0xtanzim.github.io",
   base: "/convolink",
+  compressHTML: false,
   integrations: [
-    mermaid(),
     starlight({
       title: "ConvoLink",
       description: "Autonomous AI conversation runtime linking web models (ChatGPT, Claude, DeepSeek, Gemini) to local development workflows.",
@@ -21,6 +20,9 @@ export default defineConfig({
       customCss: [
         "./src/styles/elysia-theme.css",
       ],
+      components: {
+        Head: "./src/components/Head.astro",
+      },
       sidebar: [
         {
           label: "Start Here",
