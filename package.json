@@ -20,6 +20,7 @@
     "convo": "bun run bin/convo.ts",
     "bridge": "bun run bin/convolink.ts",
     "build:extension": "bun run scripts/build-extension.ts",
+    "release": "bun run scripts/release.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {},

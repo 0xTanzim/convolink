@@ -52,11 +52,17 @@ describe("Extension Build & Packaging Pipeline", () => {
 
   it("creates downloadable release zip archives when zip is enabled", async () => {
     const distDir = path.join(tempDir, "release-dist");
-    const result = await buildExtension({ target: "chrome", outDir: distDir, zip: true });
+    const result = await buildExtension({ target: "chrome", outDir: distDir, zip: true, version: "2.1.0" });
 
     expect(result.success).toBe(true);
     expect(result.zipPath).toBeDefined();
     expect(fs.existsSync(result.zipPath!)).toBe(true);
     expect(result.zipPath!.endsWith(".zip")).toBe(true);
+    expect(result.versionedZipPath).toBeDefined();
+    expect(fs.existsSync(result.versionedZipPath!)).toBe(true);
+    expect(result.versionedZipPath!).toContain("v2.1.0");
+
+    const manifest = JSON.parse(fs.readFileSync(path.join(distDir, "manifest.json"), "utf-8"));
+    expect(manifest.version).toBe("2.1.0");
   });
 });
