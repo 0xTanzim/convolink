@@ -93,7 +93,7 @@ export class HostEnv {
         candidates = ["/usr/bin/brave-browser", "/usr/bin/brave-browser-stable", "/usr/bin/brave"];
       } else if (lower.includes("edge")) {
         candidates = ["/usr/bin/microsoft-edge", "/usr/bin/microsoft-edge-stable"];
-      } else {
+      } else if (lower.includes("chrome") || lower.includes("chromium")) {
         candidates = [
           "/usr/bin/google-chrome",
           "/usr/bin/google-chrome-stable",
@@ -104,6 +104,7 @@ export class HostEnv {
       for (const p of candidates) {
         if (fs.existsSync(p)) return p;
       }
+      return lower === "any" ? this.findAnyInstalledBrowser() : null;
     } else if (platform === "darwin") {
       let macPath = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome";
       if (lower.includes("brave")) {
@@ -111,7 +112,7 @@ export class HostEnv {
       } else if (lower.includes("edge")) {
         macPath = "/Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
       }
-      if (fs.existsSync(macPath)) return macPath;
+      return fs.existsSync(macPath) ? macPath : (lower === "any" ? this.findAnyInstalledBrowser() : null);
     } else if (platform === "win32") {
       const programFiles = process.env["PROGRAMFILES"] || "C:\\Program Files";
       const programFilesX86 = process.env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
@@ -125,9 +126,9 @@ export class HostEnv {
         const full = path.join(root, subPath);
         if (fs.existsSync(full)) return full;
       }
+      return lower === "any" ? this.findAnyInstalledBrowser() : null;
     }
 
-    // Generic fallback: try finding any installed browser
     return this.findAnyInstalledBrowser();
   }
 
