@@ -6,6 +6,8 @@ node_modules/
 # Runtime & Application Caches
 .convolink/
 .convo/
+.taste-skill/
+.astro/
 artifacts/
 /tmp/convolink-*
 /tmp/convo-*

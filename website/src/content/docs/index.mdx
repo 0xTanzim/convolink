@@ -1,0 +1,103 @@
+---
+title: ConvoLink
+description: Autonomous AI conversation runtime linking web models to local development workflows.
+template: splash
+hero:
+  tagline: Connect local autonomous coding agents (Cursor, Claude Code, Antigravity) directly to your live authenticated web AI sessions (ChatGPT, Claude, DeepSeek, Gemini).
+  image:
+    file: ../../assets/logo.svg
+  actions:
+    - text: 60-Second Quickstart
+      link: /convolink/getting-started/quickstart/
+      icon: right-arrow
+      variant: primary
+    - text: View on GitHub
+      link: https://github.com/0xTanzim/convolink
+      icon: external
+      variant: secondary
+---
+
+import { Card, CardGrid, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+
+## The Three Architectural Pillars
+
+<CardGrid stagger>
+  <Card title="The Context Bridge" icon="document">
+    **Symmetric turn persistence & SQLite FTS5 ledger.**
+    Durable conversation ledger in WAL mode, capturing user prompts and assistant specs to eliminate human copy-paste relays.
+  </Card>
+
+  <Card title="The Intelligence Bridge" icon="laptop">
+    **Asymmetric intelligence delegation.**
+    Empower local coding agents running smaller or cost-effective models to delegate difficult debugging and architecture to frontier web models.
+  </Card>
+
+  <Card title="The Capability Bridge" icon="puzzle">
+    **Borrow live web AI superpowers.**
+    Access extended thinking (e.g. DeepSeek R1), live web search grounding, and multi-model consensus validation without per-token API charges.
+  </Card>
+
+  <Card title="Zero Ghost Browsers" icon="approve-check-circle">
+    **Everyday authenticated profile protection.**
+    Connects to your real browser session via dynamic CDP inspection or our zero-flag **Companion Extension** (Chrome & Firefox MV3).
+  </Card>
+</CardGrid>
+
+---
+
+## Live Workflow Preview
+
+<Tabs>
+  <TabItem label="CLI Ask">
+    ```bash
+    # Query upstream architect for design specifications & state invariants
+    convo ask --platform claude \
+      "We are ready to implement Milestone 2. Provide the transition table, invariant list, and error codes we decided on during research."
+    ```
+  </TabItem>
+
+  <TabItem label="Multi-Model Compare">
+    ```bash
+    # Fan out proposal to ChatGPT, Claude, DeepSeek, and Gemini in parallel
+    convo compare \
+      "Evaluate trade-offs between distributed SQLite (Litestream/LiteFS) vs PostgreSQL for a multi-tenant event ledger." \
+      --platforms chatgpt,claude,deepseek,gemini \
+      --arbitrate \
+      --arbiter deepseek
+    ```
+  </TabItem>
+
+  <TabItem label="File Extraction (-w)">
+    ```bash
+    # Automatically extract tagged source code directly to your local file tree
+    convo ask --platform deepseek \
+      "Implement the token rotation service using // filepath: src/auth/token.service.ts" \
+      -w --out-dir .
+    ```
+  </TabItem>
+
+  <TabItem label="MCP Server">
+    ```json
+    // Connect Cursor or Claude Desktop in 30 seconds
+    {
+      "mcpServers": {
+        "convolink": {
+          "command": "bun",
+          "args": ["run", "/path/to/convolink/bin/convolink-mcp.ts"]
+        }
+      }
+    }
+    ```
+  </TabItem>
+</Tabs>
+
+---
+
+## Supported Frontier Web AI Platforms
+
+| Platform | Authentication | Streaming Detection | Thinking Mode |
+| :--- | :--- | :--- | :--- |
+| **ChatGPT** | Everyday Plus / Team Profile | 3-Signal DOM Settling | Supported (o1 / o3) |
+| **Claude** | Pro / Enterprise Session | ProseMirror Mutation Watcher | Extended Thinking |
+| **DeepSeek** | Authenticated Web Session | Vue Microtask Event Bus | Reasoning R1 (`--think`) |
+| **Gemini** | Google Account Profile | Quill Editor DOM Observer | Search Grounding |

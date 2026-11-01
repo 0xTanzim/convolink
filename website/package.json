@@ -1,0 +1,19 @@
+{
+  "name": "convolink-docs",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "astro dev",
+    "start": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "typecheck": "astro check"
+  },
+  "dependencies": {
+    "@astrojs/starlight": "^0.42.8",
+    "astro": "^7.4.4"
+  },
+  "devDependencies": {
+    "@bruits/satteri-linux-x64-gnu": "^0.11.6"
+  }
+}

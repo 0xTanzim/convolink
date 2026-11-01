@@ -1,0 +1,55 @@
+---
+title: Cursor & Claude Desktop Integration
+description: 30-second setup for your favorite agentic IDEs.
+---
+
+import { Tabs, TabItem, Steps } from '@astrojs/starlight/components';
+
+Connect ConvoLink to your agentic coding environments in 30 seconds.
+
+<Tabs>
+  <TabItem label="Cursor IDE">
+    <Steps>
+    1. Open your Cursor project settings or global configuration (`~/.cursor/mcp.json`).
+    2. Add the ConvoLink server configuration:
+
+       ```json
+       {
+         "mcpServers": {
+           "convolink": {
+             "command": "bun",
+             "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+           }
+         }
+       }
+       ```
+    3. Restart Cursor or reload the MCP server list.
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Claude Desktop">
+    <Steps>
+    1. Open your Claude Desktop configuration:
+       - **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
+       - **Linux:** `~/.config/Claude/claude_desktop_config.json`
+       - **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+    2. Add the ConvoLink entry:
+
+       ```json
+       {
+         "mcpServers": {
+           "convolink": {
+             "command": "bun",
+             "args": ["run", "/absolute/path/to/convolink/bin/convolink-mcp.ts"]
+           }
+         }
+       }
+       ```
+    3. Restart Claude Desktop. You will see the hammer icon with ConvoLink tools.
+    </Steps>
+  </TabItem>
+
+  <TabItem label="Antigravity / Gemini CLI">
+    Add the MCP server to your settings or execute commands via the global `convo` CLI.
+  </TabItem>
+</Tabs>

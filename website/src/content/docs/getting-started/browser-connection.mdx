@@ -1,0 +1,58 @@
+---
+title: Zero Ghost Browser Setup
+description: How ConvoLink connects directly to your everyday authenticated browser profiles.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## The Ghost Browser Problem
+
+Starting in **Google Chrome 136+**, Chromium security policies block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles.
+
+Automated tools often bypass this by spawning a fresh Chrome with a custom `--user-data-dir`. This creates an **unauthenticated "ghost browser"**: a blank profile with zero cookies, zero saved Google accounts, and zero ChatGPT/Claude/DeepSeek sessions.
+
+```
+❌ Traditional Spawner: Spawns blank browser (No logins, no ChatGPT Plus/Claude Pro)
+✅ ConvoLink Connection: Hooks into your real, authenticated everyday session
+```
+
+## The 4-Tier Connection Engine
+
+ConvoLink implements the **Zero Ghost Browser Law** (`AGENTS.md`) using a prioritized 4-tier strategy:
+
+| Tier | Strategy | Mechanism | User Impact |
+| :--- | :--- | :--- | :--- |
+| **Tier 1** | Everyday Active Session | Scans dynamic ports written to `DevToolsActivePort` | Zero restarts, zero flags (Chrome 144+) |
+| **Tier 2** | Configured CDP Port | Connects to active `127.0.0.1:9222` / `9229` | Attaches without spawning new processes |
+| **Tier 3** | Companion Extension | WebSocket bridge via `chrome.debugger` | Works on everyday profile with **zero flags** |
+| **Tier 4** | Dedicated Profile | Spawns dedicated persistent profile | Explicit fallback only; never the default |
+
+## Multi-Profile Discovery (`convo profile`)
+
+Developers often use multiple browser profiles (e.g., Personal vs Work). ConvoLink reads browser `Local State` to extract human-readable profile names and Google emails:
+
+```bash
+# List all discovered profiles
+convo profile list
+```
+
+```text
+Discovered Profiles:
+  1) [Google Chrome] Work <work@example.com>
+  2) [Google Chrome] Personal <personal@example.com>
+  3) [Brave Browser] Default
+```
+
+Link your project workspace to a profile:
+
+```bash
+convo profile select 1
+# Or select by email:
+convo profile select work@example.com
+```
+
+This choice is persisted in `.convo/config.json` for all future agent commands in this repository.
+
+<Aside type="note">
+  If you ever suspect a stray debug process was left behind, run `convo clean` to terminate orphan processes and purge temporary directories safely.
+</Aside>

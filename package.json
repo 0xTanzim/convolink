@@ -9,7 +9,8 @@
     "convo": "./bin/convo.ts"
   },
   "workspaces": [
-    "extensions/*"
+    "extensions/*",
+    "website"
   ],
   "scripts": {
     "test": "bun test --parallel=1",
@@ -20,6 +21,7 @@
     "convo": "bun run bin/convo.ts",
     "bridge": "bun run bin/convolink.ts",
     "build:extension": "bun run scripts/build-extension.ts",
+    "build:docs": "bun run --cwd website build",
     "release": "bun run scripts/release.ts",
     "typecheck": "tsc --noEmit"
   },

@@ -1,0 +1,31 @@
+---
+title: Conversation Ledger & FTS5 Search
+description: Full-text search across all past AI discussions, design decisions, and code blocks.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Every prompt submitted and every response received through ConvoLink is symmetrically captured in a high-performance **SQLite FTS5 full-text search ledger** operating in WAL (Write-Ahead Logging) mode.
+
+## Searching Your Architectural History
+
+When an agent needs to recall why a specific trade-off or algorithm was chosen days ago:
+
+```bash
+convo search "SQLite WAL mode busy_timeout pragma" --limit 5
+```
+
+```text
+Found 2 matching turns across 1 thread(s):
+
+[CHATGPT] 2026-10-31 14:22:05 | Thread: 6ae56dbc-63fc-83ec-bc20-00b69ce6cc33
+  Turn 4 (Assistant):
+  "In SQLite with WAL mode enabled, multiple readers can execute concurrently with a single writer.
+  However, writers must configure busy_timeout (e.g., 5000ms) to prevent SQLITE_BUSY exceptions under bursty load."
+```
+
+## Storage Invariants
+
+- **Location:** The database lives at `$XDG_DATA_HOME/convolink/convolink.sqlite` (Linux) or `~/.local/share/convolink/convolink.sqlite`.
+- **Concurrency:** Uses `PRAGMA journal_mode = WAL` and `PRAGMA synchronous = NORMAL`, allowing concurrent CLI queries and background agent reads without database lock contention.
+- **Portability:** Export entire threads with `convo export <threadId> --format markdown`.

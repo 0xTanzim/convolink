@@ -1,0 +1,34 @@
+---
+title: Operational Safety & PID-Aware Mutex
+description: Concurrency control, secret scrubbing, and background execution guarantees.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## PID-Aware `tmpfs` Mutex Locking
+
+When multiple terminal tabs or concurrent agents query browser tabs simultaneously, simultaneous prompt submissions could corrupt conversational state.
+
+ConvoLink employs a hardware-safe RAM mutex:
+- **Location:** On Linux, locks reside in `$XDG_RUNTIME_DIR/convolink/` (`/run/user/<UID>/convolink/`). This runs on `tmpfs` (RAM), preventing SSD wear and eliminating stale locks on reboot.
+- **Deadlock Reclamation:** Each lock file records `{"pid": <PID>, "targetId": "<ID>", "acquiredAt": "<DATE>"}`. Before throwing a lock error, ConvoLink checks whether the holding process is still alive (`process.kill(pid, 0)`). Stale locks from crashed processes are automatically reclaimed.
+- **Lease Heartbeat:** Long-running queries automatically renew their lock leases to prevent accidental eviction.
+
+## Outbound Secret Scrubbing (`PolicyGate`)
+
+Every prompt string passed to `convo ask` or `convo compare` passes through `PolicyGatePort.sanitizeOutboundPrompt()`.
+
+Known secret patterns are redacted to `[REDACTED_SECRET]` before transmission:
+- OpenAI API keys (`sk-[a-zA-Z0-9_-]{20,}`)
+- GitHub Personal Access Tokens (`ghp_[a-zA-Z0-9]{36}`)
+- Generic JWT bearer tokens
+- `.env` secret assignments (`KEY=...`)
+- AWS Access Keys
+
+## Non-Blocking Safety Gating
+
+ConvoLink **never halts `stdin` or `stdio`** to demand confirmation within an automated agent pipeline. Halting stdio deadlocks the parent agent. Instead, responses containing risky commands (e.g., `rm -rf`, `sudo`) are tagged with `contains_destructive_command: true` in the metadata, leaving execution control to the agent's native approval model.
+
+## Safe Browser Detach
+
+ConvoLink **never** calls `browser.close()`. Calling `browser.close()` terminates the developer's everyday browser window and closes all open tabs. ConvoLink exclusively calls `disconnect()` on its WebSocket client, leaving all tabs, sessions, and cookies intact.

@@ -1,0 +1,34 @@
+---
+title: Stream Settling Detection
+description: Why simple text stabilization fails and how ConvoLink achieves reliable streaming completion.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## The Flaw of Discrete Text-Variance Analysis (DTVA)
+
+Many naive browser automation scripts detect when an AI model finishes generating by periodically measuring the text length of the output container. If the length does not change for 2 seconds, they assume the stream is finished.
+
+This approach frequently fails:
+1. **Network Jitter:** Server-sent event (SSE) frame pauses trigger premature completion.
+2. **Thinking Models:** DeepSeek R1 and OpenAI o1 pause during internal chain-of-thought generation before outputting answer text.
+3. **Canvas / Code Renders:** ChatGPT Canvas and Claude Artifacts render asynchronously after the chat stream ends.
+
+## The 3-Signal Settling Engine
+
+ConvoLink's `StreamSettlingDetector` (`src/adapters/platforms/settling-detector.ts`) requires all three signals before declaring a turn complete:
+
+```mermaid
+flowchart TD
+    Stream["Active Response Stream"] --> S1["Signal 1: Action Container State<br/>(Stop Button / Spinner Absent)"]
+    Stream --> S2["Signal 2: Thinking Container Transition<br/>(Details Closed / Static)"]
+    Stream --> S3["Signal 3: Quiescence Window<br/>(Zero DOM mutations for ≥400ms)"]
+
+    S1 & S2 & S3 --> Complete["Stream Settled ✅<br/>(Dispatch Complete Event)"]
+```
+
+1. **Action Container State:** The "Stop Generating" button, pause square, or loading spinner must be absent.
+2. **Thinking Transition:** Collapsible thinking containers must be finalized.
+3. **Quiescence Window:** There must be zero DOM mutation events or stream frames for at least 400ms.
+
+This three-signal guarantee eliminates truncated code blocks and broken multi-file streams.

@@ -1,0 +1,32 @@
+---
+title: Model Context Protocol (MCP) Server
+description: Native cognitive browser tools for modern AI agents.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+ConvoLink includes a native JSON-RPC 2.0 Model Context Protocol (MCP) server over `stdio` (`bin/convolink-mcp.ts`).
+
+When integrated into an MCP-compliant agent (Cursor, Claude Desktop, Antigravity), the agent gains direct cognitive tools to interact with your live browser tabs.
+
+## Exposed Tools
+
+| Tool Name | Parameters | Description |
+| :--- | :--- | :--- |
+| `convo_ask` | `prompt`, `platform`, `targetId`, `think` | Submits prompt to browser tab and streams result. |
+| `convo_compare` | `prompt`, `platforms`, `arbitrate` | Runs multi-model cross-validation and arbitration. |
+| `convo_list_tabs` | none | Lists open AI tabs and their readiness status. |
+| `convo_search` | `query`, `limit` | Full-text searches the local SQLite FTS5 conversation ledger. |
+| `convo_profile_list`| none | Lists discovered local browser profiles. |
+| `convo_profile_select`| `profileId` | Links project workspace to a specific browser profile. |
+| `convo_export` | `threadId`, `format` | Exports thread turns and code artifacts. |
+
+## Running the Server Directly
+
+You can start the MCP stdio server with:
+
+```bash
+bun run bin/convolink-mcp.ts
+# or via CLI:
+convo mcp
+```

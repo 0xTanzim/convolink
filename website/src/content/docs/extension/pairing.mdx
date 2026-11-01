@@ -1,0 +1,52 @@
+---
+title: Cryptographic Pairing & Security
+description: How ConvoLink secures communication between the extension and local agents.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+To ensure malicious web scripts cannot connect to your local ConvoLink WebSocket endpoint, ConvoLink enforces **Non-Blocking Cryptographic Pairing** (`AGENTS.md` §4).
+
+## Pairing Token Handshake
+
+When ConvoLink runs with the extension transport, the local server listens on `ws://127.0.0.1:9224`. 
+
+```mermaid
+sequenceDiagram
+    participant Agent as Local Agent / ConvoLink
+    participant Ext as Companion Extension
+    Agent->>Ext: WebSocket Connect
+    Ext->>Agent: client_handshake (pairing_token)
+    alt Valid Token
+        Agent-->>Ext: handshake_ack (session_granted)
+    else Invalid / Missing Token
+        Agent-->>Ext: handshake_error (ERR_UNAUTHORIZED)
+        Agent->>Ext: Close WebSocket (4001)
+    end
+```
+
+## Managing Pairing Secrets
+
+View your active pairing token:
+
+```bash
+convo ext pair
+```
+
+```text
+🔐 ConvoLink Companion Pairing Token:
+----------------------------------------------------------------
+convo_sec_8f9a2b1c4e6d3f0a7b5c8e1d2f4a6c8e
+----------------------------------------------------------------
+Paste this secret into the ConvoLink Companion extension popup to authorize connections.
+```
+
+If you ever suspect a token was exposed, rotate it with:
+
+```bash
+convo ext pair --rotate
+```
+
+<Aside type="caution">
+  Token secrets are stored with strict user-only read permissions (`0600`) inside `$XDG_CONFIG_HOME/convolink/bridge-token.json`.
+</Aside>

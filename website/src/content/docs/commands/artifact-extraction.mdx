@@ -1,0 +1,33 @@
+---
+title: Multi-File Code Extraction (-w)
+description: Automatically parse and persist production code blocks from upstream AI responses.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+When an upstream model generates production files, copying and pasting multiple files across nested directory trees is tedious and prone to human error.
+
+With `-w` (or `--write-files`), ConvoLink automatically parses code blocks tagged with standard filepath directives, creates parent directories recursively, and writes them directly to your workspace.
+
+## Usage
+
+Request the upstream model to format code using `// filepath:` directives:
+
+```bash
+convo ask --platform claude \
+  "Provide the ring buffer implementation with // filepath: src/ring-buffer.ts and // filepath: tests/ring-buffer.test.ts" \
+  -w --out-dir .
+```
+
+```text
+✅ Parsed 2 file artifact(s):
+  • Written: src/ring-buffer.ts (2,104 bytes)
+  • Written: tests/ring-buffer.test.ts (1,450 bytes)
+```
+
+## Security & Path Traversal Guards
+
+ConvoLink's `WorkspaceFileSinkAdapter` enforces strict containment:
+- Relative paths are resolved against `--out-dir`.
+- Any path containing malicious directory traversal sequences (e.g. `../../etc/passwd` or `// filepath: /absolute/path`) is immediately rejected with a security violation.
+- Existing files are protected unless `--overwrite` is explicitly specified.

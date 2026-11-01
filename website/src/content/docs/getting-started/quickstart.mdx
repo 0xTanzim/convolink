@@ -1,0 +1,74 @@
+---
+title: 60-Second Quickstart
+description: Get up and running with ConvoLink in under a minute.
+---
+
+import { Steps, Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+Connect your local coding agent directly to your active browser tabs.
+
+<Steps>
+
+1. **Install ConvoLink**
+
+   Clone the repository and install dependencies using [Bun](https://bun.sh):
+
+   ```bash
+   git clone https://github.com/0xTanzim/convolink.git
+   cd convolink
+   bun install
+   bun link # Exposes `convo` and `convolink` globally
+   ```
+
+2. **Connect Your Real Browser**
+
+   <Tabs>
+     <TabItem label="Path A: Companion Extension (Recommended)">
+       Download and install the zero-flag extension from [GitHub Releases v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0):
+       - Chromium (`convolink-companion-chrome.zip`) for Chrome, Brave, and Edge.
+       - Firefox (`convolink-companion-firefox.zip`) for Mozilla Firefox.
+
+       Load the unpacked folder into `chrome://extensions` or `about:debugging`, then pair:
+       ```bash
+       convo ext pair
+       ```
+     </TabItem>
+     <TabItem label="Path B: Direct CDP Inspection">
+       Enable remote debugging via `chrome://inspect/#remote-debugging` in your browser, or start Chrome with:
+       ```bash
+       google-chrome --remote-debugging-port=9222
+       ```
+     </TabItem>
+   </Tabs>
+
+3. **Verify Connection Health**
+
+   Run `convo doctor` to test protocol latency and detect all open AI tabs:
+
+   ```bash
+   convo doctor
+   ```
+
+   ```text
+   🔍 Running ConvoLink Doctor...
+   [CDP Transport] Status: ONLINE (Latency: 1ms)
+   [Tabs] Found 4 supported AI tab(s):
+     • [CHATGPT] Architecture Discussion - ChatGPT (TargetId: A16BE3...) ✅ READY
+     • [CLAUDE] Concurrency Refactoring - Claude (TargetId: 44F12A...) ✅ READY
+     • [DEEPSEEK] Algorithmic Optimization - DeepSeek (TargetId: 713AD6...) ✅ READY
+     • [GEMINI] Cloud Deployment Strategy - Gemini (TargetId: 837BDC...) ✅ READY
+   ```
+
+4. **Submit Your First Query**
+
+   Ask your upstream architect for specifications directly from the terminal:
+
+   ```bash
+   convo ask --platform chatgpt "Explain the data model for our user authentication service."
+   ```
+
+</Steps>
+
+<Aside type="tip">
+  You can target specific tabs with shorthand `#1`, `#2` or by specifying `--platform claude`.
+</Aside>

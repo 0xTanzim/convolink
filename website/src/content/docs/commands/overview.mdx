@@ -1,0 +1,45 @@
+---
+title: CLI Command Reference
+description: Complete reference for ConvoLink command-line interface.
+---
+
+import { Tabs, TabItem } from '@astrojs/starlight/components';
+
+ConvoLink provides a unified CLI exposed as both `convo` and `convolink`.
+
+## Core Commands
+
+| Command | Usage | Description |
+| :--- | :--- | :--- |
+| `doctor` | `convo doctor [--launch]` | Audits CDP latency and detects open AI tabs. |
+| `list` | `convo list` | Lists all active browser tabs on supported platforms. |
+| `ask` | `convo ask <prompt> [flags]` | Sends prompt to an AI tab, streams completion. |
+| `compare` | `convo compare <prompt> [flags]` | Broadcasts prompt across models with arbitration. |
+| `search` | `convo search <query>` | SQLite FTS5 search across conversation ledger turns. |
+| `export` | `convo export <threadId>` | Exports a thread and code artifacts to Markdown/JSON. |
+| `profile` | `convo profile <list\|select>` | Manages and switches browser profiles. |
+| `ext` | `convo ext pair [--rotate]` | Manages extension pairing secrets. |
+| `clean` | `convo clean` | Terminates orphaned debug processes safely. |
+| `mcp` | `convo mcp` | Runs JSON-RPC 2.0 MCP server over stdio. |
+
+---
+
+## Detailed Options for `convo ask`
+
+```bash
+convo ask "Implement the caching layer" --platform claude -w --out-dir .
+```
+
+### Flags
+
+| Flag | Shorthand | Type | Description |
+| :--- | :--- | :--- | :--- |
+| `--platform` | `-p` | string | Target platform (`chatgpt`, `claude`, `deepseek`, `gemini`). |
+| `--targetId` | `-t` | string | Target a specific browser tab by CDP ID or shorthand (`#1`, `#2`). |
+| `--new` | `-n` | boolean | Start a fresh session before submitting. |
+| `--open-tab` | | boolean | Spawn a brand-new tab in the background before submitting. |
+| `--write-files` | `-w` | boolean | Extract files tagged with `// filepath:` to disk. |
+| `--out-dir` | `-o` | path | Destination directory for written files (default: `./artifacts`). |
+| `--think` | | boolean | Enable reasoning / deep-thinking mode (e.g. DeepSeek R1). |
+| `--transport` | | string | Engine: `raw-cdp` (default), `extension-bridge`, `firefox-bidi`. |
+| `--timeout` | | number | Milliseconds before request timeouts (default: `120000`). |
