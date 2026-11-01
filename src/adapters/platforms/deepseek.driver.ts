@@ -12,7 +12,7 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
-import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr } from "./deepseek.scripts.js";
+import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekSubmitPromptExpr } from "./deepseek.scripts.js";
 
 export class DeepSeekDriver implements PlatformPort {
   public readonly id: PlatformId = "deepseek";
@@ -66,28 +66,7 @@ export class DeepSeekDriver implements PlatformPort {
     prompt: string,
     _files?: string[],
   ): Promise<TurnFingerprint> {
-    const expression = `(async () => {
-      /* submitPrompt */
-      const ta = document.querySelector('#chat-input, textarea[placeholder*="Send"], textarea.chat-input, textarea');
-      if (!ta) throw new Error("DeepSeek textarea not found");
-
-      const beforeCount = document.querySelectorAll('.ds-markdown').length;
-      const lastBefore = beforeCount > 0 ? document.querySelectorAll('.ds-markdown')[beforeCount - 1] : null;
-      const lastTurnHash = lastBefore ? (lastBefore.innerText || '').trim() : '';
-
-      const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-      if (setter) setter.call(ta, ${JSON.stringify(prompt)});
-      else ta.value = ${JSON.stringify(prompt)};
-      ta.dispatchEvent(new Event('input', { bubbles: true }));
-
-      await new Promise(r => setTimeout(r, 60));
-      const sendBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button, button[class*="send"]');
-      if (sendBtn && !sendBtn.className.includes('disabled')) sendBtn.click();
-      else ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-
-      return { turnCount: beforeCount, lastTurnHash, submittedPromptHash: String(${prompt.length}) };
-    })()`;
-    return browser.evaluate<TurnFingerprint>(handle, expression);
+    return browser.evaluate<TurnFingerprint>(handle, getDeepSeekSubmitPromptExpr(prompt));
   }
 
   public async awaitCompletion(

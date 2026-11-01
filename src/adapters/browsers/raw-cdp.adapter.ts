@@ -7,12 +7,12 @@ import type {
 } from "../../core/ports/browser.port.js";
 import { BrowserConnectionError, TabNotFoundError } from "../../core/errors/bridge-errors.js";
 import type { CdpTarget, PendingMessage } from "./raw-cdp.types.js";
+import { getDownloadFileExpr } from "./raw-cdp.scripts.js";
 
 export class RawCdpAdapter implements BrowserPort {
   public readonly id = "raw-cdp" as const;
   public readonly capabilities: BrowserCapabilities = {
-    protocol: "cdp", browserFamily: "chromium",
-    supportsBackgroundLifecycle: true, supportsFileDownloads: true, supportsTabManagement: true,
+    protocol: "cdp", browserFamily: "chromium", supportsBackgroundLifecycle: true, supportsFileDownloads: true, supportsTabManagement: true,
   };
   private readonly port: number;
   private readonly activeSockets = new Map<string, WebSocket>();
@@ -114,16 +114,29 @@ export class RawCdpAdapter implements BrowserPort {
   }
 
   public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
-    const res = await this.send(handle.targetId, "Runtime.evaluate", {
-      expression,
-      returnByValue: true,
-      awaitPromise: true,
-    });
-    if (res?.exceptionDetails) {
-      const desc = res.exceptionDetails.exception?.description || res.exceptionDetails.text || JSON.stringify(res.exceptionDetails);
-      throw new Error(`In-page evaluation error: ${desc}`);
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      try {
+        const res = await this.send(handle.targetId, "Runtime.evaluate", {
+          expression,
+          returnByValue: true,
+          awaitPromise: true,
+        });
+        if (res?.exceptionDetails) {
+          const desc = res.exceptionDetails.exception?.description || res.exceptionDetails.text || JSON.stringify(res.exceptionDetails);
+          throw new Error(`In-page evaluation error: ${desc}`);
+        }
+        return res?.result?.value as T;
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("Cannot find default execution context") && Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 200));
+          continue;
+        }
+        throw err;
+      }
     }
-    return res?.result?.value as T;
+    throw new Error("Evaluation timed out waiting for execution context");
   }
 
   public async fillText(handle: SessionHandle, selector: string, text: string): Promise<void> {
@@ -164,18 +177,7 @@ export class RawCdpAdapter implements BrowserPort {
   }
 
   public async downloadFile(handle: SessionHandle, url: string): Promise<Buffer> {
-    const expr = `(async () => {
-      const res = await fetch(${JSON.stringify(url)}, { credentials: "include" });
-      if (!res.ok) throw new Error("HTTP " + res.status);
-      const blob = await res.blob();
-      return new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(r.result);
-        r.onerror = reject;
-        r.readAsDataURL(blob);
-      });
-    })()`;
-    const dataUrl = await this.evaluate<string>(handle, expr);
+    const dataUrl = await this.evaluate<string>(handle, getDownloadFileExpr(url));
     if (!dataUrl?.includes(",")) throw new Error(`Failed to download file from ${url}`);
     return Buffer.from(dataUrl.split(",")[1]!, "base64");
   }

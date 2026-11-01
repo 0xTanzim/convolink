@@ -60,3 +60,38 @@ export function getChatGPTReadThreadExpr(lastN: number): string {
     return { layoutVariant: 'chatgpt-2026-turnkey', turns };
   })()`;
 }
+
+export function getChatGPTSubmitPromptExpr(prompt: string): string {
+  return `(async () => {
+    /* submitPrompt */
+    const selector = 'div.ProseMirror[contenteditable="true"], #prompt-textarea, div[contenteditable="true"][data-placeholder], div[contenteditable="true"]';
+    let c = document.querySelector(selector);
+    if (!c) {
+      const deadline = Date.now() + 6000;
+      while (Date.now() < deadline && !c) {
+        await new Promise(r => setTimeout(r, 200));
+        c = document.querySelector(selector);
+      }
+    }
+    if (!c) throw new Error("ChatGPT composer not found");
+
+    const turns = Array.from(document.querySelectorAll('article[data-testid^="conversation-turn-"], [data-turn-key], div[data-message-author-role]'));
+    const beforeTurns = turns.length;
+    const last = turns.length > 0 ? turns[turns.length - 1] : null;
+    let lastText = '';
+    if (last) {
+      const raw = (last.querySelector('div[data-message-author-role="assistant"]')?.innerText || last.innerText || '');
+      const idx = raw.lastIndexOf('ChatGPT said:');
+      lastText = idx !== -1 ? raw.substring(idx + 'ChatGPT said:'.length).trim() : raw.trim();
+    }
+    c.focus();
+    document.execCommand('selectAll', false, null);
+    document.execCommand('insertText', false, ${JSON.stringify(prompt)});
+    c.dispatchEvent(new Event('input', { bubbles: true }));
+    await new Promise(r => setTimeout(r, 80));
+    const send = document.querySelector('button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]');
+    if (send && !send.disabled && send.getAttribute('aria-disabled') !== 'true') send.click();
+    else c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+    return { turnCount: beforeTurns, lastTurnHash: lastText, submittedPromptHash: String(${prompt.length}) };
+  })()`;
+}
