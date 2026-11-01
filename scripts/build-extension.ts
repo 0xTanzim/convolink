@@ -134,6 +134,14 @@ export async function buildExtension(options: BuildOptions): Promise<BuildResult
       }
 
       fs.copyFileSync(zipPath, versionedZipPath);
+
+      // Also copy to non-hidden dist directory when building inside EXT_ROOT
+      if (!options.outDir || options.outDir.startsWith(EXT_ROOT)) {
+        const distDir = path.join(EXT_ROOT, "dist");
+        if (!fs.existsSync(distDir)) fs.mkdirSync(distDir, { recursive: true });
+        fs.copyFileSync(zipPath, path.join(distDir, `convolink-companion-${target}.zip`));
+        fs.copyFileSync(zipPath, path.join(distDir, `convolink-companion-${target}-v${version}.zip`));
+      }
     }
 
     return { success: true, outDir, zipPath, versionedZipPath, version };

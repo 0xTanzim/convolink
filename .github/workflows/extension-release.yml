@@ -50,7 +50,9 @@ jobs:
         with:
           name: convolink-companion-extensions
           path: |
+            extensions/convolink-companion/dist/*.zip
             extensions/convolink-companion/.output/*.zip
+          include-hidden-files: true
           retention-days: 14
 
       - name: Publish GitHub Release (on tags or manual trigger)
@@ -62,4 +64,4 @@ jobs:
           prerelease: false
           generate_release_notes: true
           files: |
-            extensions/convolink-companion/.output/*.zip
+            extensions/convolink-companion/dist/*.zip
