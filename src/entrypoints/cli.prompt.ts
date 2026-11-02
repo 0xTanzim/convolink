@@ -2,6 +2,7 @@ import * as readline from "node:readline/promises";
 import { stdin as input, stdout as output } from "node:process";
 import { BrowserDiscoveryService, type DiscoveredProfile } from "../adapters/browsers/browser-discovery.js";
 import { ConfigService, type ConvoProjectConfig } from "../core/services/config.service.js";
+import { ProjectConfigAdapter } from "../adapters/config/project-config.adapter.js";
 
 export interface EnsureProfileOptions {
   workDir?: string;
@@ -29,7 +30,7 @@ export async function ensureProjectProfile(
   options: EnsureProfileOptions = {},
 ): Promise<ConvoProjectConfig | null> {
   const workDir = options.workDir;
-  const configService = new ConfigService(workDir);
+  const configService = new ConfigService(new ProjectConfigAdapter(), workDir);
 
   const discover = options.discoverProfiles ?? (() => new BrowserDiscoveryService().discoverProfiles());
   const profiles = await discover();
@@ -44,7 +45,6 @@ export async function ensureProjectProfile(
     if (matched) {
       const config: ConvoProjectConfig = {
         profileId: matched.profileId,
-        profileEmail: matched.email,
         profilePath: matched.userDataDir,
         browser: matched.browser,
       };
@@ -88,7 +88,6 @@ export async function ensureProjectProfile(
     const isGecko = chosen.browser.toLowerCase().includes("firefox") || chosen.browser.toLowerCase().includes("zen");
     const config: ConvoProjectConfig = {
       profileId: chosen.profileId,
-      profileEmail: chosen.email,
       profilePath: chosen.userDataDir,
       browser: chosen.browser,
       transport: isGecko ? "firefox-bidi" : "raw-cdp",
@@ -115,7 +114,6 @@ export async function ensureProjectProfile(
   if (isEmail || isPath || num === otherIdx) {
     const config: ConvoProjectConfig = {
       profileId: "Custom",
-      profileEmail: isEmail ? customValue : undefined,
       profilePath: isPath ? customValue : undefined,
       browser: "Custom",
     };

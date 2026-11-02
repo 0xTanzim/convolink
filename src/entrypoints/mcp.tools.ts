@@ -1,5 +1,10 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { PlatformId } from "../core/ports/platform.port.js";
+import { loadResolution } from "./config-context.js";
+import { buildCapabilities } from "./cli.doctor.js";
+import { applySetup } from "./cli.setup.js";
+import { toConvoError } from "../core/errors/convo-error.js";
+import type { BrowserId, TransportId } from "../core/ports/config.port.js";
 import {
   formatDoctorReport,
   runSelfHealingClean,
@@ -19,6 +24,7 @@ export interface McpToolExecutionResult {
 
 export interface ExecuteToolOptions {
   readonly workDir?: string;
+  readonly onProgress?: { report(event: { stage: string; elapsedMs: number; platform?: string }): void };
 }
 
 export async function executeMcpTool(
@@ -32,7 +38,7 @@ export async function executeMcpTool(
       case "convo_ask": {
         const browser = typeof args.browser === "string" ? args.browser : undefined;
         const profile = typeof args.profile === "string" ? args.profile : undefined;
-        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile });
+        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile, ...(options?.workDir ? { workDir: options.workDir } : {}) });
         if (!browserReady.ok) {
           return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
         }
@@ -49,6 +55,7 @@ export async function executeMcpTool(
         const res = await orchestrator.ask({
           prompt, platform, targetId, writeFiles, outDir, newChat, openTab,
           toggles: think !== undefined || search !== undefined ? { think, search } : undefined,
+          ...(options?.onProgress ? { progress: options.onProgress } : {}),
         });
         return {
           text: res.turn.markdownContent,
@@ -61,7 +68,7 @@ export async function executeMcpTool(
       case "convo_compare": {
         const browser = typeof args.browser === "string" ? args.browser : undefined;
         const profile = typeof args.profile === "string" ? args.profile : undefined;
-        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile });
+        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile, ...(options?.workDir ? { workDir: options.workDir } : {}) });
         if (!browserReady.ok) {
           return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
         }
@@ -73,11 +80,61 @@ export async function executeMcpTool(
         return { text: report.markdownReport };
       }
 
+      case "convo_status": {
+        const resolution = await loadResolution(undefined, options?.workDir);
+        if (!resolution.ok) {
+          return {
+            text: JSON.stringify({ ok: false, error: resolution.error }),
+            isError: true,
+          };
+        }
+        return { text: JSON.stringify({ ok: true, setup: resolution.value }), };
+      }
+
+      case "convo_setup": {
+        const browser = typeof args.browser === "string" ? (args.browser as BrowserId) : undefined;
+        if (!browser) {
+          return {
+            text: "Error: 'browser' is required. Call convo_setup with { browser: 'firefox', profile: '<path>' }.",
+            isError: true,
+          };
+        }
+        const outcome = await applySetup({
+          browserId: browser,
+          ...(typeof args.profile === "string" ? { profilePath: args.profile } : {}),
+          ...(typeof args.transport === "string" ? { transport: args.transport as TransportId } : {}),
+          verifyTab: args.verifyTab === true,
+          ...(options?.workDir ? { workDir: options.workDir } : {}),
+        });
+        return {
+          text: JSON.stringify({
+            ok: true,
+            config: outcome.config,
+            warning: outcome.warning ?? null,
+          }),
+        };
+      }
+
       case "convo_doctor": {
         const fix = args.fix === true;
         const fixResult = fix ? await runSelfHealingClean() : undefined;
         const report = await orchestrator.doctor();
-        return { text: formatDoctorReport(report, fixResult) };
+        const resolution = await loadResolution(undefined, options?.workDir);
+        const capabilities = await buildCapabilities({
+          resolution: resolution.ok ? resolution.value : null,
+          transportOk: report.transportHealth.ok,
+          ...(report.transportHealth.error ? { transportError: report.transportHealth.error } : {}),
+        });
+        return {
+          text: JSON.stringify({
+            ok: report.transportHealth.ok,
+            configured: resolution.ok ? resolution.value : null,
+            capabilities,
+            transportHealth: report.transportHealth,
+            tabs: report.tabs,
+            ...(fixResult ? { fixResult } : {}),
+          }),
+        };
       }
 
       case "convo_list_tabs": {
@@ -159,6 +216,7 @@ export async function executeMcpTool(
         return { text: `Unknown tool: ${name}. Call tools/list to inspect valid tools.`, isError: true };
     }
   } catch (err: unknown) {
-    return { text: `Error: ${err instanceof Error ? err.message : String(err)}`, isError: true };
+    const error = toConvoError(err);
+    return { text: JSON.stringify({ ok: false, error: error.toJSON() }), isError: true };
   }
 }

@@ -46,7 +46,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.result?.capabilities?.tools).toBeDefined();
   });
 
-  it("handles tools/list and returns the 8 smart cognitive tools", async () => {
+  it("handles tools/list and returns the 10 smart cognitive tools", async () => {
     const server = createTestServer();
     const response = await server.handleMessage({
       jsonrpc: "2.0",
@@ -57,7 +57,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.id).toBe(2);
     const tools = response?.result?.tools;
     expect(tools).toBeDefined();
-    expect(tools!.length).toBe(8);
+    expect(tools!.length).toBe(10);
 
     const names = tools!.map((t) => t.name);
     expect(names).toContain("convo_ask");
@@ -84,7 +84,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
       params: { name: "convo_doctor", arguments: {} },
     });
     expect(docRes?.id).toBe(30);
-    expect(docRes?.result?.content?.[0]?.text).toContain("ConvoLink Diagnostics");
+    expect(docRes?.result?.content?.[0]?.text).toContain("capabilities");
 
     const fixRes = await server.handleMessage({
       jsonrpc: "2.0",
@@ -93,7 +93,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
       params: { name: "convo_doctor", arguments: { fix: true } },
     });
     expect(fixRes?.id).toBe(31);
-    expect(fixRes?.result?.content?.[0]?.text).toContain("Ghost Cleanup");
+    expect(fixRes?.result?.content?.[0]?.text).toContain("fixResult");
   });
 
   it("handles tools/call for convo_list_tabs", async () => {
@@ -288,7 +288,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
         policyGate: new PolicyService(),
       });
 
-      const server = new McpServer(orchestrator);
+      const server = new McpServer({ orchestrator, workDir: tmpRoot });
       const response = await server.handleMessage({
         jsonrpc: "2.0",
         id: 42,

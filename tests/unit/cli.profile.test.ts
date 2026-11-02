@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { handleProfile } from "../../src/entrypoints/cli.ops.js";
 import { ConfigService } from "../../src/core/services/config.service.js";
+import { ProjectConfigAdapter } from "../../src/adapters/config/project-config.adapter.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
@@ -58,12 +59,12 @@ describe("CLI Profile Operations (convo profile)", () => {
   });
 
   it("selects and persists preferred profile into .convo/config.json", async () => {
-    const configService = new ConfigService(tmpDir);
+    const configService = new ConfigService(new ProjectConfigAdapter(), tmpDir);
     await configService.saveConfig({ profileId: "dev-profile", profileEmail: "developer@example.com" });
 
     const loaded = await configService.loadConfig(tmpDir);
     expect(loaded?.profileId).toBe("dev-profile");
-    expect(loaded?.profileEmail).toBe("developer@example.com");
+    expect(loaded?.profileEmail).toBeUndefined();
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

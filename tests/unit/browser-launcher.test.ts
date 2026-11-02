@@ -312,3 +312,27 @@ describe("BrowserLauncherService (Detached Daemon)", () => {
     expect(probedUrls).toContain("172.28.0.1");
   });
 });
+
+describe("BrowserLauncherService (Firefox profile lock)", () => {
+  it("refuses to spawn a second Firefox on a profile held by a non-debug instance", async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), "convo-ff-locked-"));
+    // A real Firefox lock is a dangling symlink: "<host>:+<pid>".
+    // Point at this test process: alive, and its cmdline has no debug flag.
+    fs.symlinkSync(`host:+${process.pid}`, path.join(dir, "lock"));
+
+    let spawned = false;
+    const launcher = new BrowserLauncherService({
+      checkPort: async () => false,
+      spawnProcess: () => {
+        spawned = true;
+      },
+      findBinary: () => "/usr/lib64/firefox/firefox",
+    });
+
+    const started = await launcher.ensureBrowserRunning({ profilePath: dir, browser: "firefox", port: 19223 });
+
+    expect(started).toBe(false);
+    expect(spawned).toBe(false);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+});

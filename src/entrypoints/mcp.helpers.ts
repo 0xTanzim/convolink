@@ -2,6 +2,7 @@ import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.
 import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js";
 import { GhostCleanupService } from "../adapters/browsers/ghost-cleanup.js";
 import { ConfigService } from "../core/services/config.service.js";
+import { ProjectConfigAdapter } from "../adapters/config/project-config.adapter.js";
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { DoctorReport } from "../core/services/orchestrator.types.js";
 
@@ -50,7 +51,7 @@ export async function runSelfHealingClean(): Promise<{ killed: number; purged: s
 export async function getProfilesListText(workDir?: string): Promise<string> {
   const discovery = new BrowserDiscoveryService();
   const profiles = await discovery.discoverProfiles();
-  const config = await new ConfigService(workDir).loadConfig();
+  const config = await new ConfigService(new ProjectConfigAdapter(), workDir).loadConfig();
   const lines = ["Discovered Browser Profiles:"];
   profiles.forEach((p, idx) => {
     const isActive = config?.profilePath
@@ -81,7 +82,7 @@ export async function selectProfile(target: string, workDir?: string): Promise<M
     const isEmail = trimmed.includes("@");
     const isPath = trimmed.startsWith("/") || trimmed.startsWith("~") || trimmed.startsWith(".");
     if (isEmail || isPath) {
-      await new ConfigService(workDir).updateConfig({
+      await new ConfigService(new ProjectConfigAdapter(), workDir).updateConfig({
         profileId: "Custom",
         profileEmail: isEmail ? trimmed : undefined,
         profilePath: isPath ? trimmed : undefined,
@@ -93,7 +94,7 @@ export async function selectProfile(target: string, workDir?: string): Promise<M
   }
 
   const isGecko = matched.browser.toLowerCase().includes("firefox") || matched.browser.toLowerCase().includes("zen");
-  await new ConfigService(workDir).updateConfig({
+  await new ConfigService(new ProjectConfigAdapter(), workDir).updateConfig({
     profileId: matched.profileId,
     profileEmail: matched.email,
     profilePath: matched.userDataDir,
@@ -135,7 +136,7 @@ export async function ensureMcpBrowserReady(
     }
   } catch {}
 
-  const configService = new ConfigService(workDir);
+  const configService = new ConfigService(new ProjectConfigAdapter(), workDir);
   if (opts.profile) {
     await selectProfile(opts.profile, workDir);
   }
@@ -145,18 +146,9 @@ export async function ensureMcpBrowserReady(
     const discover = opts.discoverProfiles ?? (() => new BrowserDiscoveryService().discoverProfiles());
     const profiles = await discover();
 
-    if (profiles.length === 1) {
-      const single = profiles[0]!;
-      const isGecko = single.browser.toLowerCase().includes("firefox") || single.browser.toLowerCase().includes("zen");
-      await configService.updateConfig({
-        profileId: single.profileId,
-        profileEmail: single.email,
-        profilePath: single.userDataDir,
-        browser: single.browser,
-        transport: isGecko ? "firefox-bidi" : "raw-cdp",
-      });
-      config = await configService.loadConfig();
-    } else if (profiles.length > 1) {
+    if (profiles.length > 0) {
+      // A single discovered profile is still a choice the user must make:
+      // picking it silently is how a project ends up driving the wrong session.
       const options = profiles.map((p) => `${p.name}${p.email ? ` <${p.email}>` : ""} (${p.browser})`);
       const profileList = await getProfilesListText();
       const question = "Which browser profile do you want active for this project (.convo/config.json)?";
@@ -180,6 +172,16 @@ export async function ensureMcpBrowserReady(
         ].join("\n"),
       };
     }
+  }
+
+  if (!config && !opts.ensureBrowserRunning) {
+    return {
+      ok: false,
+      requiresUserSelection: true,
+      question: "Which browser profile should ConvoLink use for this project?",
+      options: [],
+      errorText: "No browser profile is configured for this workspace. Call convo_setup with { browser, profile }.",
+    };
   }
 
   if (opts.ensureBrowserRunning) {

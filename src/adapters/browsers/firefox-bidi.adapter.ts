@@ -19,6 +19,7 @@ export class FirefoxBidiAdapter implements BrowserPort {
   private readonly port: number;
   private readonly messenger?: BidiMessenger;
   private socket?: WebSocket;
+  private exitCleanupRegistered = false;
   private messageCounter = 0;
   private readonly pending = new Map<number, { resolve: (val: any) => void; reject: (err: Error) => void }>();
 
@@ -64,6 +65,35 @@ export class FirefoxBidiAdapter implements BrowserPort {
   }
 
   public async detach(_handle: SessionHandle): Promise<void> {}
+
+  /**
+   * Firefox allows a single BiDi session. A process that exits without
+   * session.end blocks every later command until the browser restarts, so the
+   * socket is told to end the session even on an abrupt exit.
+   */
+  private registerExitCleanup(): void {
+    if (this.exitCleanupRegistered) return;
+    this.exitCleanupRegistered = true;
+
+    const release = () => {
+      try {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+          this.socket.send(JSON.stringify({ id: -1, method: "session.end", params: {} }));
+          this.socket.close();
+        }
+      } catch {}
+    };
+
+    process.once("exit", release);
+    // `timeout` and Ctrl-C terminate with a signal, and Bun does not fire "exit"
+    // for those, which left the only BiDi session occupied.
+    for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"] as const) {
+      process.once(signal, () => {
+        release();
+        setTimeout(() => process.exit(0), 60);
+      });
+    }
+  }
 
   public async disconnect(): Promise<void> {
     if (this.messenger) {
@@ -175,6 +205,7 @@ export class FirefoxBidiAdapter implements BrowserPort {
   private async ensureSocket(): Promise<WebSocket> {
     if (this.socket && this.socket.readyState === WebSocket.OPEN) return this.socket;
     this.socket = await createBidiSocket(this.port, this.pending, (ws, method, params) => this.sendRaw(ws, method, params));
+    this.registerExitCleanup();
     return this.socket;
   }
 }

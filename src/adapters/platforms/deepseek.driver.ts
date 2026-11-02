@@ -12,6 +12,7 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
+import { buildSettleExpr } from "./page-events.js";
 import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
 import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekSubmitPromptExpr, getDeepSeekFingerprintExpr, getDeepSeekAwaitCompletionExpr } from "./deepseek.scripts.js";
@@ -112,7 +113,7 @@ export class DeepSeekDriver implements PlatformPort {
         turnIndex: number;
         text: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, getDeepSeekAwaitCompletionExpr(before.turnCount));
+      }>(handle, buildSettleExpr(getDeepSeekAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
 
       const text = status.text || (status as any).assistantText || "";
       if (status.isGenerating || status.isThinking || text.length !== lastLength) {

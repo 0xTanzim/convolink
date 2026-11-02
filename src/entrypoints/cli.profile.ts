@@ -1,9 +1,10 @@
 import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
 import { ConfigService } from "../core/services/config.service.js";
+import { ProjectConfigAdapter } from "../adapters/config/project-config.adapter.js";
 
 export async function handleProfile(args: string[]): Promise<number> {
   const sub = args[0] || "list";
-  const configService = new ConfigService();
+  const configService = new ConfigService(new ProjectConfigAdapter());
   const currentConfig = await configService.loadConfig();
   const discovery = new BrowserDiscoveryService();
   const profiles = await discovery.discoverProfiles();
@@ -69,7 +70,6 @@ export async function handleProfile(args: string[]): Promise<number> {
     const isGecko = matched.browser.toLowerCase().includes("firefox") || matched.browser.toLowerCase().includes("zen");
     await configService.updateConfig({
       profileId: matched.profileId,
-      profileEmail: matched.email,
       profilePath: matched.userDataDir,
       browser: matched.browser,
       transport: isGecko ? "firefox-bidi" : "raw-cdp",

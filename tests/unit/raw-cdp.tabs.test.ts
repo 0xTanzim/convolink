@@ -23,7 +23,7 @@ describe("RawCdpAdapter Tab & Navigation Operations", () => {
     }) as any;
 
     try {
-      const adapter = new RawCdpAdapter(9222);
+      const adapter = new RawCdpAdapter(9222, { isDefaultProfile: () => false });
       const tab = await adapter.createTab("https://chatgpt.com/");
 
       expect(requestedMethod).toBe("PUT");
@@ -45,7 +45,7 @@ describe("RawCdpAdapter Tab & Navigation Operations", () => {
     }) as any;
 
     try {
-      const adapter = new RawCdpAdapter(9222);
+      const adapter = new RawCdpAdapter(9222, { isDefaultProfile: () => false });
       await adapter.closeTab("tab-new-123");
 
       expect(requestedUrl).toContain("/json/close/tab-new-123");
@@ -55,7 +55,7 @@ describe("RawCdpAdapter Tab & Navigation Operations", () => {
   });
 
   it("navigates and goes back via evaluate", async () => {
-    const adapter = new RawCdpAdapter(9222);
+    const adapter = new RawCdpAdapter(9222, { isDefaultProfile: () => false });
     const handle: SessionHandle = { sessionId: "s1", targetId: "t1", adapterId: "raw-cdp" };
     const evaluated: string[] = [];
 
@@ -100,7 +100,7 @@ describe("RawCdpAdapter Tab & Navigation Operations", () => {
     }) as any;
 
     try {
-      const adapter = new RawCdpAdapter(9222, {
+      const adapter = new RawCdpAdapter(9222, { isDefaultProfile: () => false,
         isWsl: () => true,
         getWslGateway: () => "172.28.0.1",
       });

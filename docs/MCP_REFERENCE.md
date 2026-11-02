@@ -166,3 +166,20 @@ Inspect and manage host browser profiles (Google Chrome, Edge, Brave): discover 
   }
 }
 ```
+
+## Tool 9: `convo_status`
+
+Returns the resolved browser, profile, transport, and endpoint for the project,
+with the source of each value (flag, env, project config, or user config). Never
+launches or modifies anything. Use it before other tools instead of guessing.
+
+## Tool 10: `convo_setup`
+
+Sets the project's browser and profile after the user switches browsers. It never
+prompts: pass `{ "browser": "zen", "profile": "/home/you/.zen/abc.default" }`.
+The combination is verified before `.convo/config.json` is written; an unreachable
+or blocked combination returns a structured error and writes nothing.
+
+```json
+{ "browser": "firefox", "profile": "/home/you/.mozilla/firefox/xxxx.default-release", "verifyTab": false }
+```

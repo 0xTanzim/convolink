@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { ensureProjectProfile, isInteractiveSession } from "../../src/entrypoints/cli.prompt.js";
 import { ConfigService } from "../../src/core/services/config.service.js";
+import { ProjectConfigAdapter } from "../../src/adapters/config/project-config.adapter.js";
 import type { DiscoveredProfile } from "../../src/adapters/browsers/browser-discovery.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -35,7 +36,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
   });
 
   it("returns existing config without prompting if .convo/config.json exists", async () => {
-    const configService = new ConfigService(tmpDir);
+    const configService = new ConfigService(new ProjectConfigAdapter(), tmpDir);
     await configService.saveConfig({ profileId: "Default", profileEmail: "developer@example.com" });
 
     let promptCalled = false;
@@ -50,7 +51,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     });
 
     expect(promptCalled).toBe(false);
-    expect(resolved?.profileEmail).toBe("developer@example.com");
+    expect(resolved?.profileId).toBe("Default");
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
@@ -73,7 +74,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     expect(resolved).toBeNull();
 
     // Verify nothing was written to config.json
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved).toBeNull();
 
@@ -98,13 +99,13 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     expect(promptMessage).not.toContain("default: 1");
     expect(resolved).toBeDefined();
     expect(resolved?.profileId).toBe("Profile 1");
-    expect(resolved?.profileEmail).toBe("personal@example.com");
+    expect(resolved?.profilePath).toBe("/home/user/.config/google-chrome");
 
     // Verify persisted
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved?.profileId).toBe("Profile 1");
-    expect(saved?.profileEmail).toBe("personal@example.com");
+    expect(saved?.profileEmail).toBeUndefined();
 
     fs.rmSync(freshTmp, { recursive: true, force: true });
   });
@@ -121,7 +122,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
 
     expect(resolved).toBeNull();
 
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved).toBeNull();
 
@@ -145,9 +146,9 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
 
     expect(promptCalled).toBe(false);
     expect(resolved?.profileId).toBe("Profile 1");
-    expect(resolved?.profileEmail).toBe("personal@example.com");
+    expect(resolved?.profilePath).toBe("/home/user/.config/google-chrome");
 
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved?.profileId).toBe("Profile 1");
 
@@ -166,7 +167,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
 
     expect(resolved).toBeNull();
 
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved).toBeNull();
 
@@ -186,7 +187,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     expect(resolved).toBeDefined();
     expect(resolved?.profilePath).toBe("/custom/browser/user-data");
 
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved?.profilePath).toBe("/custom/browser/user-data");
 
@@ -216,7 +217,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     expect(resolved?.browser).toBe("Zen Browser");
     expect(resolved?.transport).toBe("firefox-bidi");
 
-    const configService = new ConfigService(freshTmp);
+    const configService = new ConfigService(new ProjectConfigAdapter(), freshTmp);
     const saved = await configService.loadConfig();
     expect(saved?.transport).toBe("firefox-bidi");
 

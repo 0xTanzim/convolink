@@ -1,6 +1,9 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import { OsProcessProbe } from "./process-probe.js";
+import { readBrowserRecords, removeBrowserRecord } from "./browser-records.js";
+import type { ProcessProbe } from "../../core/ports/process.port.js";
 
 export class GhostCleanupService {
   private static readonly GHOST_PATTERNS = [
@@ -36,34 +39,29 @@ export class GhostCleanupService {
     return purged;
   }
 
-  public async killGhostProcesses(): Promise<number> {
-    if (process.platform === "win32") return 0;
-
+  /**
+   * Only processes ConvoLink recorded when it launched them are candidates.
+   * Scanning every browser process is how a cleanup command kills the user's
+   * real window, so the record — not a name match — is the permission slip.
+   */
+  public async killGhostProcesses(
+    probe: ProcessProbe = new OsProcessProbe(),
+    kill: (pid: number) => void = (pid) => process.kill(pid, "SIGKILL"),
+  ): Promise<number> {
     let killed = 0;
-    try {
-      // Find chrome processes with ghost profile arguments
-      const pgrep = Bun.spawn(["pgrep", "-a", "chrome"], { stdout: "pipe" });
-      const output = await new Response(pgrep.stdout).text();
-      const lines = output.split("\n").filter(Boolean);
-
-      for (const line of lines) {
-        const parts = line.trim().split(/\s+/);
-        const pid = parseInt(parts[0] || "", 10);
-        if (isNaN(pid) || pid <= 0) continue;
-
-        const cmdLine = line.slice(parts[0]?.length || 0).trim();
-        if (
-          cmdLine.includes("convolink/chrome-profile") ||
-          cmdLine.includes("chrome-debug") ||
-          cmdLine.includes("puppeteer_dev_chrome_profile")
-        ) {
-          try {
-            process.kill(pid, "SIGTERM");
-            killed++;
-          } catch {}
-        }
+    for (const record of readBrowserRecords()) {
+      if (!probe.isAlive(record.pid)) {
+        removeBrowserRecord(record.profilePath);
+        continue;
       }
-    } catch {}
+      const cmdline = probe.cmdline(record.pid) ?? "";
+      if (!cmdline.includes(record.profilePath) && !this.isGhostPath(record.profilePath)) continue;
+      try {
+        kill(record.pid);
+        killed += 1;
+      } catch {}
+      removeBrowserRecord(record.profilePath);
+    }
     return killed;
   }
 

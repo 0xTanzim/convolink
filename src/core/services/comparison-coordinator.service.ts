@@ -4,6 +4,7 @@ import type { TabManagerService } from "./tab-manager.service.js";
 import type { WorkspaceSinkPort } from "../ports/storage.port.js";
 import type { CompareOptions, ComparisonReport } from "./comparison.types.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
+import { SubmitSequencer } from "./submit-sequencer.js";
 import { ComparisonEngineService } from "./comparison-engine.service.js";
 import { ComparisonReportService } from "./comparison-report.service.js";
 import { TabNotFoundError } from "../errors/bridge-errors.js";
@@ -30,8 +31,11 @@ export class ComparisonCoordinator {
 
   public bindOrchestrator(orchestrator: SessionOrchestrator): void {
     this.orchestrator = orchestrator;
+    const sequencer = new SubmitSequencer();
     this.engine = new ComparisonEngineService((tab, prompt, timeoutMs) =>
-      orchestrator.ask({ prompt, targetId: tab.targetId, timeoutMs }),
+      sequencer.run((onSubmitted) =>
+        orchestrator.ask({ prompt, targetId: tab.targetId, timeoutMs, onSubmitted }),
+      ),
     );
   }
 

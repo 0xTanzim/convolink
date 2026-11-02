@@ -1,6 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { BrowserDiscoveryService } from "../../src/adapters/browsers/browser-discovery.js";
 import { ConfigService } from "../../src/core/services/config.service.js";
+import { ProjectConfigAdapter } from "../../src/adapters/config/project-config.adapter.js";
 import { GhostCleanupService } from "../../src/adapters/browsers/ghost-cleanup.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -20,7 +21,7 @@ describe("Resilience & Edge-Case Worst-Scenario Suite", () => {
       }),
     );
 
-    const configService = new ConfigService();
+    const configService = new ConfigService(new ProjectConfigAdapter());
     const config = await configService.loadConfig(tmpDir);
 
     expect(config).toBeDefined();

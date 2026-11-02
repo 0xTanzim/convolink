@@ -2,6 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { MCP_TOOLS } from "../../src/entrypoints/mcp.schema.js";
 import { ensureMcpBrowserReady } from "../../src/entrypoints/mcp.helpers.js";
 import { ConfigService } from "../../src/core/services/config.service.js";
+import { ProjectConfigAdapter } from "../../src/adapters/config/project-config.adapter.js";
 import type { SessionOrchestrator } from "../../src/core/services/orchestrator.js";
 import * as path from "node:path";
 import * as fs from "node:fs";
@@ -24,7 +25,7 @@ describe("MCP Tool Schemas & Human-in-the-Loop Elicitation", () => {
     expect(doctorTool?.inputSchema.properties.browser).toBeDefined();
   });
 
-  it("auto-binds silently when exactly one profile is discovered", async () => {
+  it("never auto-binds a profile without the user choosing, even when only one exists", async () => {
     const tmpDir = path.join(os.tmpdir(), `convo-mcp-single-${Date.now()}`);
     fs.mkdirSync(tmpDir, { recursive: true });
 
@@ -50,11 +51,11 @@ describe("MCP Tool Schemas & Human-in-the-Loop Elicitation", () => {
       ensureBrowserRunning: async () => true,
     });
 
-    expect(ready.ok).toBe(true);
+    expect(ready.ok).toBe(false);
+    expect(ready.requiresUserSelection).toBe(true);
 
-    const config = await new ConfigService(tmpDir).loadConfig();
-    expect(config?.profileId).toBe("Default");
-    expect(config?.profileEmail).toBe("solo@corp.com");
+    const config = await new ConfigService(new ProjectConfigAdapter(), tmpDir).loadConfig();
+    expect(config).toBeNull();
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });

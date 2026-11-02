@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
 import { createContainer } from "../../src/container.js";
+import { loadResolution, requireResolution } from "../../src/entrypoints/config-context.js";
 
 describe("createContainer Transport Auto-Resolution", () => {
   let sandboxDir: string;
@@ -21,12 +22,12 @@ describe("createContainer Transport Auto-Resolution", () => {
     } catch {}
   });
 
-  it("defaults to raw-cdp when no config exists", () => {
-    const container = createContainer({ workDir: sandboxDir });
+  it("defaults to raw-cdp when no config exists", async () => {
+    const container = createContainer();
     expect(container.browser.id).toBe("raw-cdp");
   });
 
-  it("auto-selects firefox-bidi when .convo/config.json has Zen Browser", () => {
+  it("auto-selects firefox-bidi when .convo/config.json has Zen Browser", async () => {
     fs.mkdirSync(convoDir, { recursive: true });
     fs.writeFileSync(
       configFile,
@@ -36,11 +37,12 @@ describe("createContainer Transport Auto-Resolution", () => {
       }),
     );
 
-    const container = createContainer({ workDir: sandboxDir });
+    const resolved = requireResolution(await loadResolution({}, sandboxDir));
+    const container = createContainer({ resolution: resolved });
     expect(container.browser.id).toBe("firefox-bidi");
   });
 
-  it("auto-selects firefox-bidi when .convo/config.json has Firefox", () => {
+  it("auto-selects firefox-bidi when .convo/config.json has Firefox", async () => {
     fs.mkdirSync(convoDir, { recursive: true });
     fs.writeFileSync(
       configFile,
@@ -50,7 +52,8 @@ describe("createContainer Transport Auto-Resolution", () => {
       }),
     );
 
-    const container = createContainer({ workDir: sandboxDir });
+    const resolved = requireResolution(await loadResolution({}, sandboxDir));
+    const container = createContainer({ resolution: resolved });
     expect(container.browser.id).toBe("firefox-bidi");
   });
 

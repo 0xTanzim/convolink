@@ -90,6 +90,8 @@ describe("Extension Bridge End-to-End Provider Orchestration", () => {
               },
             },
           }));
+        } else if (expr.includes("document.readyState")) {
+          ws.send(JSON.stringify({ id: msg.id, result: { value: true } }));
         } else {
           // Default settling or general evaluate
           ws.send(JSON.stringify({

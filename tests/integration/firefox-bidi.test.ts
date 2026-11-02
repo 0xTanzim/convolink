@@ -1,4 +1,4 @@
-import { describe, expect, it } from "bun:test";
+import { afterAll, describe, expect, it } from "bun:test";
 import { FirefoxBidiAdapter } from "../../src/adapters/browsers/firefox-bidi.adapter.js";
 
 async function isBidiAvailable(port = 9223): Promise<boolean> {
@@ -9,10 +9,19 @@ async function isBidiAvailable(port = 9223): Promise<boolean> {
         try { ws.close(); } catch {}
         resolve(false);
       }, 500);
+      // Firefox allows one session, so a probe must actually request one: an
+      // open socket is not the same as an available session.
       ws.onopen = () => {
+        ws.send(JSON.stringify({ id: 1, method: "session.new", params: { capabilities: {} } }));
+      };
+      ws.onmessage = (event) => {
+        const data = JSON.parse(String(event.data));
         clearTimeout(timer);
-        try { ws.close(); } catch {}
-        resolve(true);
+        try {
+          ws.send(JSON.stringify({ id: 2, method: "session.end", params: {} }));
+          ws.close();
+        } catch {}
+        resolve(data.type !== "error");
       };
       ws.onerror = () => {
         clearTimeout(timer);
@@ -28,6 +37,12 @@ const bidiAvailable = await isBidiAvailable(9223);
 
 describe.skipIf(!bidiAvailable)("FirefoxBidiAdapter Integration (Port 9223)", () => {
   const adapter = new FirefoxBidiAdapter(9223);
+
+  // Firefox allows one session. Leaving it open makes every later CLI call and
+  // this file's own reruns report "session busy".
+  afterAll(async () => {
+    await adapter.disconnect();
+  });
 
   it("queries transport health against running Firefox instance", async () => {
     const health = await adapter.health();
@@ -81,5 +96,5 @@ describe.skipIf(!bidiAvailable)("FirefoxBidiAdapter Integration (Port 9223)", ()
 
     await adapter.detach(handle);
     await adapter.closeTab(tab.targetId);
-  }, 10000);
+  }, 30000);
 });

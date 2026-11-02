@@ -20,10 +20,14 @@ import { SessionOrchestrator } from "./core/services/orchestrator.js";
 import { BridgeTokenService } from "./core/services/bridge-token.service.js";
 import { normalizeBrowserName } from "./core/env/browser-name.js";
 import type { BrowserPort, BrowserAdapterId } from "./core/ports/browser.port.js";
+import type { ResolvedSetup } from "./core/services/setup/precedence.js";
+import { createBrowserAdapter } from "./adapters/browsers/browser-factory.js";
 import type { PlatformPort } from "./core/ports/platform.port.js";
 import type { ThreadStore, WorkspaceSinkPort } from "./core/ports/storage.port.js";
 
 export interface AppContainer {
+  /** Releases remote browser sessions (Firefox allows only one). */
+  readonly shutdown: () => Promise<void>;
   readonly browser: BrowserPort;
   readonly drivers: readonly PlatformPort[];
   readonly lockService: LockService;
@@ -38,6 +42,8 @@ export interface AppContainer {
 }
 
 export interface ContainerOptions {
+  /** Resolved once by the caller; the container never reads configuration. */
+  readonly resolution?: ResolvedSetup;
   readonly cdpEndpoint?: string;
   readonly browser?: BrowserPort;
   readonly transport?: BrowserAdapterId;
@@ -47,52 +53,20 @@ export interface ContainerOptions {
 }
 
 export function createContainer(options?: ContainerOptions): AppContainer {
-  let transport = options?.transport ?? (process.env.CONVOLINK_TRANSPORT as BrowserAdapterId | undefined);
+  const resolved = options?.resolution;
+  let transport: BrowserAdapterId | undefined =
+    resolved?.transport ?? options?.transport ?? (process.env.CONVOLINK_TRANSPORT as BrowserAdapterId | undefined);
   if (!transport && options?.browserName) {
     const norm = normalizeBrowserName(options.browserName);
     if (norm.id !== "auto") transport = norm.transport;
   }
-  let detectedPort: number | undefined;
-  if (!transport) {
-    try {
-      const configPath = path.join(options?.workDir ?? process.cwd(), ".convo", "config.json");
-      if (fs.existsSync(configPath)) {
-        const raw = fs.readFileSync(configPath, "utf8");
-        const parsed = JSON.parse(raw);
-        if (parsed.transport) {
-          transport = parsed.transport;
-        } else if (parsed.browser) {
-          const norm = normalizeBrowserName(parsed.browser);
-          if (norm.id !== "auto") transport = norm.transport;
-        }
-        if (parsed.profilePath) {
-          const portFile = path.join(parsed.profilePath, "DevToolsActivePort");
-          if (fs.existsSync(portFile)) {
-            const lines = fs.readFileSync(portFile, "utf8").split("\n").map((l: string) => l.trim()).filter(Boolean);
-            const p = parseInt(lines[0] || "", 10);
-            if (!isNaN(p) && p > 0) detectedPort = p;
-          }
-        }
-      }
-    } catch {}
-  }
   if (!transport) transport = "raw-cdp";
 
   const defaultPort = transport === "firefox-bidi" ? 9223 : (transport === "extension-bridge" ? 9224 : 9222);
-  const activePort = detectedPort ?? defaultPort;
-  const endpoint = options?.cdpEndpoint ?? `http://127.0.0.1:${activePort}`;
-  const portMatch = endpoint.match(/:(\d+)/);
-  const port = options?.cdpEndpoint && portMatch && portMatch[1] ? parseInt(portMatch[1], 10) : activePort;
+  const port = resolved?.port ?? (options?.cdpEndpoint ? Number(options.cdpEndpoint.match(/:(\d+)/)?.[1] ?? defaultPort) : defaultPort);
+  const endpoint = resolved?.endpoint ?? options?.cdpEndpoint ?? `http://127.0.0.1:${port}`;
 
-  const browser = options?.browser ?? (
-    transport === "agent-browser"
-      ? new AgentBrowserAdapter(port)
-      : transport === "firefox-bidi"
-        ? new FirefoxBidiAdapter(port)
-        : transport === "extension-bridge"
-          ? new ExtensionBridgeAdapter(port, new BridgeTokenService())
-          : new RawCdpAdapter(endpoint)
-  );
+  const browser = options?.browser ?? createBrowserAdapter({ transport, endpoint, port });
 
   const drivers: readonly PlatformPort[] = [
     new DeepSeekDriver(),
@@ -124,7 +98,15 @@ export function createContainer(options?: ContainerOptions): AppContainer {
     comparisonCoordinator,
   });
 
+  const shutdown = async (): Promise<void> => {
+    // Firefox keeps a single BiDi session; releasing it explicitly is what makes
+    // the next command work without restarting the browser.
+    const port = browser as BrowserPort & { disconnect?: () => Promise<void> };
+    await port.disconnect?.().catch(() => {});
+  };
+
   return {
+    shutdown,
     browser,
     drivers,
     lockService,

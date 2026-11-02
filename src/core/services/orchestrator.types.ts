@@ -8,6 +8,7 @@ import type {
 } from "../ports/platform.port.js";
 import type { BrowserPort } from "../ports/browser.port.js";
 import type { PolicyGatePort, RiskLabel } from "../ports/policy.port.js";
+import type { ProgressPort } from "../ports/progress.port.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService, ExtractedArtifact } from "./artifact.service.js";
 import type { WorkspaceSinkPort, ThreadStore } from "../ports/storage.port.js";
@@ -54,6 +55,9 @@ export interface AskOptions {
   readonly outDir?: string;
   readonly newChat?: boolean;
   readonly openTab?: boolean;
+  readonly progress?: ProgressPort;
+  /** Fired once the prompt has left the composer, before generation is awaited. */
+  readonly onSubmitted?: () => void;
 }
 
 export interface AskResult {

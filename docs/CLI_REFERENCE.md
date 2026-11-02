@@ -56,3 +56,34 @@ Exhaustive reference for all 16 commands provided by `convo` / `convolink`.
 
 ### `convo export`
 - `--format`: Serialization format: `markdown` (default) or `json`.
+
+## Machine Output and Exit Codes
+
+Every operational command accepts `--json` and then writes exactly one document to
+stdout:
+
+```json
+{ "ok": true, "command": "ask", "data": { "platform": "deepseek", "text": "..." }, "error": null }
+```
+
+On failure the same envelope carries `error` with `code`, `message`, `remediation`,
+and `retryable`. Progress is emitted as newline-delimited JSON on stderr, so stdout
+stays parseable.
+
+| Exit | Meaning |
+|---|---|
+| 0 | Success (or a comparison with at least one successful model) |
+| 2 | Configuration missing, invalid, or no browser found |
+| 3 | Browser unreachable, profile locked, or default-profile blocked |
+| 4 | Session contention (another client holds the Firefox session) |
+| 5 | Platform not ready, or submission not observed |
+| 6 | Internal error |
+
+## `convo setup`
+
+```bash
+convo setup                 # interactive selection, verification, persistence
+convo setup --show          # resolved browser, profile, transport, and their sources
+convo setup --reset         # remove .convo/config.json
+convo setup --browser=firefox --profile=/path --no-verify-tab   # agent path, no prompting
+```

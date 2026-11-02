@@ -6,6 +6,7 @@ import { getDownloadFileExpr, getChangeExpr } from "./raw-cdp.scripts.js";
 import { queryCdpTargets, createCdpTab, closeCdpTab, findBrowserWsUrl } from "./raw-cdp.targets.js";
 import { evaluateCdpExpression } from "./raw-cdp.eval.js";
 import { createCdpSocket } from "./raw-cdp.ws.js";
+import { DEFAULT_PROFILE_BLOCK_MESSAGE, isDefaultProfileEndpoint } from "./default-profile-guard.js";
 import { BrowserWsClient } from "./raw-cdp.browser-ws.js";
 import { getHandTransitionPause } from "../common/human-motor.js";
 import { getStealthPreloadScript } from "../common/stealth-scripts.js";
@@ -17,6 +18,8 @@ export interface RawCdpOptions {
   getWslGateway?: () => string | null;
   browserWsUrl?: string;
   userDataDir?: string;
+  /** Overridable so tests do not depend on the host's running browsers. */
+  isDefaultProfile?: (port: number) => boolean;
 }
 
 export class RawCdpAdapter implements BrowserPort {
@@ -30,6 +33,7 @@ export class RawCdpAdapter implements BrowserPort {
   private readonly getWslGateway: () => string | null;
   private readonly browserWsUrl?: string;
   private readonly userDataDir?: string;
+  private readonly isDefaultProfile: (port: number) => boolean;
   private browserWsClient: BrowserWsClient | null = null;
   private readonly activeSockets = new Map<string, WebSocket>();
   private readonly pendingRequests = new Map<string, Map<number, PendingMessage>>();
@@ -40,6 +44,7 @@ export class RawCdpAdapter implements BrowserPort {
     this.getWslGateway = options.getWslGateway ?? (() => PlatformEnv.getWslGatewayIp());
     this.browserWsUrl = options.browserWsUrl;
     this.userDataDir = options.userDataDir;
+    this.isDefaultProfile = options.isDefaultProfile ?? ((port) => isDefaultProfileEndpoint(port));
     if (typeof portOrEndpoint === "number") this.port = portOrEndpoint;
     else {
       const match = portOrEndpoint.match(/:(\d+)/);
@@ -51,6 +56,16 @@ export class RawCdpAdapter implements BrowserPort {
 
   public async health(): Promise<TransportHealth> {
     const start = Date.now();
+    if (this.isDefaultProfile(this.port)) {
+      return {
+        ok: false,
+        adapterId: this.id,
+        endpoint: `http://${this.host}:${this.port}`,
+        openTabsCount: 0,
+        latencyMs: 0,
+        error: `Blocked: ${DEFAULT_PROFILE_BLOCK_MESSAGE}. Use the Companion Extension, or run "convo connect" for a dedicated debug profile.`,
+      };
+    }
     try {
       const tabs = await this.listTabs();
       return { ok: true, adapterId: this.id, endpoint: `http://${this.host}:${this.port}`, openTabsCount: tabs.length, latencyMs: Date.now() - start };
@@ -59,7 +74,18 @@ export class RawCdpAdapter implements BrowserPort {
     }
   }
 
+  /**
+   * Attaching to the default-profile browser only raises Chrome's approval modal
+   * and is refused afterwards, so it is treated as unreachable, not retried.
+   */
+  private assertNotDefaultProfile(): void {
+    if (this.isDefaultProfile(this.port)) {
+      throw new BrowserConnectionError(`${this.host}:${this.port}`, DEFAULT_PROFILE_BLOCK_MESSAGE);
+    }
+  }
+
   private async ensureBrowserWs(): Promise<BrowserWsClient | null> {
+    this.assertNotDefaultProfile();
     if (this.browserWsClient?.isOpen()) return this.browserWsClient;
     const wsUrl = this.browserWsUrl ?? findBrowserWsUrl(this.host, this.port, this.userDataDir);
     if (!wsUrl) return null;

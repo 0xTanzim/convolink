@@ -80,6 +80,11 @@ export class SessionOrchestrator {
     return this.tabManager.goBack(TabResolver.resolveTargetTab({ targetId, prompt: "" }, await this.listTabs()).targetId);
   }
 
+  /** Releases the remote session, which Gecko allows only one of. */
+  public async shutdown(): Promise<void> {
+    await this.browser.disconnect?.().catch(() => {});
+  }
+
   public async compare(options: CompareOptions): Promise<ComparisonReport> { return this.comparisonCoordinator.run(options); }
   public async searchLedger(query: string, limit?: number): Promise<SearchResult[]> {
     return this.threadStore?.searchTurns ? this.threadStore.searchTurns(query, limit) : [];
@@ -107,6 +112,12 @@ export class SessionOrchestrator {
     const driver = TabResolver.findDriver(targetTab.url, this.drivers);
     if (!driver) throw new PlatformDriverNotFoundError(targetTab.url);
 
+    const platform = targetTab.platformId ?? undefined;
+    const startedAt = Date.now();
+    const report = (stage: "prepare" | "filling" | "submitted" | "generating" | "done") =>
+      options.progress?.report({ stage, elapsedMs: Date.now() - startedAt, ...(platform ? { platform } : {}) });
+    report("prepare");
+
     if (options.newChat) {
       await this.tabManager.startNewChat(targetTab, driver);
     }
@@ -123,8 +134,13 @@ export class SessionOrchestrator {
         }
 
         const timeoutMs = options.timeoutMs ?? 120_000;
+        report("filling");
         const fingerprint = await driver.submitPrompt(sessionHandle, this.browser, sanitized.cleanText, options.files);
+        options.onSubmitted?.();
+        report("submitted");
+        report("generating");
         const completion = await driver.awaitCompletion(sessionHandle, this.browser, fingerprint, timeoutMs);
+        report("done");
         const currentTurn = options.autoContinue !== false
           ? await this.autoContinueTurn(sessionHandle, driver, completion.turn, timeoutMs, lockHandle)
           : completion.turn;

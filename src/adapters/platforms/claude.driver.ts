@@ -12,6 +12,7 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
+import { buildSettleExpr } from "./page-events.js";
 import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getClaudeResolveSelectorsExpr, getClaudeReadThreadExpr, getClaudeFingerprintExpr, getClaudeAwaitCompletionExpr } from "./claude.scripts.js";
 
@@ -98,7 +99,7 @@ export class ClaudeDriver implements PlatformPort {
         isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, getClaudeAwaitCompletionExpr(before.turnCount));
+      }>(handle, buildSettleExpr(getClaudeAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
 
       const text = status.assistantText || (status as any).text || "";
       if (status.isGenerating || status.isThinking || text.length !== lastLength) {

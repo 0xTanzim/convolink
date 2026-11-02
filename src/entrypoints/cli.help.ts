@@ -13,6 +13,7 @@ Usage:
   convo resume <threadId>        Rehydrate and re-open saved thread from persistent SQLite ledger
   convo export <threadId>        Export structured conversation ledger (Markdown or JSON)
   convo search <query>           Full-text search across historical conversation turns and code
+  convo setup [--show|--reset]   Choose and verify the browser + profile; saves .convo/config.json
   convo profile [list|select]    View and persist active browser profile in .convo/config.json
   convo ext pair [--rotate]      Display or rotate extension pairing token for browser bridge
   convo daemon [status|start|stop] Manage background singleton bridge daemon

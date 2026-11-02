@@ -271,6 +271,35 @@ convo doctor
 
 ---
 
+
+## 🧭 First Run and Browser Support
+
+Run `convo setup` once per project. It lists the browsers and profiles it can see,
+lets you pick with arrow keys, mouse, or by typing, verifies the choice against the
+real session, and writes `.convo/config.json`. Later commands reuse it; no flags
+and no guessing.
+
+```bash
+convo setup                # interactive: browser -> profile -> verify -> save
+convo setup --show         # what is configured, and where each value came from
+convo setup --browser=zen --profile=/home/you/.zen/abc.default  # non-interactive (agents)
+convo setup --reset        # forget the selection
+```
+
+| Browser | Debug on the real default profile? | What ConvoLink does |
+|---|---|---|
+| Chrome | No — blocked even after the approval dialog | Requires a dedicated `--user-data-dir`; refuses the default profile before opening a socket |
+| Brave | No | Same as Chrome |
+| Edge | No | Same as Chrome |
+| Chromium | No | Same as Chrome |
+| Firefox | Yes, but one BiDi session and one process per profile | Reuses the running session, or starts the same profile with `convo connect --firefox`; never spawns a second instance |
+| Zen | Yes, same rules as Firefox | Same as Firefox |
+
+Firefox and Zen allow the real profile, so your logins come along. Chromium-family
+browsers need a separate data directory, because their default profile hard-blocks
+remote debugging. No path enables the extension automatically, and no path kills a
+browser you did not ask it to restart.
+
 ## 🛠️ The 4 Core Workflows
 
 ### 1. Ingest Architectural Specs & Invariants

@@ -1,76 +1,69 @@
 import * as path from "node:path";
-import * as fs from "node:fs";
-import * as os from "node:os";
+import { HostEnv } from "../env/host-env.js";
+import type {
+  ConfigStorePort,
+  ConvoProjectConfig,
+} from "../ports/config.port.js";
 
-export interface ConvoProjectConfig {
-  readonly profileId?: string;
-  readonly profileEmail?: string;
-  readonly profilePath?: string;
-  readonly browser?: string;
-  readonly preferredPlatform?: "chatgpt" | "deepseek" | "gemini" | "claude";
-  readonly transport?: "raw-cdp" | "agent-browser" | "firefox-bidi" | "extension-bridge";
-  readonly cdpPort?: number;
+export type { ConvoProjectConfig } from "../ports/config.port.js";
+
+const CONFIG_DIR = ".convo";
+const CONFIG_FILE = "config.json";
+
+/** Pure merge: later values win, undefined never erases an existing value. */
+export function mergeConfig(
+  base: ConvoProjectConfig | null | undefined,
+  partial: ConvoProjectConfig,
+): ConvoProjectConfig {
+  const merged: Record<string, unknown> = { ...(base ?? {}) };
+  for (const [key, value] of Object.entries(partial)) {
+    if (value !== undefined) merged[key] = value;
+  }
+  return merged as ConvoProjectConfig;
 }
 
+/**
+ * Validation and path logic only. File access belongs to ConfigStorePort so the
+ * domain kernel stays free of I/O and stays trivially testable.
+ */
 export class ConfigService {
-  private readonly defaultProjectRoot: string;
-
-  constructor(projectRoot?: string) {
-    this.defaultProjectRoot = projectRoot ?? process.env.CONVO_PROJECT_ROOT ?? process.cwd();
-  }
+  public constructor(
+    private readonly store: ConfigStorePort,
+    private readonly projectRoot?: string,
+  ) {}
 
   public getConfigPath(projectRoot?: string): string {
-    const root = projectRoot ?? this.defaultProjectRoot;
-    return path.join(root, ".convo", "config.json");
+    const root = projectRoot ?? this.projectRoot ?? process.env.CONVO_PROJECT_ROOT ?? process.cwd();
+    return path.join(root, CONFIG_DIR, CONFIG_FILE);
   }
 
   public getGlobalConfigPath(): string {
-    return path.join(os.homedir(), ".config", "convolink", "config.json");
+    return path.join(HostEnv.getConfigDir(), CONFIG_FILE);
   }
 
   public async loadConfig(projectRoot?: string): Promise<ConvoProjectConfig | null> {
-    const localPath = this.getConfigPath(projectRoot);
-    if (fs.existsSync(localPath)) {
-      try {
-        const raw = await fs.promises.readFile(localPath, "utf8");
-        return JSON.parse(raw) as ConvoProjectConfig;
-      } catch {}
-    }
-
-    const globalPath = this.getGlobalConfigPath();
-    if (fs.existsSync(globalPath)) {
-      try {
-        const raw = await fs.promises.readFile(globalPath, "utf8");
-        return JSON.parse(raw) as ConvoProjectConfig;
-      } catch {}
-    }
-
-    return null;
+    const result = await this.store.load(projectRoot ?? this.projectRoot);
+    if (result.status === "invalid") throw new Error(result.problem);
+    return result.config;
   }
 
   public async saveConfig(config: ConvoProjectConfig, projectRoot?: string): Promise<string> {
-    const configPath = this.getConfigPath(projectRoot);
-    const convoDir = path.dirname(configPath);
-
-    if (!fs.existsSync(convoDir)) {
-      await fs.promises.mkdir(convoDir, { recursive: true });
-    }
-
-    await fs.promises.writeFile(configPath, JSON.stringify(config, null, 2), "utf8");
-    return configPath;
+    return this.store.save(config, projectRoot ?? this.projectRoot);
   }
 
-  public validateProfilePath(profilePath?: string): string | null {
+  public async updateConfig(
+    partial: ConvoProjectConfig,
+    projectRoot?: string,
+  ): Promise<ConvoProjectConfig> {
+    return this.store.update(partial, projectRoot ?? this.projectRoot);
+  }
+
+  public validateProfilePath(
+    profilePath?: string,
+    exists: (candidate: string) => boolean = () => false,
+  ): string | null {
     if (!profilePath || typeof profilePath !== "string") return null;
     const normalized = path.normalize(profilePath);
-    if (fs.existsSync(normalized)) return normalized;
-    return null;
-  }
-
-  public async updateConfig(partial: Partial<ConvoProjectConfig>, projectRoot?: string): Promise<ConvoProjectConfig> {
-    const existing = (await this.loadConfig(projectRoot)) ?? {};
-    const merged: ConvoProjectConfig = { ...existing, ...partial };
-    await this.saveConfig(merged, projectRoot);
-    return merged;
+    return exists(normalized) ? normalized : null;
   }
 }

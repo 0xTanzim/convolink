@@ -20,7 +20,7 @@ describe("CLI Compare Command", () => {
     }
   });
 
-  it("fails with code 1 if prompt is omitted", async () => {
+  it("fails with the internal exit code if prompt is omitted", async () => {
     let errOutput = "";
     const origErr = console.error;
     console.error = (...args: unknown[]) => {
@@ -29,7 +29,7 @@ describe("CLI Compare Command", () => {
 
     try {
       const code = await runCli(["compare"]);
-      expect(code).toBe(1);
+      expect(code).toBe(6);
       expect(errOutput).toContain("Prompt is required for comparison");
     } finally {
       console.error = origErr;

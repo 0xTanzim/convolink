@@ -3,6 +3,7 @@
  */
 
 import { STEALTH_PRELOAD_SCRIPT } from "../common/stealth-scripts.js";
+import { ConvoError } from "../../core/errors/convo-error.js";
 
 export async function createBidiSocket(
   port: number,
@@ -35,9 +36,12 @@ export async function createBidiSocket(
   } catch (err: unknown) {
     const msg = (err as Error)?.message || "";
     if (msg.includes("Maximum number of active sessions")) {
-      console.error(`\n⚠️ Firefox WebDriver BiDi already has an active session from a previous process.`);
-      console.error(`💡 Firefox requires a quick restart to clear the stale session:`);
-      console.error(`   Run 'convo clean' or restart Firefox with: firefox -no-remote --remote-debugging-port=${port}\n`);
+      throw new ConvoError(
+        "session-busy",
+        "Firefox already has an active BiDi session held by another client.",
+        "Close the other ConvoLink process, or run `convo connect --firefox --restart` to reopen the same profile.",
+        { cause: err },
+      );
     }
     throw err;
   }

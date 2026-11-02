@@ -5,23 +5,66 @@ import type { StateJournalService } from "./journal.service.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
 import { TabResolver } from "./tab-resolver.js";
 import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
+import { buildMountedExpr } from "../../adapters/platforms/page-events.js";
+
+export interface TabManagerOptions {
+  /** How long a newly created tab may take to become usable. */
+  readonly readinessTimeoutMs?: number;
+}
+
+// Page readiness is a real-world wait; unit tests construct this service
+// directly and must not block for it.
+const DEFAULT_READINESS_TIMEOUT_MS = process.env.NODE_ENV === "test" ? 0 : 20_000;
+const LAYOUT_POLL_MS = 250;
 
 export class TabManagerService {
   private readonly browser: BrowserPort;
   private readonly drivers: readonly PlatformPort[];
   private readonly lockService: LockService;
   private readonly journalService?: StateJournalService;
+  private readonly readinessTimeoutMs: number;
 
   public constructor(
     browser: BrowserPort,
     drivers: readonly PlatformPort[],
     lockService: LockService,
     journalService?: StateJournalService,
+    options: TabManagerOptions = {},
   ) {
     this.browser = browser;
     this.drivers = drivers;
     this.lockService = lockService;
     this.journalService = journalService;
+    this.readinessTimeoutMs = options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS;
+  }
+
+  /**
+   * A tab is reported as created long before its framework has hydrated. Waiting
+   * here means `convo tab new` returns a tab that can actually accept a prompt.
+   */
+  private async waitUntilUsable(targetId: string, driver: PlatformPort): Promise<void> {
+    if (this.readinessTimeoutMs <= 0) return;
+    const handle: SessionHandle = { sessionId: `ready-${targetId}`, targetId, adapterId: this.browser.id };
+    const deadline = Date.now() + this.readinessTimeoutMs;
+
+    let composerSelector: string | null = null;
+
+    while (Date.now() < deadline) {
+      const resolved = await driver.resolveSelectors(handle, this.browser).catch(() => null);
+      if (resolved?.composerSelector) {
+        composerSelector = resolved.composerSelector;
+        break;
+      }
+      await new Promise((resolve) => setTimeout(resolve, LAYOUT_POLL_MS));
+    }
+
+    if (!composerSelector) return;
+
+    await this.browser
+      .evaluate(handle, buildMountedExpr(composerSelector, {
+        maxWaitMs: Math.max(1000, deadline - Date.now()),
+      }))
+      .catch(() => false);
   }
 
   public async createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
@@ -33,6 +76,10 @@ export class TabManagerService {
     const driver = this.drivers.find((d) => d.id === platformOrUrl || d.matchesUrl(platformOrUrl));
     const url = isUrl ? platformOrUrl : (driver ? driver.getBaseUrl() : platformOrUrl);
     const tabDesc = await this.browser.createTab(url);
+
+    if (driver) {
+      await this.waitUntilUsable(tabDesc.targetId, driver);
+    }
 
     const platform = driver?.id ?? null;
     const threadId = driver ? driver.extractThreadId(tabDesc.url) : null;

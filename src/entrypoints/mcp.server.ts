@@ -40,12 +40,15 @@ export interface McpServerOptions {
   readonly orchestrator?: OrchestratorProvider;
   readonly onActivity?: () => void;
   readonly workDir?: string;
+  /** Writes a JSON-RPC notification (progress) to the client. */
+  readonly notify?: (message: unknown) => void;
 }
 
 export class McpServer {
   private readonly provider?: OrchestratorProvider;
   private readonly onActivity?: () => void;
   private readonly workDir?: string;
+  private readonly notify?: (message: unknown) => void;
   private resolvedOrchestrator: SessionOrchestrator | null = null;
 
   public constructor(providerOrOptions?: OrchestratorProvider | McpServerOptions) {
@@ -55,6 +58,7 @@ export class McpServer {
       this.provider = providerOrOptions.orchestrator;
       this.onActivity = providerOrOptions.onActivity;
       this.workDir = providerOrOptions.workDir;
+      this.notify = providerOrOptions.notify;
     }
   }
 
@@ -92,7 +96,13 @@ export class McpServer {
           ? params.arguments : {};
         const orchestrator = await this.getOrchestrator();
         const { executeMcpTool } = await import("./mcp.tools.js");
-        const toolResult = await executeMcpTool(orchestrator, name, toolArgs, { workDir: this.workDir });
+        const progressToken = progressTokenOf(params);
+        const toolResult = await executeMcpTool(orchestrator, name, toolArgs, {
+          workDir: this.workDir,
+          ...(progressToken !== undefined && this.notify
+            ? { onProgress: this.progressPort(progressToken) }
+            : {}),
+        });
         return {
           jsonrpc: "2.0",
           id: req.id,
@@ -117,4 +127,35 @@ export class McpServer {
         };
     }
   }
+
+  public async shutdown(): Promise<void> {
+    await this.resolvedOrchestrator?.shutdown().catch(() => {});
+  }
+
+  private progressPort(token: string | number) {
+    let sequence = 0;
+    return {
+      report: (event: { stage: string; elapsedMs: number; platform?: string }) => {
+        sequence += 1;
+        this.notify?.({
+          jsonrpc: "2.0",
+          method: "notifications/progress",
+          params: {
+            progressToken: token,
+            progress: sequence,
+            message: `${event.platform ?? "browser"}:${event.stage}`,
+          },
+        });
+      },
+    };
+  }
+}
+
+function progressTokenOf(params: McpToolCallParams | undefined): string | number | undefined {
+  const meta = params?._meta;
+  if (meta && typeof meta === "object" && "progressToken" in meta) {
+    const token = (meta as { progressToken?: unknown }).progressToken;
+    if (typeof token === "string" || typeof token === "number") return token;
+  }
+  return undefined;
 }

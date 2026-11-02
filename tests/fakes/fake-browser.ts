@@ -37,6 +37,10 @@ export class FakeBrowserPort implements BrowserPort {
         return value as T;
       }
     }
+    // Defaults for the readiness/composer probes: a fake page is loaded and its
+    // composer clears once send is activated. Tests can override either one.
+    if (expression.includes("document.readyState")) return true as T;
+    if (expression.includes("c.value || c.innerText")) return false as T;
     return {} as T;
   }
 

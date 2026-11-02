@@ -29,16 +29,18 @@ export async function runMcpServer(
 ): Promise<void> {
   const timeoutMs = parseIdleTimeout(options.args ?? process.argv.slice(2));
   let cleanedUp = false;
-  const cleanup = () => {
+  let mcpServer: McpServer | undefined = server;
+  const cleanup = async () => {
     if (cleanedUp) return;
     cleanedUp = true;
+    await mcpServer?.shutdown();
     LockService.cleanupProcessLocks();
   };
 
   const idleController = new IdleTimeoutController({
     timeoutMs,
     onTimeout: () => {
-      cleanup();
+      void cleanup();
       if (options.exitOnTimeout !== false && input === process.stdin) {
         process.exit(0);
       }
@@ -47,12 +49,20 @@ export async function runMcpServer(
 
   const unregisterTeardown = registerTeardownHandlers(() => {
     idleController.stop();
-    cleanup();
+    void cleanup();
   });
 
-  const mcpServer = server ?? new McpServer({
-    orchestrator: async () => (await import("../container.js")).createContainer().orchestrator,
+  mcpServer = server ?? new McpServer({
+    orchestrator: async () => {
+      const [{ loadResolution }, { createContainer }] = await Promise.all([
+        import("./config-context.js"),
+        import("../container.js"),
+      ]);
+      const resolution = await loadResolution();
+      return createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
+    },
     onActivity: () => idleController.recordActivity(),
+    notify: (message) => output.write(JSON.stringify(message) + "\n"),
   });
 
   const rl = readline.createInterface({ input, terminal: false });
@@ -78,7 +88,7 @@ export async function runMcpServer(
     }
   } finally {
     idleController.stop();
-    cleanup();
+    await cleanup();
     unregisterTeardown();
   }
 }

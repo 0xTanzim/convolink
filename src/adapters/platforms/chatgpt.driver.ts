@@ -5,6 +5,7 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
+import { buildSettleExpr } from "./page-events.js";
 import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
 import { CHATGPT_RESOLVE_SELECTORS_EXPR, getChatGPTReadThreadExpr, getChatGPTSubmitPromptExpr, getChatGPTFingerprintExpr, getChatGPTAwaitCompletionExpr } from "./chatgpt.scripts.js";
@@ -107,7 +108,7 @@ export class ChatGPTDriver implements PlatformPort {
         isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, getChatGPTAwaitCompletionExpr(before.turnCount));
+      }>(handle, buildSettleExpr(getChatGPTAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
 
       const text = status.assistantText || (status as any).text || "";
       if (status.isGenerating || status.isThinking || text.length !== lastLength) {

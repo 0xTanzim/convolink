@@ -1,5 +1,7 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import { inspectFirefoxProfile } from "./firefox-profile.js";
+import { writeBrowserRecord } from "./browser-records.js";
 import * as net from "node:net";
 import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
@@ -8,7 +10,7 @@ import { PlatformEnv } from "../../core/env/platform-env.js";
 export interface LauncherDependencies {
   findBinary?: (browserName?: string) => string | null;
   checkPort?: (port: number, host?: string) => Promise<boolean>;
-  spawnProcess?: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => void;
+  spawnProcess?: (bin: string, args: string[], opts: { detached: boolean; stdio: "ignore" }) => { pid?: number } | void;
   isWsl?: () => boolean;
   getWslGateway?: () => string | null;
   isHeadless?: () => boolean;
@@ -141,6 +143,13 @@ export class BrowserLauncherService {
 
     const port = options.port ?? (isGecko ? 9223 : 9222);
     if (await this.checkPort(port)) return true;
+
+    if (isGecko && options.profilePath) {
+      const lock = inspectFirefoxProfile(options.profilePath);
+      // A profile is owned by one process. Spawning a second instance exits
+      // immediately and leaves no debug port, which is the ghost we must avoid.
+      if (lock.locked && !lock.debugging) return false;
+    }
 
     if (isGecko && options.profilePath && !this.isProfileLocked(options.profilePath).locked) {
       try { fs.unlinkSync(path.join(options.profilePath, "lock")); } catch {}

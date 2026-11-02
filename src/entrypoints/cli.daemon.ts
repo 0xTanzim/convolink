@@ -5,6 +5,8 @@ import { HostEnv } from "../core/env/host-env.js";
 import { DaemonClient } from "../adapters/daemon/daemon-client.js";
 import { BridgeDaemonService } from "../adapters/daemon/bridge-daemon.service.js";
 import { createContainer } from "../container.js";
+import { loadResolution } from "./config-context.js";
+import { clearDaemonStatus, readDaemonStatus, writeDaemonStatus } from "./daemon-status.js";
 
 export interface DaemonCliOptions {
   readonly socketPath?: string;
@@ -32,8 +34,13 @@ export async function handleDaemon(args: string[], options: DaemonCliOptions = {
           pidInfo = `PID ${data.pid} (started: ${data.startedAt})`;
         } catch {}
       }
+      const status = readDaemonStatus(socketPath);
       console.log(`🟢 ConvoLink Daemon: ONLINE [${pidInfo}]`);
       console.log(`   Socket: ${socketPath}`);
+      if (status) {
+        console.log(`   Transport: ${status.transport} (${status.endpoint})`);
+        console.log(`   Browser: ${status.browserId}`);
+      }
       return 0;
     }
     case "start": {
@@ -44,12 +51,19 @@ export async function handleDaemon(args: string[], options: DaemonCliOptions = {
       }
       const isForeground = args.includes("--foreground") || args.includes("-f");
       if (isForeground) {
-        const container = createContainer();
+        const resolution = await loadResolution();
+        const container = createContainer(resolution.ok ? { resolution: resolution.value } : {});
+        const transport = resolution.ok ? resolution.value.transport : container.browser.id;
+        const endpoint = resolution.ok ? resolution.value.endpoint : "default";
+        writeDaemonStatus({ transport, endpoint, browserId: resolution.ok ? resolution.value.browserId : "unconfigured", startedAt: new Date().toISOString() }, socketPath);
         const daemon = new BridgeDaemonService({ orchestrator: container.orchestrator, socketPath, pidPath });
         await daemon.start();
         console.log(`🚀 ConvoLink Daemon started in foreground on ${socketPath}`);
+        console.log(`   Transport: ${transport} (${endpoint})`);
         const cleanup = async () => {
           await daemon.stop();
+          await container.shutdown();
+          clearDaemonStatus(socketPath);
           process.exit(0);
         };
         process.on("SIGINT", cleanup);

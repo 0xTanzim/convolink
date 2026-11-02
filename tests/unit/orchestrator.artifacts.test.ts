@@ -77,6 +77,7 @@ describe("SessionOrchestrator Artifacts & Continuation", () => {
     let continuationChecked = false;
     browser.evaluate = async (handle, expr) => {
       browser.evaluatedExpressions.push(expr);
+      if (expr.includes("document.readyState")) return true as any;
       if (expr.includes("/* findContinuationTrigger */")) {
         if (!continuationChecked) {
           continuationChecked = true;

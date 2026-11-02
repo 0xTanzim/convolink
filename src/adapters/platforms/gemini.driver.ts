@@ -12,7 +12,8 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
-import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { buildSettleExpr } from "./page-events.js";
+import { submitWithRecovery, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { GEMINI_RESOLVE_SELECTORS_EXPR, getGeminiReadThreadExpr, getGeminiFingerprintExpr, getGeminiAwaitCompletionExpr } from "./gemini.scripts.js";
 
 export class GeminiDriver implements PlatformPort {
@@ -67,7 +68,7 @@ export class GeminiDriver implements PlatformPort {
     await browser.fillText(handle, composerSelector, prompt);
 
     const sendBtnSelector = 'button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"]';
-    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
+    await submitWithRecovery(browser, handle, composerSelector, sendBtnSelector, prompt);
 
     return fingerprint;
   }
@@ -95,7 +96,7 @@ export class GeminiDriver implements PlatformPort {
         isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, getGeminiAwaitCompletionExpr(before.turnCount));
+      }>(handle, buildSettleExpr(getGeminiAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
 
       const text = status.assistantText || (status as any).text || "";
       if (status.isGenerating || status.isThinking || text.length !== lastLength) {
