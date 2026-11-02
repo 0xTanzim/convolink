@@ -51,6 +51,7 @@ export class TabManagerService {
       url: tabDesc.url,
       platformId: platform,
       threadId,
+      isNewlyCreated: true,
     };
   }
 

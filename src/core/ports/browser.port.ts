@@ -1,6 +1,6 @@
 export type BrowserAdapterId = "raw-cdp" | "agent-browser" | "firefox-bidi" | "extension-bridge";
 export type BrowserProtocol = "cdp" | "webdriver-bidi";
-export type BrowserFamily = "chromium" | "firefox" | "webkit" | "unknown";
+export type BrowserFamily = "chromium" | "firefox" | "webkit" | "extension" | "unknown";
 
 export interface BrowserCapabilities {
   readonly protocol: BrowserProtocol;
@@ -73,4 +73,7 @@ export interface BrowserPort {
 
   /** Navigates an attached tab session back in browser history */
   goBack?(handle: SessionHandle): Promise<void>;
+
+  /** Cleanly disconnects the adapter and releases remote browser sessions without closing the browser */
+  disconnect?(): Promise<void>;
 }

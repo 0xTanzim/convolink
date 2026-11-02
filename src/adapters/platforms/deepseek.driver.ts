@@ -10,39 +10,33 @@ import type {
   ToggleOptions,
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
-import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
-import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekSubmitPromptExpr } from "./deepseek.scripts.js";
+import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
+import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekSubmitPromptExpr, getDeepSeekFingerprintExpr, getDeepSeekAwaitCompletionExpr } from "./deepseek.scripts.js";
 
 export class DeepSeekDriver implements PlatformPort {
   public readonly id: PlatformId = "deepseek";
 
   public getBaseUrl(): string { return "https://chat.deepseek.com/"; }
   public matchesUrl(url: string): boolean { return url.includes("chat.deepseek.com"); }
-  public extractThreadId(url: string): string {
-    const match = url.match(/\/s\/([a-zA-Z0-9-]+)/);
-    return match && match[1] ? match[1] : "default";
-  }
-
+  public extractThreadId(url: string): string { return url.match(/\/s\/([a-zA-Z0-9-]+)/)?.[1] ?? "default"; }
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
     return browser.evaluate<SelectorResolution>(handle, DEEPSEEK_RESOLVE_SELECTORS_EXPR);
   }
 
   public async readThread(
-    handle: SessionHandle,
-    browser: BrowserPort,
-    options?: { lastNTurns?: number },
+    handle: SessionHandle, browser: BrowserPort, options?: { lastNTurns?: number },
   ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
-    const lastN = options?.lastNTurns ?? 50;
-    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getDeepSeekReadThreadExpr(lastN));
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getDeepSeekReadThreadExpr(options?.lastNTurns ?? 50));
   }
 
   public async startNewChat(handle: SessionHandle, browser: BrowserPort): Promise<void> {
     const expr = `(() => {
       /* startNewChat */
       const btn = document.querySelector('div.ds-button, button[class*="new-chat"], a[href="/"]');
-      if (btn) btn.click();
-      else window.location.href = "https://chat.deepseek.com/";
+      if (btn) btn.click(); else window.location.href = "https://chat.deepseek.com/";
     })()`;
     await browser.evaluate(handle, expr);
   }
@@ -66,7 +60,32 @@ export class DeepSeekDriver implements PlatformPort {
     prompt: string,
     _files?: string[],
   ): Promise<TurnFingerprint> {
-    return browser.evaluate<TurnFingerprint>(handle, getDeepSeekSubmitPromptExpr(prompt));
+    const isLoginWall = await browser.evaluate<boolean>(handle, `(() => {
+      /* authCheck */
+      const login = document.querySelector('div[class*="login"], button[class*="login"], a[href*="login"]');
+      const composer = document.querySelector('textarea#chat-input, textarea[placeholder*="DeepSeek"], div[contenteditable="true"]');
+      return Boolean(login && !composer);
+    })()`).catch(() => false);
+    if (isLoginWall === true) throw new AuthChallengeError("login_required", this.getBaseUrl());
+
+    const cf = await browser
+      .evaluate<TurnstileDetectionResult>(handle, getTurnstileDetectionExpr())
+      .catch(() => ({ detected: false, isInteractive: false }));
+    if (cf.detected) {
+      throw new AuthChallengeError(cf.isInteractive ? "turnstile" : "cloudflare", this.getBaseUrl());
+    }
+
+    const fingerprint = await browser
+      .evaluate<TurnFingerprint>(handle, getDeepSeekFingerprintExpr(prompt.length))
+      .catch(() => ({ turnCount: 0, lastTurnHash: "", submittedPromptHash: String(prompt.length) }));
+
+    const composerSelector = 'textarea#chat-input, textarea[placeholder*="DeepSeek"], div[contenteditable="true"]';
+    await browser.fillText(handle, composerSelector, prompt);
+
+    const sendBtnSelector = 'div[role="button"].ds-button--circle, div.ds-button--circle, button[aria-label*="send"], div.send-button';
+    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
+
+    return fingerprint;
   }
 
   public async awaitCompletion(
@@ -77,10 +96,14 @@ export class DeepSeekDriver implements PlatformPort {
     quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
+    let lastActivity = Date.now();
+    let lastLength = 0;
+    const idleTimeoutMs = Math.max(timeoutMs, 60_000);
+    const maxHardCapMs = Math.max(timeoutMs * 2, 300_000);
     const detector = new StreamSettlingDetector(quiescenceMs);
     const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
-    while (Date.now() - start < timeoutMs) {
+    while (Date.now() - lastActivity < idleTimeoutMs && Date.now() - start < maxHardCapMs) {
       const status = await browser.evaluate<{
         mdCount: number;
         hasNewTurn?: boolean;
@@ -89,50 +112,15 @@ export class DeepSeekDriver implements PlatformPort {
         turnIndex: number;
         text: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(
-        handle,
-        `(() => {
-          /* awaitCompletion */
-          const circleBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button');
-          const svg = circleBtn ? circleBtn.querySelector('svg') : null;
-          const stopBtn = document.querySelector('button[aria-label*="Stop"]');
-          const isGenerating = Boolean(
-            (stopBtn && stopBtn.offsetParent !== null) ||
-            (svg && (svg.innerHTML.includes('linearGradient') || svg.classList.toString().includes('spin'))) ||
-            (circleBtn && (circleBtn.querySelector('.ds-icon-spinning') || circleBtn.className.includes('loading')))
-          );
-
-          const thought = document.querySelector('div.ds-thought, div[class*="ds-thought"], div[class*="thought"]');
-          const isThinking = Boolean(
-            thought && (
-              thought.querySelector('.ds-icon-spinning, .spinner, [class*="spin"]') ||
-              (thought.innerText || '').includes('Thinking...')
-            )
-          );
-
-          const mdList = Array.from(document.querySelectorAll('.ds-markdown'));
-          const last = mdList.length > 0 ? mdList[mdList.length - 1] : null;
-          const codeBlocks = last ? Array.from(last.querySelectorAll('pre')).map(p => {
-            const b = p.closest('.md-code-block')?.querySelector('.md-code-block-banner-wrap') || p.querySelector('.code-block-header');
-            const lang = (b ? (b.innerText || '').trim().split(/\\s+/)[0] : 'text').toLowerCase();
-            return { language: lang || 'text', code: (p.querySelector('code') || p).textContent || '' };
-          }) : [];
-
-          const text = last ? (last.innerText || '').trim() : '';
-          return {
-            mdCount: mdList.length,
-            hasNewTurn: mdList.length > ${before.turnCount},
-            isGenerating,
-            isThinking,
-            turnIndex: mdList.length - 1,
-            text,
-            codeBlocks,
-          };
-        })()`,
-      );
+      }>(handle, getDeepSeekAwaitCompletionExpr(before.turnCount));
 
       const text = status.text || (status as any).assistantText || "";
-      const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+      if (status.isGenerating || status.isThinking || text.length !== lastLength) {
+        lastActivity = Date.now();
+        lastLength = text.length;
+      }
+
+      const hasNewTurn = Boolean(status.hasNewTurn || (status.mdCount >= before.turnCount && text.length > 0 && text !== before.lastTurnHash));
       const settled = hasNewTurn && detector.isSettled({
         isGenerating: status.isGenerating,
         isThinking: status.isThinking,
@@ -160,8 +148,10 @@ export class DeepSeekDriver implements PlatformPort {
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
     return browser.evaluate<ContinuationTrigger>(handle, `(() => {
       /* findContinuationTrigger */
+      ${IS_VISIBLE_JS}
       const btn = document.querySelector('button.ds-button--continue, button[aria-label*="Continue"]');
-      return { hasContinuation: Boolean(btn && btn.offsetParent !== null), triggerSelector: "button.ds-button--continue" };
+      const hasContinuation = isVisible(btn);
+      return { hasContinuation, triggerSelector: "button.ds-button--continue" };
     })()`);
   }
 

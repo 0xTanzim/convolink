@@ -1,3 +1,5 @@
+import { IS_VISIBLE_JS } from "./driver-helpers.js";
+
 export const GEMINI_RESOLVE_SELECTORS_EXPR = `(() => {
   /* resolveSelectors */
   const quill = document.querySelector('rich-textarea div.ql-editor, rich-textarea [contenteditable="true"], p[data-placeholder], div[contenteditable="true"].ql-editor');
@@ -34,5 +36,50 @@ export function getGeminiReadThreadExpr(lastN: number): string {
       turns.push({ turnIndex: index++, role, markdownContent: rawText, codeBlocks, contentHash: String(rawText.length) });
     }
     return { layoutVariant: 'gemini-quill-2026', turns };
+  })()`;
+}
+
+export function getGeminiFingerprintExpr(promptLength: number): string {
+  return `(() => {
+    /* submitPrompt */
+    const beforeTurns = document.querySelectorAll('user-query, model-response').length;
+    return { turnCount: beforeTurns, lastTurnHash: String(beforeTurns), submittedPromptHash: String(${promptLength}) };
+  })()`;
+}
+
+export function getGeminiAwaitCompletionExpr(beforeTurnCount: number): string {
+  return `(() => {
+    /* awaitCompletion */
+    ${IS_VISIBLE_JS}
+    const stop = document.querySelector('button[aria-label="Stop response"], button[aria-label*="Stop"]');
+    const spinner = document.querySelector('mat-mdc-progress-spinner, mat-progress-spinner, .processing-state-visible');
+    const isGenerating = Boolean(
+      (stop && isVisible(stop)) ||
+      (spinner && isVisible(spinner))
+    );
+
+    const thoughtEl = document.querySelector('.sparkle-thinking, div[data-testid*="thought"], div[class*="thought"], button[aria-label*="Thinking"], button[aria-label*="thought"]');
+    const isThinking = Boolean(
+      thoughtEl && (
+        thoughtEl.classList.contains('sparkle-thinking') ||
+        thoughtEl.querySelector('mat-progress-spinner, mat-mdc-progress-spinner, [class*="spin"]') ||
+        (thoughtEl.innerText || '').includes('Thinking...')
+      )
+    );
+
+    const models = Array.from(document.querySelectorAll('model-response'));
+    const turns = Array.from(document.querySelectorAll('user-query, model-response'));
+    const hasNewTurn = turns.length > ${beforeTurnCount};
+    const lastModel = models.length > 0 ? models[models.length - 1] : null;
+
+    const contentNode = lastModel ? (lastModel.querySelector('message-content, .markdown, .model-response-text') || lastModel) : null;
+    let assistantText = contentNode ? ((contentNode.innerText || contentNode.textContent) || '').trim() : '';
+    assistantText = assistantText.replace(/^Show code\s*/i, '').replace(/^Gemini said\s*/i, '').trim();
+    const codeBlocks = lastModel ? Array.from(lastModel.querySelectorAll('pre code')).map(c => ({
+      language: c.className.replace(/^language-/, '') || 'text',
+      code: c.textContent || '',
+    })) : [];
+
+    return { turnsCount: turns.length, hasNewTurn, isGenerating, isThinking, assistantText, codeBlocks };
   })()`;
 }

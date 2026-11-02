@@ -40,11 +40,17 @@ describe("FirefoxBidiAdapter", () => {
 
   describe("Adapter Operations via Mock WebSocket Messenger", () => {
     it("reports id and capabilities accurately for Firefox BiDi", () => {
-      const adapter = new FirefoxBidiAdapter(9222);
+      const adapter = new FirefoxBidiAdapter();
       expect(adapter.id).toBe("firefox-bidi");
       expect(adapter.capabilities.protocol).toBe("webdriver-bidi");
       expect(adapter.capabilities.browserFamily).toBe("firefox");
       expect(adapter.capabilities.supportsTabManagement).toBe(true);
+    });
+
+    it("defaults to port 9223 for WebDriver BiDi", async () => {
+      const adapter = new FirefoxBidiAdapter(undefined, async () => ({ contexts: [] }));
+      const health = await adapter.health();
+      expect(health.endpoint).toContain(":9223");
     });
 
     it("lists open tabs using browsingContext.getTree", async () => {
@@ -68,6 +74,22 @@ describe("FirefoxBidiAdapter", () => {
       expect(tabs[0]?.url).toBe("https://chatgpt.com/c/123");
       expect(tabs[1]?.targetId).toBe("ctx-2");
       expect(sentMessages[0]?.method).toBe("browsingContext.getTree");
+    });
+
+    it("extracts document.title for discovered tabs when available", async () => {
+      const adapter = new FirefoxBidiAdapter(9222, async (method, _params) => {
+        if (method === "browsingContext.getTree") {
+          return { contexts: [{ context: "ctx-1", url: "https://chatgpt.com/c/123", children: [] }] };
+        }
+        if (method === "script.evaluate") {
+          return { type: "success", result: { type: "string", value: "ChatGPT — Advanced Refactoring" } };
+        }
+        return {};
+      });
+
+      const tabs = await adapter.listTabs();
+      expect(tabs.length).toBe(1);
+      expect(tabs[0]?.title).toBe("ChatGPT — Advanced Refactoring");
     });
 
     it("evaluates JavaScript expressions using script.evaluate with deserialization", async () => {
@@ -131,6 +153,60 @@ describe("FirefoxBidiAdapter", () => {
       await adapter.closeTab("ctx-to-close");
       expect(sent[0]?.method).toBe("browsingContext.close");
       expect(sent[0]?.params.context).toBe("ctx-to-close");
+    });
+
+    it("sends session.end when disconnect() is called", async () => {
+      const sent: any[] = [];
+      const adapter = new FirefoxBidiAdapter(9223, async (method, params) => {
+        sent.push({ method, params });
+        return {};
+      });
+
+      await adapter.disconnect();
+      expect(sent[0]?.method).toBe("session.end");
+    });
+
+    it("uses native input.performActions with pointer coordinates on click()", async () => {
+      const sent: any[] = [];
+      const adapter = new FirefoxBidiAdapter(9223, async (method, params) => {
+        sent.push({ method, params });
+        if (method === "script.evaluate") {
+          return { type: "success", result: { type: "object", value: [["x", { type: "number", value: 150 }], ["y", { type: "number", value: 250 }]] } };
+        }
+        return {};
+      });
+
+      await adapter.click({ sessionId: "s1", targetId: "ctx-1", adapterId: "firefox-bidi" }, "#send-btn");
+      const actionCall = sent.find((s) => s.method === "input.performActions");
+      expect(actionCall).toBeDefined();
+      expect(actionCall.params.actions[0].type).toBe("pointer");
+    });
+
+    it("uses native input.performActions on pressKey()", async () => {
+      const sent: any[] = [];
+      const adapter = new FirefoxBidiAdapter(9223, async (method, params) => {
+        sent.push({ method, params });
+        return {};
+      });
+
+      await adapter.pressKey({ sessionId: "s1", targetId: "ctx-1", adapterId: "firefox-bidi" }, "#input", "Enter");
+      const actionCall = sent.find((s) => s.method === "input.performActions");
+      expect(actionCall).toBeDefined();
+      expect(actionCall.params.actions[0].type).toBe("key");
+    });
+
+    it("keeps session active during detach() until disconnect()", async () => {
+      const sent: any[] = [];
+      const adapter = new FirefoxBidiAdapter(9223, async (method, params) => {
+        sent.push({ method, params });
+        return {};
+      });
+
+      await adapter.detach({ sessionId: "test-sess", targetId: "ctx-1", adapterId: "firefox-bidi" });
+      expect(sent.length).toBe(0);
+
+      await adapter.disconnect();
+      expect(sent[0]?.method).toBe("session.end");
     });
   });
 });

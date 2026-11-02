@@ -4,9 +4,10 @@ import * as os from "node:os";
 
 export class GhostCleanupService {
   private static readonly GHOST_PATTERNS = [
-    /convolink[\\/]chrome-profile/i,
-    /convolink-ghost/i,
-    /chrome-debug/i,
+    /convolink[\\/](chrome|firefox)-profile/i,
+    /convolink[\\/]profiles[\\/].*-dev/i,
+    /convolink-(ghost|firefox-test)/i,
+    /(chrome|firefox)-debug/i,
     /puppeteer_dev_chrome_profile/i,
   ];
 

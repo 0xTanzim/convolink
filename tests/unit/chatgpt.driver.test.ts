@@ -68,7 +68,7 @@ describe("ChatGPTDriver", () => {
 
   it("submits prompt targeting ProseMirror editor and dynamic send button", async () => {
     const browser = new FakeBrowserPort();
-    browser.evalResponseMap.set("submitPrompt", {
+    browser.evalResponseMap.set("/* submitPrompt */", {
       turnCount: 2,
       lastTurnHash: "turn-hash-2",
       submittedPromptHash: "prompt-hash",
@@ -78,7 +78,27 @@ describe("ChatGPTDriver", () => {
     const fingerprint = await driver.submitPrompt(handle, browser, "Hello ChatGPT");
 
     expect(fingerprint.turnCount).toBe(2);
-    expect(browser.evaluatedExpressions.some((e) => e.includes("ProseMirror"))).toBe(true);
+    expect(browser.filledTexts.some((f) => f.text === "Hello ChatGPT")).toBe(true);
+  });
+
+  it("throws AuthChallengeError login_required immediately when login wall is detected on submitPrompt", async () => {
+    const browser = new FakeBrowserPort();
+    browser.evalResponseMap.set("/* authCheck */", true);
+
+    const driver = new ChatGPTDriver();
+    expect(driver.submitPrompt(handle, browser, "Hello ChatGPT")).rejects.toThrow("login_required");
+  });
+
+  it("throws AuthChallengeError turnstile when Cloudflare challenge is detected", async () => {
+    const browser = new FakeBrowserPort();
+    browser.evalResponseMap.set("challenges.cloudflare.com", {
+      detected: true,
+      isInteractive: true,
+      rect: { left: 100, top: 200, width: 300, height: 65 },
+    });
+
+    const driver = new ChatGPTDriver();
+    expect(driver.submitPrompt(handle, browser, "Hello ChatGPT")).rejects.toThrow("turnstile");
   });
 
   it("inspects Canvas editor when active in ChatGPT", async () => {

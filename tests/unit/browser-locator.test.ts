@@ -108,4 +108,69 @@ describe("BrowserLocator", () => {
 
     expect(found).toBe("/usr/bin/brave-browser");
   });
+
+  it("resolves Firefox candidates across Linux, macOS, and Windows", () => {
+    const linuxCandidates = BrowserLocator.getCandidatePaths("Firefox", {
+      platform: "linux",
+      arch: "x86_64",
+    });
+    expect(linuxCandidates).toContain("/usr/bin/firefox");
+    expect(linuxCandidates).toContain("/snap/bin/firefox");
+
+    const macCandidates = BrowserLocator.getCandidatePaths("Firefox", {
+      platform: "darwin",
+      env: { HOME: "/Users/testuser" },
+    });
+    expect(macCandidates).toContain("/Applications/Firefox.app/Contents/MacOS/firefox");
+
+    const winCandidates = BrowserLocator.getCandidatePaths("Firefox", {
+      platform: "win32",
+      env: {
+        PROGRAMFILES: "C:\\Program Files",
+        "PROGRAMFILES(X86)": "C:\\Program Files (x86)",
+      },
+    });
+    expect(winCandidates.some((c) => c.includes("Mozilla Firefox\\firefox.exe"))).toBe(true);
+  });
+
+  it("resolves Zen Browser candidates across Linux, macOS, and Windows", () => {
+    const linuxCandidates = BrowserLocator.getCandidatePaths("Zen Browser", {
+      platform: "linux",
+      arch: "x86_64",
+      env: { HOME: "/home/testuser" },
+    });
+    expect(linuxCandidates).toContain("/home/testuser/.local/bin/zen");
+    expect(linuxCandidates).toContain("/usr/bin/zen");
+
+    const macCandidates = BrowserLocator.getCandidatePaths("Zen", {
+      platform: "darwin",
+      env: { HOME: "/Users/testuser" },
+    });
+    expect(macCandidates.some((c) => c.includes("zen"))).toBe(true);
+
+    const winCandidates = BrowserLocator.getCandidatePaths("Zen", {
+      platform: "win32",
+      env: {
+        PROGRAMFILES: "C:\\Program Files",
+      },
+    });
+    expect(winCandidates.some((c) => c.includes("zen.exe"))).toBe(true);
+  });
+
+  it("finds Firefox or Zen when browserName is 'any' and Chromium browsers are absent", () => {
+    const mockFiles = new Set(["/usr/bin/firefox"]);
+    const found = BrowserLocator.findBrowserExecutable("any", {
+      platform: "linux",
+      fileExists: (p) => mockFiles.has(p),
+    });
+    expect(found).toBe("/usr/bin/firefox");
+
+    const mockZen = new Set(["/home/testuser/.local/bin/zen"]);
+    const foundZen = BrowserLocator.findBrowserExecutable("any", {
+      platform: "linux",
+      env: { HOME: "/home/testuser" },
+      fileExists: (p) => mockZen.has(p),
+    });
+    expect(foundZen).toBe("/home/testuser/.local/bin/zen");
+  });
 });

@@ -76,4 +76,65 @@ describe("BrowserDiscoveryService", () => {
 
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
+
+  it("prioritizes native system browsers over custom/saved convolink profiles", () => {
+    const customProfilesRoot = path.join(os.homedir(), ".config/convolink/profiles");
+    const testCustomDir = path.join(customProfilesRoot, "probe-test-profile");
+    fs.mkdirSync(testCustomDir, { recursive: true });
+
+    try {
+      const defaultDirs = BrowserDiscoveryService.getDefaultUserDataDirs();
+      const systemChromeIdx = defaultDirs.findIndex((d) => d.includes("google-chrome") || d.includes("Chrome"));
+      const customProfileIdx = defaultDirs.findIndex((d) => d.includes("probe-test-profile"));
+
+      expect(systemChromeIdx).toBeGreaterThanOrEqual(0);
+      expect(customProfileIdx).toBeGreaterThanOrEqual(0);
+      expect(systemChromeIdx).toBeLessThan(customProfileIdx);
+    } finally {
+      fs.rmSync(testCustomDir, { recursive: true, force: true });
+    }
+  });
+
+  it("filters profiles by canonical browser name using getProfilesForBrowser", async () => {
+    const discovery = new BrowserDiscoveryService();
+    discovery.discoverProfiles = async () => [
+      { browser: "Google Chrome", profileId: "Default", name: "Work", email: "a@b.com", userDataDir: "/tmp/chrome" },
+      { browser: "Firefox", profileId: "release", name: "FF", email: "c@d.com", userDataDir: "/tmp/ff" },
+    ];
+    const ff = await discovery.getProfilesForBrowser("firefox");
+    expect(ff.length).toBe(1);
+    expect(ff[0]?.browser).toBe("Firefox");
+
+    const chrome = await discovery.getProfilesForBrowser("chrome");
+    expect(chrome.length).toBe(1);
+    expect(chrome[0]?.browser).toBe("Google Chrome");
+  });
+
+  it("identifies custom convolink profiles with Chromium Local State as Google Chrome profiles and includes them in getProfilesForBrowser('chrome')", async () => {
+    const customProfileDir = path.join(tmpDir, "convolink", "profiles", "zack-ai");
+    fs.mkdirSync(customProfileDir, { recursive: true });
+
+    const localState = {
+      profile: {
+        info_cache: {
+          Default: {
+            name: "Zack",
+            user_name: "avigilzack@gmail.com",
+            gaia_name: "Zack",
+          },
+        },
+      },
+    };
+    fs.writeFileSync(path.join(customProfileDir, "Local State"), JSON.stringify(localState));
+
+    const discovery = new BrowserDiscoveryService([customProfileDir]);
+    const chromeProfiles = await discovery.getProfilesForBrowser("chrome");
+
+    expect(chromeProfiles.length).toBe(1);
+    expect(chromeProfiles[0]?.name).toBe("Zack");
+    expect(chromeProfiles[0]?.email).toBe("avigilzack@gmail.com");
+    expect(chromeProfiles[0]?.browser.toLowerCase()).toContain("chrome");
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
 });

@@ -28,11 +28,17 @@ describe("CLI Argument Parser (parseAskArgs & parseCompareArgs)", () => {
     const askRes = parseAskArgs(["-o", "./custom-artifacts", "run"]);
     expect(askRes.outDir).toBe("./custom-artifacts");
 
+    const askCamel = parseAskArgs(["--outDir", "./custom-artifacts", "run"]);
+    expect(askCamel.outDir).toBe("./custom-artifacts");
+
     const compareRes = parseCompareArgs(["-o", "./cmp-artifacts", "compare models"]);
     expect(compareRes.outDir).toBe("./cmp-artifacts");
 
     const compareLong = parseCompareArgs(["--out-dir", "./cmp-long", "compare models"]);
     expect(compareLong.outDir).toBe("./cmp-long");
+
+    const compareCamel = parseCompareArgs(["--outDir", "./cmp-camel", "compare models"]);
+    expect(compareCamel.outDir).toBe("./cmp-camel");
   });
 
   it("parses boolean flags without treating them as prompt words", () => {
@@ -47,5 +53,19 @@ describe("CLI Argument Parser (parseAskArgs & parseCompareArgs)", () => {
     expect(res.targetId).toBe("tab-99");
     expect(res.outDir).toBe("./out");
     expect(res.prompt).toBe("Write quicksort");
+  });
+
+  it("defaults launch to false and only enables it when --launch is explicitly provided", () => {
+    const defaultAsk = parseAskArgs(["-p", "deepseek", "hello"]);
+    expect(defaultAsk.launch).toBe(false);
+
+    const launchedAsk = parseAskArgs(["--launch", "-p", "deepseek", "hello"]);
+    expect(launchedAsk.launch).toBe(true);
+
+    const defaultCmp = parseCompareArgs(["-p", "deepseek,claude", "test"]);
+    expect(defaultCmp.launch).toBe(false);
+
+    const launchedCmp = parseCompareArgs(["--launch", "-p", "deepseek,claude", "test"]);
+    expect(launchedCmp.launch).toBe(true);
   });
 });

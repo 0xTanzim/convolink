@@ -10,37 +10,31 @@ import type {
   ContinuationTrigger,
   DownloadLinkDescriptor,
 } from "../../core/ports/platform.port.js";
-import { TimeoutError } from "../../core/errors/bridge-errors.js";
+import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
-import { getClaudeResolveSelectorsExpr, getClaudeReadThreadExpr } from "./claude.scripts.js";
+import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { getClaudeResolveSelectorsExpr, getClaudeReadThreadExpr, getClaudeFingerprintExpr, getClaudeAwaitCompletionExpr } from "./claude.scripts.js";
 
 export class ClaudeDriver implements PlatformPort {
   public readonly id: PlatformId = "claude";
 
   public matchesUrl(url: string): boolean { return url.includes("claude.ai"); }
   public getBaseUrl(): string { return "https://claude.ai/new"; }
-  public extractThreadId(url: string): string {
-    const match = url.match(/claude\.ai\/chat\/([a-zA-Z0-9_-]+)/);
-    return match && match[1] ? match[1] : "";
-  }
+  public extractThreadId(url: string): string { return url.match(/claude\.ai\/chat\/([a-zA-Z0-9_-]+)/)?.[1] ?? ""; }
   public async resolveSelectors(handle: SessionHandle, browser: BrowserPort): Promise<SelectorResolution> {
     return browser.evaluate<SelectorResolution>(handle, getClaudeResolveSelectorsExpr());
   }
 
   public async readThread(
-    handle: SessionHandle,
-    browser: BrowserPort,
-    options?: { lastNTurns?: number },
+    handle: SessionHandle, browser: BrowserPort, options?: { lastNTurns?: number },
   ): Promise<{ layoutVariant: string; turns: ConversationTurn[] }> {
-    const lastN = options?.lastNTurns ?? 50;
-    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getClaudeReadThreadExpr(lastN));
+    return browser.evaluate<{ layoutVariant: string; turns: ConversationTurn[] }>(handle, getClaudeReadThreadExpr(options?.lastNTurns ?? 50));
   }
 
   public async startNewChat(handle: SessionHandle, browser: BrowserPort): Promise<void> {
     const expr = `(() => {
       const btn = document.querySelector('a[href="/new"], button[aria-label="New chat"], button[data-testid="new-chat-button"]');
-      if (btn) btn.click();
-      else window.location.href = "https://claude.ai/new";
+      if (btn) btn.click(); else window.location.href = "https://claude.ai/new";
     })()`;
     await browser.evaluate(handle, expr);
   }
@@ -60,28 +54,25 @@ export class ClaudeDriver implements PlatformPort {
     prompt: string,
     _files?: string[],
   ): Promise<TurnFingerprint> {
-    const expression = `(async () => {
-      /* submitPrompt */
+    const isLoginWall = await browser.evaluate<boolean>(handle, `(() => {
+      /* authCheck */
+      const login = document.querySelector('a[href*="/login"], button[data-testid*="login"], input[type="email"]');
       const composer = document.querySelector('div.ProseMirror[contenteditable="true"], div[contenteditable="true"], #prompt-textarea');
-      if (!composer) throw new Error("Claude composer not found");
-      const turns = document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]');
-      const beforeTurns = turns.length;
-      const last = turns.length > 0 ? turns[turns.length - 1] : null;
-      const lastText = last ? (last.innerText || '').trim() : '';
+      return Boolean(login && !composer);
+    })()`).catch(() => false);
+    if (isLoginWall === true) throw new AuthChallengeError("login_required", this.getBaseUrl());
 
-      composer.focus();
-      document.execCommand('selectAll', false, null);
-      document.execCommand('insertText', false, ${JSON.stringify(prompt)});
-      composer.dispatchEvent(new Event('input', { bubbles: true }));
+    const fingerprint = await browser
+      .evaluate<TurnFingerprint>(handle, getClaudeFingerprintExpr(prompt.length))
+      .catch(() => ({ turnCount: 0, lastTurnHash: "", submittedPromptHash: String(prompt.length) }));
 
-      await new Promise(r => setTimeout(r, 80));
-      const send = document.querySelector('button[aria-label="Send Message"], button[aria-label*="Send"]');
-      if (send && !send.disabled && send.getAttribute('aria-disabled') !== 'true') send.click();
-      else composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
+    const composerSelector = 'div.ProseMirror[contenteditable="true"], div[contenteditable="true"], #prompt-textarea';
+    await browser.fillText(handle, composerSelector, prompt);
 
-      return { turnCount: beforeTurns, lastTurnHash: lastText, submittedPromptHash: String(${prompt.length}) };
-    })()`;
-    return browser.evaluate<TurnFingerprint>(handle, expression);
+    const sendBtnSelector = 'button[aria-label="Send Message"], button[aria-label*="Send"]';
+    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
+
+    return fingerprint;
   }
 
   public async awaitCompletion(
@@ -92,10 +83,14 @@ export class ClaudeDriver implements PlatformPort {
     quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
+    let lastActivity = Date.now();
+    let lastLength = 0;
+    const idleTimeoutMs = Math.max(timeoutMs, 60_000);
+    const maxHardCapMs = Math.max(timeoutMs * 2, 300_000);
     const detector = new StreamSettlingDetector(quiescenceMs);
     const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
-    while (Date.now() - start < timeoutMs) {
+    while (Date.now() - lastActivity < idleTimeoutMs && Date.now() - start < maxHardCapMs) {
       const status = await browser.evaluate<{
         turnsCount: number;
         hasNewTurn: boolean;
@@ -103,49 +98,14 @@ export class ClaudeDriver implements PlatformPort {
         isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(
-        handle,
-        `(() => {
-          /* awaitCompletion */
-          const stop = document.querySelector('button[aria-label="Stop Response"], button[aria-label*="Stop"]');
-          const streamingEl = document.querySelector('div[data-is-streaming="true"]');
-          const isGenerating = Boolean((stop && stop.offsetParent !== null) || streamingEl);
-
-          const thinkingEl = document.querySelector('div[data-testid*="thought"], div[data-testid*="thinking"], div[class*="thinking"], button[aria-label*="Thinking"]');
-          const isThinking = Boolean(
-            thinkingEl && (
-              thinkingEl.querySelector('[class*="spin"], svg.animate-spin, .animate-pulse') ||
-              (thinkingEl.innerText || '').includes('Thinking...') ||
-              document.querySelector('div[data-is-streaming="true"] [class*="thinking"]')
-            )
-          );
-
-          const turns = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]'));
-          const last = turns.length > 0 ? turns[turns.length - 1] : null;
-          let assistantText = '';
-          const codeBlocks = [];
-
-          if (last) {
-            assistantText = (last.innerText || '').trim();
-            const pres = last.querySelectorAll('pre');
-            pres.forEach(p => {
-              const lang = (p.querySelector('code')?.className || '').replace(/.*language-(\\w+).*/, '$1') || 'text';
-              codeBlocks.push({ language: lang, code: (p.querySelector('code') || p).textContent || '' });
-            });
-          }
-
-          return {
-            turnsCount: turns.length,
-            hasNewTurn: turns.length > ${before.turnCount},
-            isGenerating,
-            isThinking,
-            assistantText,
-            codeBlocks,
-          };
-        })()`,
-      );
+      }>(handle, getClaudeAwaitCompletionExpr(before.turnCount));
 
       const text = status.assistantText || (status as any).text || "";
+      if (status.isGenerating || status.isThinking || text.length !== lastLength) {
+        lastActivity = Date.now();
+        lastLength = text.length;
+      }
+
       const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
       const settled = hasNewTurn && detector.isSettled({
         isGenerating: status.isGenerating,
@@ -176,8 +136,10 @@ export class ClaudeDriver implements PlatformPort {
 
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
     const expr = `(() => {
+      ${IS_VISIBLE_JS}
       const btn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText || '').includes('Continue'));
-      return { hasContinuation: Boolean(btn && btn.offsetParent !== null), triggerSelector: 'button[aria-label*="Continue"]' };
+      const hasContinuation = isVisible(btn);
+      return { hasContinuation, triggerSelector: 'button[aria-label*="Continue"]' };
     })()`;
     return browser.evaluate<ContinuationTrigger>(handle, expr);
   }
@@ -190,10 +152,7 @@ export class ClaudeDriver implements PlatformPort {
   }
 
   public async findDownloadLinks(handle: SessionHandle, browser: BrowserPort): Promise<DownloadLinkDescriptor[]> {
-    const expr = `(() => {
-      const anchors = Array.from(document.querySelectorAll('a[download], a[href^="blob:"]'));
-      return anchors.map(a => ({ url: a.href, filename: a.getAttribute('download') || undefined }));
-    })()`;
+    const expr = `(() => Array.from(document.querySelectorAll('a[download], a[href^="blob:"]')).map(a => ({ url: a.href, filename: a.getAttribute('download') || undefined })))()`;
     return browser.evaluate<DownloadLinkDescriptor[]>(handle, expr);
   }
 }

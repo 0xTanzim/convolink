@@ -21,6 +21,7 @@ export interface DiscoveredTab {
   readonly url: string;
   readonly platformId: PlatformId | null;
   readonly threadId: string | null;
+  readonly isNewlyCreated?: boolean;
 }
 
 export interface DoctorTabDiagnosis {

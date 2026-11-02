@@ -70,7 +70,7 @@ describe("ClaudeDriver", () => {
 
   it("submits prompt targeting ProseMirror editor and send button", async () => {
     const browser = new FakeBrowserPort();
-    browser.evalResponseMap.set("submitPrompt", {
+    browser.evalResponseMap.set("/* submitPrompt */", {
       turnCount: 2,
       lastTurnHash: "prior-content",
       submittedPromptHash: "15",
@@ -81,6 +81,7 @@ describe("ClaudeDriver", () => {
 
     expect(fingerprint.turnCount).toBe(2);
     expect(fingerprint.submittedPromptHash).toBe("15");
+    expect(browser.filledTexts.some((f) => f.text === "Hello Claude 3.7")).toBe(true);
   });
 
   it("awaits completion detecting stream settling and absence of stop button", async () => {

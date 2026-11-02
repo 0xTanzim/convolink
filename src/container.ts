@@ -1,3 +1,5 @@
+import * as fs from "node:fs";
+import * as path from "node:path";
 import { RawCdpAdapter } from "./adapters/browsers/raw-cdp.adapter.js";
 import { AgentBrowserAdapter } from "./adapters/browsers/agent-browser.adapter.js";
 import { FirefoxBidiAdapter } from "./adapters/browsers/firefox-bidi.adapter.js";
@@ -16,6 +18,7 @@ import { ComparisonCoordinator } from "./core/services/comparison-coordinator.se
 import { SqliteLedgerAdapter } from "./adapters/storage/sqlite-ledger.adapter.js";
 import { SessionOrchestrator } from "./core/services/orchestrator.js";
 import { BridgeTokenService } from "./core/services/bridge-token.service.js";
+import { normalizeBrowserName } from "./core/env/browser-name.js";
 import type { BrowserPort, BrowserAdapterId } from "./core/ports/browser.port.js";
 import type { PlatformPort } from "./core/ports/platform.port.js";
 import type { ThreadStore, WorkspaceSinkPort } from "./core/ports/storage.port.js";
@@ -38,22 +41,56 @@ export interface ContainerOptions {
   readonly cdpEndpoint?: string;
   readonly browser?: BrowserPort;
   readonly transport?: BrowserAdapterId;
+  readonly browserName?: string;
   readonly threadStore?: ThreadStore;
+  readonly workDir?: string;
 }
 
 export function createContainer(options?: ContainerOptions): AppContainer {
-  const endpoint = options?.cdpEndpoint ?? "http://127.0.0.1:9222";
-  const portMatch = endpoint.match(/:(\d+)/);
-  const port = portMatch && portMatch[1] ? parseInt(portMatch[1], 10) : 9222;
+  let transport = options?.transport ?? (process.env.CONVOLINK_TRANSPORT as BrowserAdapterId | undefined);
+  if (!transport && options?.browserName) {
+    const norm = normalizeBrowserName(options.browserName);
+    if (norm.id !== "auto") transport = norm.transport;
+  }
+  let detectedPort: number | undefined;
+  if (!transport) {
+    try {
+      const configPath = path.join(options?.workDir ?? process.cwd(), ".convo", "config.json");
+      if (fs.existsSync(configPath)) {
+        const raw = fs.readFileSync(configPath, "utf8");
+        const parsed = JSON.parse(raw);
+        if (parsed.transport) {
+          transport = parsed.transport;
+        } else if (parsed.browser) {
+          const norm = normalizeBrowserName(parsed.browser);
+          if (norm.id !== "auto") transport = norm.transport;
+        }
+        if (parsed.profilePath) {
+          const portFile = path.join(parsed.profilePath, "DevToolsActivePort");
+          if (fs.existsSync(portFile)) {
+            const lines = fs.readFileSync(portFile, "utf8").split("\n").map((l: string) => l.trim()).filter(Boolean);
+            const p = parseInt(lines[0] || "", 10);
+            if (!isNaN(p) && p > 0) detectedPort = p;
+          }
+        }
+      }
+    } catch {}
+  }
+  if (!transport) transport = "raw-cdp";
 
-  const transport = options?.transport ?? (process.env.CONVOLINK_TRANSPORT as BrowserAdapterId | undefined ?? "raw-cdp");
+  const defaultPort = transport === "firefox-bidi" ? 9223 : (transport === "extension-bridge" ? 9224 : 9222);
+  const activePort = detectedPort ?? defaultPort;
+  const endpoint = options?.cdpEndpoint ?? `http://127.0.0.1:${activePort}`;
+  const portMatch = endpoint.match(/:(\d+)/);
+  const port = options?.cdpEndpoint && portMatch && portMatch[1] ? parseInt(portMatch[1], 10) : activePort;
+
   const browser = options?.browser ?? (
     transport === "agent-browser"
       ? new AgentBrowserAdapter(port)
       : transport === "firefox-bidi"
         ? new FirefoxBidiAdapter(port)
         : transport === "extension-bridge"
-          ? new ExtensionBridgeAdapter(port === 9222 ? 9224 : port, new BridgeTokenService())
+          ? new ExtensionBridgeAdapter(port, new BridgeTokenService())
           : new RawCdpAdapter(endpoint)
   );
 

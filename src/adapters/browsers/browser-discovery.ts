@@ -1,6 +1,8 @@
 import * as path from "node:path";
 import * as fs from "node:fs";
 import * as os from "node:os";
+import * as net from "node:net";
+import { parseGeckoProfiles } from "./gecko-profiles.js";
 
 export interface DiscoveredProfile {
   readonly browser: string;
@@ -26,8 +28,17 @@ export class BrowserDiscoveryService {
   public static getDefaultUserDataDirs(): string[] {
     const home = os.homedir();
     const dirs: string[] = [];
+    if (process.platform === "linux") {
+      dirs.push(...[".config/google-chrome", ".config/chromium", ".config/microsoft-edge", ".config/BraveSoftware/Brave-Browser", ".mozilla/firefox", ".config/zen", ".zen", ".config/convolink/chrome-profile"].map((p) => path.join(home, p)));
+    } else if (process.platform === "darwin") {
+      dirs.push(...["Library/Application Support/Google/Chrome", "Library/Application Support/Microsoft Edge", "Library/Application Support/BraveSoftware/Brave-Browser", "Library/Application Support/Firefox", "Library/Application Support/zen", "Library/Application Support/Zen Browser", "Library/Application Support/convolink/chrome-profile"].map((p) => path.join(home, p)));
+    } else if (process.platform === "win32") {
+      const local = process.env.LOCALAPPDATA || path.join(home, "AppData/Local");
+      const roaming = process.env.APPDATA || path.join(home, "AppData/Roaming");
+      dirs.push(path.join(local, "Google/Chrome/User Data"), path.join(local, "Microsoft/Edge/User Data"), path.join(local, "BraveSoftware/Brave-Browser/User Data"), path.join(roaming, "Mozilla/Firefox"), path.join(roaming, "zen"), path.join(roaming, "Zen Browser"), path.join(local, "convolink/chrome-profile"));
+    }
 
-    // Automatically scan saved ConvoLink profiles (~/.config/convolink/profiles/*)
+    // Secondary fallback: saved custom ConvoLink profiles (~/.config/convolink/profiles/*)
     const savedProfilesRoot = path.join(home, ".config/convolink/profiles");
     if (fs.existsSync(savedProfilesRoot)) {
       try {
@@ -40,30 +51,6 @@ export class BrowserDiscoveryService {
       } catch {}
     }
 
-    if (process.platform === "linux") {
-      dirs.push(
-        path.join(home, ".config/google-chrome"),
-        path.join(home, ".config/chromium"),
-        path.join(home, ".config/microsoft-edge"),
-        path.join(home, ".config/BraveSoftware/Brave-Browser"),
-        path.join(home, ".config/convolink/chrome-profile"),
-      );
-    } else if (process.platform === "darwin") {
-      dirs.push(
-        path.join(home, "Library/Application Support/Google/Chrome"),
-        path.join(home, "Library/Application Support/Microsoft Edge"),
-        path.join(home, "Library/Application Support/BraveSoftware/Brave-Browser"),
-        path.join(home, "Library/Application Support/convolink/chrome-profile"),
-      );
-    } else if (process.platform === "win32") {
-      const localAppData = process.env.LOCALAPPDATA || path.join(home, "AppData/Local");
-      dirs.push(
-        path.join(localAppData, "Google/Chrome/User Data"),
-        path.join(localAppData, "Microsoft/Edge/User Data"),
-        path.join(localAppData, "BraveSoftware/Brave-Browser/User Data"),
-        path.join(localAppData, "convolink/chrome-profile"),
-      );
-    }
     return dirs;
   }
 
@@ -96,6 +83,14 @@ export class BrowserDiscoveryService {
 
       const browserName = this.inferBrowserName(dataDir);
       const portInfo = await this.readDevToolsActivePort(dataDir);
+
+      const profilesIni = path.join(dataDir, "profiles.ini");
+      if (fs.existsSync(profilesIni)) {
+        const geckoProfiles = await parseGeckoProfiles(dataDir, browserName);
+        results.push(...geckoProfiles);
+        continue;
+      }
+
       const localStateFile = path.join(dataDir, "Local State");
 
       if (fs.existsSync(localStateFile)) {
@@ -107,9 +102,12 @@ export class BrowserDiscoveryService {
           if (infoCache && typeof infoCache === "object") {
             for (const [profileId, info] of Object.entries(infoCache)) {
               const entry = info as Record<string, unknown>;
+              const resolvedId = dataDir.toLowerCase().includes("convolink/profiles/")
+                ? path.basename(dataDir)
+                : profileId;
               results.push({
                 browser: browserName,
-                profileId,
+                profileId: resolvedId,
                 name: String(entry.name || profileId),
                 email: String(entry.user_name || ""),
                 userDataDir: dataDir,
@@ -135,13 +133,20 @@ export class BrowserDiscoveryService {
     return results;
   }
 
-  public async findActiveEndpoint(): Promise<{ endpoint: string; port: number } | null> {
+  public async getProfilesForBrowser(browserName?: string): Promise<DiscoveredProfile[]> {
+    const all = await this.discoverProfiles();
+    if (!browserName || browserName === "auto" || browserName === "any") return all;
+    const lower = browserName.toLowerCase();
+    return all.filter((p) => p.browser.toLowerCase().includes(lower));
+  }
+
+  public async findActiveEndpoint(): Promise<{ endpoint: string; port: number; browserWsPath?: string } | null> {
     for (const dir of this.searchDirs) {
       const portInfo = await this.readDevToolsActivePort(dir);
       if (portInfo) {
         const isAlive = await this.checkPortAlive(portInfo.port);
         if (isAlive) {
-          return { endpoint: `http://127.0.0.1:${portInfo.port}`, port: portInfo.port };
+          return { endpoint: `http://127.0.0.1:${portInfo.port}`, port: portInfo.port, browserWsPath: portInfo.browserWsPath };
         }
       }
     }
@@ -158,26 +163,31 @@ export class BrowserDiscoveryService {
   }
 
   private async checkPortAlive(port: number): Promise<boolean> {
-    try {
-      const res = await fetch(`http://127.0.0.1:${port}/json/version`, {
-        signal: AbortSignal.timeout(600),
+    return new Promise<boolean>((resolve) => {
+      const socket = net.createConnection({ host: "127.0.0.1", port });
+      socket.setTimeout(250);
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve(true);
       });
-      return res.ok;
-    } catch {
-      return false;
-    }
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
   }
 
   private inferBrowserName(dirPath: string): string {
     const lower = dirPath.toLowerCase();
-    if (lower.includes("convolink/profiles/")) {
-      const base = path.basename(dirPath);
-      return `ConvoLink Profile (${base})`;
-    }
+    if (lower.includes("zen")) return "Zen Browser";
+    if (lower.includes("firefox") || lower.includes("mozilla")) return "Firefox";
     if (lower.includes("edge")) return "Microsoft Edge";
     if (lower.includes("brave")) return "Brave";
     if (lower.includes("chromium")) return "Chromium";
-    if (lower.includes("convolink")) return "ConvoLink Dedicated Profile";
     return "Google Chrome";
   }
 }

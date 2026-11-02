@@ -39,11 +39,13 @@ export type OrchestratorProvider =
 export interface McpServerOptions {
   readonly orchestrator?: OrchestratorProvider;
   readonly onActivity?: () => void;
+  readonly workDir?: string;
 }
 
 export class McpServer {
   private readonly provider?: OrchestratorProvider;
   private readonly onActivity?: () => void;
+  private readonly workDir?: string;
   private resolvedOrchestrator: SessionOrchestrator | null = null;
 
   public constructor(providerOrOptions?: OrchestratorProvider | McpServerOptions) {
@@ -52,6 +54,7 @@ export class McpServer {
     } else if (providerOrOptions && typeof providerOrOptions === "object") {
       this.provider = providerOrOptions.orchestrator;
       this.onActivity = providerOrOptions.onActivity;
+      this.workDir = providerOrOptions.workDir;
     }
   }
 
@@ -89,7 +92,7 @@ export class McpServer {
           ? params.arguments : {};
         const orchestrator = await this.getOrchestrator();
         const { executeMcpTool } = await import("./mcp.tools.js");
-        const toolResult = await executeMcpTool(orchestrator, name, toolArgs);
+        const toolResult = await executeMcpTool(orchestrator, name, toolArgs, { workDir: this.workDir });
         return {
           jsonrpc: "2.0",
           id: req.id,

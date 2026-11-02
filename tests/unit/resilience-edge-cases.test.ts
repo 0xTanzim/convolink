@@ -66,6 +66,6 @@ describe("Resilience & Edge-Case Worst-Scenario Suite", () => {
     expect(cleaner.isGhostPath("/")).toBe(false);
     expect(cleaner.isGhostPath("/etc")).toBe(false);
     expect(cleaner.isGhostPath("/home/user/.config/google-chrome")).toBe(false);
-    expect(cleaner.isGhostPath(path.join(os.homedir(), ".config/convolink/profiles/zack-ai"))).toBe(false);
+    expect(cleaner.isGhostPath(path.join(os.homedir(), ".config/convolink/profiles/my-profile"))).toBe(false);
   });
 });

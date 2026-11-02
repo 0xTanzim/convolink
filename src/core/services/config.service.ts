@@ -16,7 +16,7 @@ export class ConfigService {
   private readonly defaultProjectRoot: string;
 
   constructor(projectRoot?: string) {
-    this.defaultProjectRoot = projectRoot ?? process.cwd();
+    this.defaultProjectRoot = projectRoot ?? process.env.CONVO_PROJECT_ROOT ?? process.cwd();
   }
 
   public getConfigPath(projectRoot?: string): string {

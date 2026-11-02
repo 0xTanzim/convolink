@@ -15,6 +15,7 @@ Usage:
   convo search <query>           Full-text search across historical conversation turns and code
   convo profile [list|select]    View and persist active browser profile in .convo/config.json
   convo ext pair [--rotate]      Display or rotate extension pairing token for browser bridge
+  convo daemon [status|start|stop] Manage background singleton bridge daemon
   convo clean                    Purge stray ghost browser processes and temporary debug profiles
   convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio
 

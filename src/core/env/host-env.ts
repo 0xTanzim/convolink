@@ -52,6 +52,20 @@ export class HostEnv {
   }
 
   /**
+   * Resolves the Unix Domain Socket path for the persistent ConvoLink daemon.
+   */
+  public static getSocketPath(): string {
+    return path.join(this.getLockDir(), "bridge.sock");
+  }
+
+  /**
+   * Resolves the PID lockfile path for the persistent ConvoLink daemon.
+   */
+  public static getDaemonPidPath(): string {
+    return path.join(this.getLockDir(), "daemon.pid");
+  }
+
+  /**
    * Formats a deterministic mutex lockfile path for a browser tab.
    */
   public static getTabLockPath(targetId: string): string {
@@ -82,9 +96,13 @@ export class HostEnv {
   }
 
   /**
-   * Locates a browser executable dynamically based on browser name (Brave, Edge, Chrome, Chromium).
+   * Locates a browser executable dynamically based on browser name (Brave, Edge, Chrome, Chromium, Firefox, Zen).
+   * If browserName is omitted, falls back to Chrome or any installed browser.
    */
-  public static findBrowserExecutable(browserName = "Google Chrome"): string | null {
-    return BrowserLocator.findBrowserExecutable(browserName);
+  public static findBrowserExecutable(browserName?: string): string | null {
+    if (browserName && browserName.toLowerCase() !== "any") {
+      return BrowserLocator.findBrowserExecutable(browserName);
+    }
+    return BrowserLocator.findChromeExecutable() ?? BrowserLocator.findAnyInstalledBrowser();
   }
 }

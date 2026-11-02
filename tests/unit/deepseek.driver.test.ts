@@ -64,9 +64,9 @@ describe("DeepSeekDriver", () => {
     expect(thread.turns[1]?.codeBlocks[0]?.code).toBe("console.log('hello');");
   });
 
-  it("submits prompt using prototype setter injection", async () => {
+  it("submits prompt using native delegation", async () => {
     const browser = new FakeBrowserPort();
-    browser.evalResponseMap.set("submitPrompt", {
+    browser.evalResponseMap.set("/* submitPrompt */", {
       turnCount: 2,
       lastTurnHash: "hash-last",
       submittedPromptHash: "hash-prompt",
@@ -76,7 +76,19 @@ describe("DeepSeekDriver", () => {
     const fingerprint = await driver.submitPrompt(handle, browser, "Hello DeepSeek");
 
     expect(fingerprint.turnCount).toBe(2);
-    expect(browser.evaluatedExpressions.some((e) => e.includes("HTMLTextAreaElement.prototype"))).toBe(true);
+    expect(browser.filledTexts.some((f) => f.text === "Hello DeepSeek")).toBe(true);
+  });
+
+  it("throws AuthChallengeError when Cloudflare challenge is detected", async () => {
+    const browser = new FakeBrowserPort();
+    browser.evalResponseMap.set("challenges.cloudflare.com", {
+      detected: true,
+      isInteractive: true,
+      rect: { left: 100, top: 200, width: 300, height: 65 },
+    });
+
+    const driver = new DeepSeekDriver();
+    expect(driver.submitPrompt(handle, browser, "Hello DeepSeek")).rejects.toThrow("turnstile");
   });
 
   it("detects download links and continuation in DeepSeek", async () => {

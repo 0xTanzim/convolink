@@ -11,10 +11,9 @@ export async function handleProfile(args: string[]): Promise<number> {
   if (sub === "list") {
     if (args.includes("--json") || args.includes("-j")) {
       const jsonList = profiles.map((p, i) => {
-        const isActive = Boolean(
-          (currentConfig?.profileEmail && p.email === currentConfig.profileEmail) ||
-          (currentConfig?.profilePath && p.userDataDir === currentConfig.profilePath),
-        );
+        const isActive = currentConfig?.profilePath
+          ? p.userDataDir === currentConfig.profilePath
+          : Boolean(currentConfig?.profileEmail && p.email === currentConfig.profileEmail);
         return {
           index: i + 1,
           browser: p.browser,
@@ -23,7 +22,6 @@ export async function handleProfile(args: string[]): Promise<number> {
           profileId: p.profileId,
           userDataDir: p.userDataDir,
           isActive,
-          isRecommended: i === 0,
         };
       });
       console.log(JSON.stringify(jsonList, null, 2));
@@ -33,9 +31,9 @@ export async function handleProfile(args: string[]): Promise<number> {
     console.log("📁 Discovered Browser Profiles:\n");
     profiles.forEach((p, i) => {
       const idx = i + 1;
-      const isActive =
-        (currentConfig?.profileEmail && p.email === currentConfig.profileEmail) ||
-        (currentConfig?.profilePath && p.userDataDir === currentConfig.profilePath);
+      const isActive = currentConfig?.profilePath
+        ? p.userDataDir === currentConfig.profilePath
+        : Boolean(currentConfig?.profileEmail && p.email === currentConfig.profileEmail);
       const activeBadge = isActive ? " [★ ACTIVE IN THIS REPO]" : "";
       const email = p.email ? ` <${p.email}>` : "";
       console.log(`  #${idx} [${p.browser}] ${p.name}${email}${activeBadge}`);
@@ -68,11 +66,13 @@ export async function handleProfile(args: string[]): Promise<number> {
       return 1;
     }
 
+    const isGecko = matched.browser.toLowerCase().includes("firefox") || matched.browser.toLowerCase().includes("zen");
     await configService.updateConfig({
       profileId: matched.profileId,
       profileEmail: matched.email,
       profilePath: matched.userDataDir,
       browser: matched.browser,
+      transport: isGecko ? "firefox-bidi" : "raw-cdp",
     });
 
     const email = matched.email ? ` <${matched.email}>` : "";

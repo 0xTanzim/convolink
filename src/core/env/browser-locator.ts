@@ -34,7 +34,7 @@ export class BrowserLocator {
   }
 
   public static findAnyInstalledBrowser(options: BrowserLocatorOptions = {}): string | null {
-    const browsers = ["Google Chrome", "Brave", "Microsoft Edge", "Chromium"];
+    const browsers = ["Google Chrome", "Brave", "Microsoft Edge", "Chromium", "Firefox", "Zen Browser"];
     for (const b of browsers) {
       const found = this.findBrowserExecutable(b, options);
       if (found) return found;
@@ -52,7 +52,7 @@ export class BrowserLocator {
     const lower = browserName.toLowerCase();
 
     if (platform === "linux") {
-      return this.getLinuxCandidates(lower, arch);
+      return this.getLinuxCandidates(lower, arch, env);
     }
     if (platform === "darwin") {
       return this.getDarwinCandidates(lower, env);
@@ -63,8 +63,33 @@ export class BrowserLocator {
     return [];
   }
 
-  private static getLinuxCandidates(lower: string, arch: string): string[] {
+  private static getLinuxCandidates(
+    lower: string,
+    arch: string,
+    env: Record<string, string | undefined>,
+  ): string[] {
     const isArm = arch === "arm64" || arch === "aarch64";
+    const home = env.HOME || os.homedir();
+    if (lower.includes("zen")) {
+      return [
+        path.join(home, ".local/bin/zen"),
+        "/usr/bin/zen",
+        "/usr/bin/zen-browser",
+        "/usr/local/bin/zen",
+        path.join(home, ".zen/zen"),
+        "/var/lib/flatpak/exports/bin/app.zen_browser.zen",
+        "/snap/bin/zen",
+      ];
+    }
+    if (lower.includes("firefox")) {
+      return [
+        "/usr/bin/firefox",
+        "/usr/bin/firefox-esr",
+        "/snap/bin/firefox",
+        "/var/lib/flatpak/exports/bin/org.mozilla.firefox",
+        "/run/current-system/sw/bin/firefox",
+      ];
+    }
     if (lower.includes("brave")) {
       return [
         "/usr/bin/brave-browser",
@@ -108,7 +133,12 @@ export class BrowserLocator {
     let appName = "Google Chrome.app/Contents/MacOS/Google Chrome";
     let extra: string[] = [];
 
-    if (lower.includes("brave")) {
+    if (lower.includes("zen")) {
+      appName = "Zen Browser.app/Contents/MacOS/zen";
+      extra = ["/Applications/Zen.app/Contents/MacOS/zen", path.join(home, "Applications/Zen.app/Contents/MacOS/zen")];
+    } else if (lower.includes("firefox")) {
+      appName = "Firefox.app/Contents/MacOS/firefox";
+    } else if (lower.includes("brave")) {
       appName = "Brave Browser.app/Contents/MacOS/Brave Browser";
     } else if (lower.includes("edge")) {
       appName = "Microsoft Edge.app/Contents/MacOS/Microsoft Edge";
@@ -131,7 +161,11 @@ export class BrowserLocator {
     const programFilesX86 = env["PROGRAMFILES(X86)"] || "C:\\Program Files (x86)";
 
     let subPath = winPath.join("Google", "Chrome", "Application", "chrome.exe");
-    if (lower.includes("brave")) {
+    if (lower.includes("zen")) {
+      subPath = winPath.join("Zen Browser", "zen.exe");
+    } else if (lower.includes("firefox")) {
+      subPath = winPath.join("Mozilla Firefox", "firefox.exe");
+    } else if (lower.includes("brave")) {
       subPath = winPath.join("BraveSoftware", "Brave-Browser", "Application", "brave.exe");
     } else if (lower.includes("edge")) {
       subPath = winPath.join("Microsoft", "Edge", "Application", "msedge.exe");

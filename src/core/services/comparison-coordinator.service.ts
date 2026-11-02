@@ -48,7 +48,7 @@ export class ComparisonCoordinator {
     const targetTabs: DiscoveredTab[] = [];
 
     for (const p of platforms) {
-      let tab = allTabs.find((t) => t.platformId === p);
+      let tab = allTabs.find((t) => t.platformId === p && !targetTabs.some((used) => used.targetId === t.targetId));
       if (!tab && options.autoSpawn !== false) {
         tab = await this.tabManager.createTab(p);
       }

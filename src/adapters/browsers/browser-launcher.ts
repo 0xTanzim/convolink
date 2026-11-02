@@ -1,5 +1,6 @@
 import { spawn } from "node:child_process";
 import * as fs from "node:fs";
+import * as net from "node:net";
 import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
 import { PlatformEnv } from "../../core/env/platform-env.js";
@@ -68,14 +69,30 @@ export class BrowserLauncherService {
       const res = await fetch(`http://${host}:${port}/json/version`, {
         signal: AbortSignal.timeout(300),
       });
-      return res.ok;
-    } catch {
-      return false;
-    }
+      if (res.ok) return true;
+    } catch {}
+
+    return new Promise<boolean>((resolve) => {
+      const socket = net.createConnection({ host, port });
+      socket.setTimeout(250);
+      socket.on("connect", () => {
+        socket.destroy();
+        resolve(true);
+      });
+      socket.on("timeout", () => {
+        socket.destroy();
+        resolve(false);
+      });
+      socket.on("error", () => {
+        socket.destroy();
+        resolve(false);
+      });
+    });
   }
 
   public isProfileLocked(profilePath?: string): { locked: boolean; pid?: number } {
     if (!profilePath) return { locked: false };
+    // Check Chromium SingletonLock
     const lockFile = path.join(profilePath, "SingletonLock");
     try {
       const target = fs.readlinkSync(lockFile);
@@ -91,28 +108,61 @@ export class BrowserLauncherService {
         }
       }
     } catch {}
+
+    // Check Gecko (Firefox / Zen) lock symlink (lock -> ip:+<pid>)
+    const geckoLock = path.join(profilePath, "lock");
+    try {
+      const target = fs.readlinkSync(geckoLock);
+      const parts = target.split(":+");
+      const pidStr = parts[parts.length - 1];
+      const pid = pidStr ? parseInt(pidStr, 10) : undefined;
+      if (pid && !isNaN(pid)) {
+        try {
+          process.kill(pid, 0);
+          return { locked: true, pid };
+        } catch {
+          return { locked: false };
+        }
+      }
+    } catch {}
+
     return { locked: false };
   }
 
   public async ensureBrowserRunning(options: EnsureBrowserOptions = {}): Promise<boolean> {
-    const port = options.port ?? 9222;
-    if (await this.checkPort(port)) {
-      return true;
-    }
-
     const binary = this.findBinary(options.browser);
     if (!binary) return false;
 
+    const isGecko = Boolean(
+      (options.browser && (options.browser.toLowerCase().includes("firefox") || options.browser.toLowerCase().includes("zen"))) ||
+      binary.toLowerCase().includes("firefox") ||
+      binary.toLowerCase().includes("zen"),
+    );
+
+    const port = options.port ?? (isGecko ? 9223 : 9222);
+    if (await this.checkPort(port)) return true;
+
+    if (isGecko && options.profilePath && !this.isProfileLocked(options.profilePath).locked) {
+      try { fs.unlinkSync(path.join(options.profilePath, "lock")); } catch {}
+      try { fs.unlinkSync(path.join(options.profilePath, ".parentlock")); } catch {}
+    }
+
     const args = [`--remote-debugging-port=${port}`];
-    if (options.profilePath) {
-      args.push(`--user-data-dir=${options.profilePath}`);
-    }
-    if (options.profileDirectory) {
-      args.push(`--profile-directory=${options.profileDirectory}`);
-      args.push("--no-first-run");
-    }
-    if (options.headless === true || (options.headless === undefined && this.isHeadless())) {
-      args.push("--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox");
+    if (isGecko) {
+      args.push("-no-remote", "--remote-allow-origins=*");
+      if (options.profilePath) args.push("-profile", options.profilePath);
+      if (options.headless === true || (options.headless === undefined && this.isHeadless())) args.push("-headless");
+    } else {
+      if (options.profilePath) args.push(`--user-data-dir=${options.profilePath}`);
+      if (options.profileDirectory) {
+        const targetDir = options.profilePath ? path.join(options.profilePath, options.profileDirectory) : "";
+        const defaultDir = options.profilePath ? path.join(options.profilePath, "Default") : "";
+        const profDir = !fs.existsSync(targetDir) && fs.existsSync(defaultDir) ? "Default" : options.profileDirectory;
+        args.push(`--profile-directory=${profDir}`, "--no-first-run");
+      }
+      if (options.headless === true || (options.headless === undefined && this.isHeadless())) {
+        args.push("--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox");
+      }
     }
 
     this.spawner(binary, args, { detached: true, stdio: "ignore" });
@@ -123,9 +173,7 @@ export class BrowserLauncherService {
 
     while (Date.now() < deadline) {
       await new Promise((r) => setTimeout(r, interval));
-      if (await this.checkPort(port)) {
-        return true;
-      }
+      if (await this.checkPort(port)) return true;
     }
 
     const lock = this.isProfileLocked(options.profilePath);
@@ -133,12 +181,17 @@ export class BrowserLauncherService {
       console.error(
         `\n⚠️ Profile '${options.profilePath}' is currently open in another process (PID ${lock.pid}) without remote debugging enabled.`,
       );
-      console.error(
-        `💡 Chromium ignores --remote-debugging-port when attaching to an already-running browser instance.`,
-      );
-      console.error(
-        `💡 To fix: Close that browser window and retry, or use a dedicated ConvoLink profile ('convo profile select 1').\n`,
-      );
+      if (isGecko) {
+        const binName = options.browser?.toLowerCase().includes("zen") ? "zen" : "firefox";
+        console.error(`💡 Firefox/Zen ignores --remote-debugging-port when joining an already-running browser instance.`);
+        console.error(`💡 Solutions:`);
+        console.error(`   1. Launch with debugging: '${binName} -no-remote --remote-debugging-port=${port}'`);
+        console.error(`   2. Or connect without flags via Companion Extension: 'convo ext pair'`);
+        console.error(`   3. Or select another profile with 'convo profile list'.\n`);
+      } else {
+        console.error(`💡 Chromium ignores --remote-debugging-port when attaching to an already-running browser instance.`);
+        console.error(`💡 To fix: Close that browser window and retry, or select another profile with 'convo profile list'.\n`);
+      }
     }
 
     return false;

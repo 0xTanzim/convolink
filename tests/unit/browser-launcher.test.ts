@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import * as path from "node:path";
+import * as os from "node:os";
+import * as fs from "node:fs";
 import { BrowserLauncherService } from "../../src/adapters/browsers/browser-launcher.js";
 
 describe("BrowserLauncherService (Detached Daemon)", () => {
@@ -98,6 +101,106 @@ describe("BrowserLauncherService (Detached Daemon)", () => {
     expect(capturedArgs).toContain("--no-first-run");
   });
 
+  it("falls back to 'Default' when profileDirectory does not exist inside profilePath to prevent ghost profile creation", async () => {
+    let capturedArgs: string[] = [];
+    let checked = false;
+
+    const tmpDataDir = path.join(os.tmpdir(), `convo-ghost-prevent-${Date.now()}`);
+    fs.mkdirSync(path.join(tmpDataDir, "Default"), { recursive: true });
+
+    try {
+      const launcher = new BrowserLauncherService({
+        findBinary: () => "/usr/bin/google-chrome",
+        checkPort: async () => {
+          if (!checked) {
+            checked = true;
+            return false;
+          }
+          return true;
+        },
+        spawnProcess: (_bin, args) => {
+          capturedArgs = args;
+        },
+      });
+
+      await launcher.ensureBrowserRunning({
+        profilePath: tmpDataDir,
+        profileDirectory: "zack-ai",
+        browser: "Google Chrome",
+      });
+
+      expect(capturedArgs).toContain(`--user-data-dir=${tmpDataDir}`);
+      expect(capturedArgs).toContain("--profile-directory=Default");
+      expect(capturedArgs).not.toContain("--profile-directory=zack-ai");
+    } finally {
+      fs.rmSync(tmpDataDir, { recursive: true, force: true });
+    }
+  });
+
+  it("passes -profile and avoids Chromium-specific flags when launching Firefox", async () => {
+    let capturedArgs: string[] = [];
+    let checked = false;
+
+    const launcher = new BrowserLauncherService({
+      findBinary: () => "/usr/bin/firefox",
+      checkPort: async () => {
+        if (!checked) {
+          checked = true;
+          return false;
+        }
+        return true;
+      },
+      spawnProcess: (_bin, args) => {
+        capturedArgs = args;
+      },
+    });
+
+    await launcher.ensureBrowserRunning({
+      profilePath: "/home/user/.mozilla/firefox/vnwp8i57.default-release",
+      browser: "Firefox",
+      headless: true,
+    });
+
+    expect(capturedArgs).toContain("--remote-debugging-port=9223");
+    expect(capturedArgs).toContain("-no-remote");
+    expect(capturedArgs).toContain("--remote-allow-origins=*");
+    expect(capturedArgs).toContain("-profile");
+    expect(capturedArgs).toContain("/home/user/.mozilla/firefox/vnwp8i57.default-release");
+    expect(capturedArgs).toContain("-headless");
+    expect(capturedArgs.some((a) => a.includes("--user-data-dir"))).toBe(false);
+    expect(capturedArgs.some((a) => a.includes("--no-first-run"))).toBe(false);
+  });
+
+  it("passes -profile and avoids Chromium-specific flags when launching Zen Browser", async () => {
+    let capturedArgs: string[] = [];
+    let checked = false;
+
+    const launcher = new BrowserLauncherService({
+      findBinary: () => "/home/user/.local/bin/zen",
+      checkPort: async () => {
+        if (!checked) {
+          checked = true;
+          return false;
+        }
+        return true;
+      },
+      spawnProcess: (_bin, args) => {
+        capturedArgs = args;
+      },
+    });
+
+    await launcher.ensureBrowserRunning({
+      profilePath: "/home/user/.config/zen/uc3afs3u.Default (release)",
+      browser: "Zen Browser",
+    });
+
+    expect(capturedArgs).toContain("--remote-debugging-port=9223");
+    expect(capturedArgs).toContain("-no-remote");
+    expect(capturedArgs).toContain("-profile");
+    expect(capturedArgs).toContain("/home/user/.config/zen/uc3afs3u.Default (release)");
+    expect(capturedArgs.some((a) => a.includes("--user-data-dir"))).toBe(false);
+  });
+
   it("detects when profile directory is locked by a living process", () => {
     const launcher = new BrowserLauncherService();
     // Test with non-existent dir
@@ -113,6 +216,57 @@ describe("BrowserLauncherService (Detached Daemon)", () => {
       const locked = launcher.isProfileLocked(tmpDir);
       expect(locked.locked).toBe(true);
       expect(locked.pid).toBe(process.pid);
+    } finally {
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    }
+
+    // Test with Firefox / Zen symlink format (lock -> 127.0.0.1:+<pid>)
+    const geckoTmpDir = `/tmp/test-gecko-lock-${Date.now()}`;
+    fs.mkdirSync(geckoTmpDir, { recursive: true });
+    try {
+      fs.symlinkSync(`127.0.0.1:+${process.pid}`, `${geckoTmpDir}/lock`);
+      const locked = launcher.isProfileLocked(geckoTmpDir);
+      expect(locked.locked).toBe(true);
+      expect(locked.pid).toBe(process.pid);
+    } finally {
+      fs.rmSync(geckoTmpDir, { recursive: true, force: true });
+    }
+  });
+
+  it("automatically unlinks stale gecko lock files when the holding PID is dead", async () => {
+    const fs = require("node:fs");
+    const path = require("node:path");
+    const tmpDir = `/tmp/test-gecko-stale-lock-${Date.now()}`;
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const lockPath = path.join(tmpDir, "lock");
+    const parentLockPath = path.join(tmpDir, ".parentlock");
+
+    // Dead PID 999999
+    fs.symlinkSync("127.0.0.1:+999999", lockPath);
+    fs.writeFileSync(parentLockPath, "");
+
+    let spawned = false;
+    let checkCount = 0;
+    const launcher = new BrowserLauncherService({
+      findBinary: () => "/usr/bin/firefox",
+      checkPort: async () => {
+        checkCount++;
+        return checkCount > 1; // false on first check, true on second
+      },
+      spawnProcess: () => {
+        spawned = true;
+      },
+    });
+
+    try {
+      await launcher.ensureBrowserRunning({
+        profilePath: tmpDir,
+        browser: "firefox",
+      });
+
+      expect(spawned).toBe(true);
+      expect(fs.existsSync(lockPath)).toBe(false);
+      expect(fs.existsSync(parentLockPath)).toBe(false);
     } finally {
       fs.rmSync(tmpDir, { recursive: true, force: true });
     }

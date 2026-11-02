@@ -1,6 +1,12 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { PlatformId } from "../core/ports/platform.port.js";
-import { formatDoctorReport, runSelfHealingClean, getProfilesListText, selectProfile } from "./mcp.helpers.js";
+import {
+  formatDoctorReport,
+  runSelfHealingClean,
+  getProfilesListText,
+  selectProfile,
+  ensureMcpBrowserReady,
+} from "./mcp.helpers.js";
 export { MCP_TOOLS, type McpToolDefinition } from "./mcp.schema.js";
 
 export interface McpToolExecutionResult {
@@ -11,14 +17,25 @@ export interface McpToolExecutionResult {
   readonly redactedSecretsCount?: number;
 }
 
+export interface ExecuteToolOptions {
+  readonly workDir?: string;
+}
+
 export async function executeMcpTool(
   orchestrator: SessionOrchestrator,
   name: string,
   args: Record<string, unknown> = {},
+  options?: ExecuteToolOptions,
 ): Promise<McpToolExecutionResult> {
   try {
     switch (name) {
       case "convo_ask": {
+        const browser = typeof args.browser === "string" ? args.browser : undefined;
+        const profile = typeof args.profile === "string" ? args.profile : undefined;
+        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile });
+        if (!browserReady.ok) {
+          return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
+        }
         const prompt = typeof args.prompt === "string" ? args.prompt : String(args.prompt ?? "");
         const platform = typeof args.platform === "string" ? (args.platform as PlatformId) : undefined;
         const targetId = typeof args.targetId === "string" ? args.targetId : undefined;
@@ -42,6 +59,12 @@ export async function executeMcpTool(
       }
 
       case "convo_compare": {
+        const browser = typeof args.browser === "string" ? args.browser : undefined;
+        const profile = typeof args.profile === "string" ? args.profile : undefined;
+        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile });
+        if (!browserReady.ok) {
+          return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
+        }
         const prompt = typeof args.prompt === "string" ? args.prompt : String(args.prompt ?? "");
         const platforms = Array.isArray(args.platforms) ? (args.platforms as PlatformId[]) : undefined;
         const arbitrate = typeof args.arbitrate === "boolean" ? args.arbitrate : undefined;
@@ -127,9 +150,9 @@ export async function executeMcpTool(
         const action = typeof args.action === "string" ? args.action : "list";
         if (action === "select") {
           const target = typeof args.target === "string" ? args.target : "";
-          return selectProfile(target);
+          return selectProfile(target, options?.workDir);
         }
-        return { text: await getProfilesListText() };
+        return { text: await getProfilesListText(options?.workDir) };
       }
 
       default:

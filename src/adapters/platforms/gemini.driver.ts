@@ -12,7 +12,8 @@ import type {
 } from "../../core/ports/platform.port.js";
 import { TimeoutError } from "../../core/errors/bridge-errors.js";
 import { StreamSettlingDetector } from "./settling-detector.js";
-import { GEMINI_RESOLVE_SELECTORS_EXPR, getGeminiReadThreadExpr } from "./gemini.scripts.js";
+import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { GEMINI_RESOLVE_SELECTORS_EXPR, getGeminiReadThreadExpr, getGeminiFingerprintExpr, getGeminiAwaitCompletionExpr } from "./gemini.scripts.js";
 
 export class GeminiDriver implements PlatformPort {
   public readonly id: PlatformId = "gemini";
@@ -58,30 +59,17 @@ export class GeminiDriver implements PlatformPort {
     prompt: string,
     _files?: string[],
   ): Promise<TurnFingerprint> {
-    const expr = `(() => {
-      /* submitPrompt */
-      const composer = document.querySelector('rich-textarea div.ql-editor.textarea, rich-textarea [contenteditable="true"], p[data-placeholder], div[contenteditable="true"].ql-editor');
-      if (!composer) throw new Error("Gemini Quill composer not found");
+    const fingerprint = await browser
+      .evaluate<TurnFingerprint>(handle, getGeminiFingerprintExpr(prompt.length))
+      .catch(() => ({ turnCount: 0, lastTurnHash: "", submittedPromptHash: String(prompt.length) }));
 
-      const beforeTurns = document.querySelectorAll('user-query, model-response').length;
-      composer.focus();
-      document.execCommand('selectAll', false, null);
-      document.execCommand('insertText', false, ${JSON.stringify(prompt)});
+    const composerSelector = 'rich-textarea div.ql-editor.textarea, rich-textarea [contenteditable="true"], p[data-placeholder], div[contenteditable="true"].ql-editor';
+    await browser.fillText(handle, composerSelector, prompt);
 
-      const sendBtn = document.querySelector('button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"]');
-      if (sendBtn && !sendBtn.disabled && sendBtn.getAttribute('aria-disabled') !== 'true') {
-        sendBtn.click();
-      } else {
-        composer.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-      }
+    const sendBtnSelector = 'button[aria-label="Send message"], button.send-button, button[mattooltip="Send message"], button[aria-label*="Send"]';
+    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
 
-      return {
-        turnCount: beforeTurns,
-        lastTurnHash: String(beforeTurns),
-        submittedPromptHash: String(${prompt.length}),
-      };
-    })()`;
-    return browser.evaluate<TurnFingerprint>(handle, expr);
+    return fingerprint;
   }
 
   public async awaitCompletion(
@@ -92,10 +80,14 @@ export class GeminiDriver implements PlatformPort {
     quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
     const start = Date.now();
+    let lastActivity = Date.now();
+    let lastLength = 0;
+    const idleTimeoutMs = Math.max(timeoutMs, 60_000);
+    const maxHardCapMs = Math.max(timeoutMs * 2, 300_000);
     const detector = new StreamSettlingDetector(quiescenceMs);
     const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
 
-    while (Date.now() - start < timeoutMs) {
+    while (Date.now() - lastActivity < idleTimeoutMs && Date.now() - start < maxHardCapMs) {
       const status = await browser.evaluate<{
         turnsCount: number;
         hasNewTurn: boolean;
@@ -103,42 +95,14 @@ export class GeminiDriver implements PlatformPort {
         isThinking?: boolean;
         assistantText: string;
         codeBlocks: Array<{ language: string; code: string }>;
-      }>(
-        handle,
-        `(() => {
-          /* awaitCompletion */
-          const stop = document.querySelector('button[aria-label="Stop response"], button[aria-label*="Stop"]');
-          const spinner = document.querySelector('mat-mdc-progress-spinner, mat-progress-spinner');
-          const isGenerating = Boolean(
-            (stop && stop.offsetParent !== null) ||
-            (spinner && (spinner.offsetParent !== null || spinner.tagName.toLowerCase().includes('spinner')))
-          );
-
-          const thoughtEl = document.querySelector('.sparkle-thinking, div[data-testid*="thought"], div[class*="thought"], button[aria-label*="Thinking"], button[aria-label*="thought"]');
-          const isThinking = Boolean(
-            thoughtEl && (
-              thoughtEl.classList.contains('sparkle-thinking') ||
-              thoughtEl.querySelector('mat-progress-spinner, mat-mdc-progress-spinner, [class*="spin"]') ||
-              (thoughtEl.innerText || '').includes('Thinking...')
-            )
-          );
-
-          const models = Array.from(document.querySelectorAll('model-response'));
-          const turns = Array.from(document.querySelectorAll('user-query, model-response'));
-          const hasNewTurn = turns.length > ${before.turnCount};
-          const lastModel = models.length > 0 ? models[models.length - 1] : null;
-
-          const assistantText = lastModel ? (lastModel.innerText || '').trim() : '';
-          const codeBlocks = lastModel ? Array.from(lastModel.querySelectorAll('pre code')).map(c => ({
-            language: c.className.replace(/^language-/, '') || 'text',
-            code: c.textContent || '',
-          })) : [];
-
-          return { turnsCount: turns.length, hasNewTurn, isGenerating, isThinking, assistantText, codeBlocks };
-        })()`,
-      );
+      }>(handle, getGeminiAwaitCompletionExpr(before.turnCount));
 
       const text = status.assistantText || (status as any).text || "";
+      if (status.isGenerating || status.isThinking || text.length !== lastLength) {
+        lastActivity = Date.now();
+        lastLength = text.length;
+      }
+
       const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
       const settled = hasNewTurn && detector.isSettled({
         isGenerating: status.isGenerating,
@@ -170,8 +134,10 @@ export class GeminiDriver implements PlatformPort {
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
     const expr = `(() => {
       /* findContinuationTrigger */
+      ${IS_VISIBLE_JS}
       const b = document.querySelector('button[aria-label*="Continue"], button.continue-btn');
-      return { hasContinuation: Boolean(b && b.offsetParent !== null), triggerSelector: 'button[aria-label*="Continue"]' };
+      const hasContinuation = isVisible(b);
+      return { hasContinuation, triggerSelector: 'button[aria-label*="Continue"]' };
     })()`;
     return browser.evaluate<ContinuationTrigger>(handle, expr);
   }

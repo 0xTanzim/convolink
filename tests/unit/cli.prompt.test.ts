@@ -13,7 +13,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     {
       browser: "Google Chrome",
       profileId: "Default",
-      name: "Zack",
+      name: "Work Profile",
       email: "developer@example.com",
       userDataDir: "/home/user/.config/google-chrome",
     },
@@ -55,7 +55,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     fs.rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  it("in non-interactive mode, auto-selects default active profile without blocking stdin", async () => {
+  it("in non-interactive mode, returns null and never automatically selects a profile without user input", async () => {
     const freshTmp = path.join(os.tmpdir(), `convo-non-interactive-${Date.now()}`);
     let promptCalled = false;
 
@@ -70,13 +70,17 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     });
 
     expect(promptCalled).toBe(false);
-    expect(resolved).toBeDefined();
-    expect(resolved?.profileId).toBe("Default");
+    expect(resolved).toBeNull();
+
+    // Verify nothing was written to config.json
+    const configService = new ConfigService(freshTmp);
+    const saved = await configService.loadConfig();
+    expect(saved).toBeNull();
 
     fs.rmSync(freshTmp, { recursive: true, force: true });
   });
 
-  it("in interactive mode, prompts user and persists choice to .convo/config.json", async () => {
+  it("in interactive mode, prompts user without ranking/recommended tags and persists choice to .convo/config.json", async () => {
     const freshTmp = path.join(os.tmpdir(), `convo-interactive-${Date.now()}`);
     let promptMessage = "";
 
@@ -91,6 +95,7 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     });
 
     expect(promptMessage).toContain("Select a profile");
+    expect(promptMessage).not.toContain("default: 1");
     expect(resolved).toBeDefined();
     expect(resolved?.profileId).toBe("Profile 1");
     expect(resolved?.profileEmail).toBe("personal@example.com");
@@ -104,17 +109,21 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     fs.rmSync(freshTmp, { recursive: true, force: true });
   });
 
-  it("defaults to option 1 when user presses Enter without typing a number", async () => {
-    const freshTmp = path.join(os.tmpdir(), `convo-default-enter-${Date.now()}`);
+  it("never automatically selects option 1 when user submits empty input", async () => {
+    const freshTmp = path.join(os.tmpdir(), `convo-no-default-enter-${Date.now()}`);
 
     const resolved = await ensureProjectProfile({
       workDir: freshTmp,
       isInteractive: true,
       discoverProfiles: async () => mockProfiles,
-      promptInput: async () => "", // Empty string = Enter
+      promptInput: async () => "", // Empty string = Enter without selection
     });
 
-    expect(resolved?.profileId).toBe("Default");
+    expect(resolved).toBeNull();
+
+    const configService = new ConfigService(freshTmp);
+    const saved = await configService.loadConfig();
+    expect(saved).toBeNull();
 
     fs.rmSync(freshTmp, { recursive: true, force: true });
   });
@@ -143,5 +152,105 @@ describe("CLI Interactive Prompt & Profile Auto-Resolution", () => {
     expect(saved?.profileId).toBe("Profile 1");
 
     fs.rmSync(freshTmp, { recursive: true, force: true });
+  });
+
+  it("handles skip option (typing '0' or 'skip') by cancelling cleanly without error", async () => {
+    const freshTmp = path.join(os.tmpdir(), `convo-skip-${Date.now()}`);
+
+    const resolved = await ensureProjectProfile({
+      workDir: freshTmp,
+      isInteractive: true,
+      discoverProfiles: async () => mockProfiles,
+      promptInput: async () => "skip",
+    });
+
+    expect(resolved).toBeNull();
+
+    const configService = new ConfigService(freshTmp);
+    const saved = await configService.loadConfig();
+    expect(saved).toBeNull();
+
+    fs.rmSync(freshTmp, { recursive: true, force: true });
+  });
+
+  it("handles custom write-in ('Other') input for custom profile directory or email", async () => {
+    const freshTmp = path.join(os.tmpdir(), `convo-other-${Date.now()}`);
+
+    const resolved = await ensureProjectProfile({
+      workDir: freshTmp,
+      isInteractive: true,
+      discoverProfiles: async () => mockProfiles,
+      promptInput: async () => "/custom/browser/user-data",
+    });
+
+    expect(resolved).toBeDefined();
+    expect(resolved?.profilePath).toBe("/custom/browser/user-data");
+
+    const configService = new ConfigService(freshTmp);
+    const saved = await configService.loadConfig();
+    expect(saved?.profilePath).toBe("/custom/browser/user-data");
+
+    fs.rmSync(freshTmp, { recursive: true, force: true });
+  });
+
+  it("saves transport as firefox-bidi when Zen Browser or Firefox is selected", async () => {
+    const freshTmp = path.join(os.tmpdir(), `convo-zen-prompt-${Date.now()}`);
+    const zenProfiles: DiscoveredProfile[] = [
+      {
+        browser: "Zen Browser",
+        profileId: "Default (release)",
+        name: "Zen Personal",
+        email: "zenuser@example.com",
+        userDataDir: "/home/user/.config/zen/uc3afs3u.Default (release)",
+      },
+    ];
+
+    const resolved = await ensureProjectProfile({
+      workDir: freshTmp,
+      isInteractive: true,
+      discoverProfiles: async () => zenProfiles,
+      promptInput: async () => "1",
+    });
+
+    expect(resolved).toBeDefined();
+    expect(resolved?.browser).toBe("Zen Browser");
+    expect(resolved?.transport).toBe("firefox-bidi");
+
+    const configService = new ConfigService(freshTmp);
+    const saved = await configService.loadConfig();
+    expect(saved?.transport).toBe("firefox-bidi");
+
+    fs.rmSync(freshTmp, { recursive: true, force: true });
+  });
+
+  it("resolveLaunchProfile prevents cross-browser profile pollution", async () => {
+    const { resolveLaunchProfile } = await import("../../src/entrypoints/cli.prompt.js");
+    const firefoxConfig = {
+      browser: "Firefox",
+      profilePath: "/home/user/.mozilla/firefox/profile.default",
+      profileId: "default",
+    };
+
+    const mockDiscovery = {
+      getProfilesForBrowser: async (b?: string) => [
+        {
+          browser: "Google Chrome",
+          profileId: "Default",
+          name: "Chrome User",
+          email: "chrome@example.com",
+          userDataDir: "/home/user/.config/google-chrome",
+        },
+      ],
+    };
+
+    // When requested browser is Chrome but config is Firefox, resolve Chrome profile
+    const forChrome = await resolveLaunchProfile(firefoxConfig, "chrome", mockDiscovery);
+    expect(forChrome.profilePath).toBe("/home/user/.config/google-chrome");
+    expect(forChrome.profileDirectory).toBe("Default");
+
+    // When requested browser matches config, keep configured profile
+    const forFirefox = await resolveLaunchProfile(firefoxConfig, "firefox", mockDiscovery);
+    expect(forFirefox.profilePath).toBe("/home/user/.mozilla/firefox/profile.default");
+    expect(forFirefox.profileDirectory).toBe("default");
   });
 });

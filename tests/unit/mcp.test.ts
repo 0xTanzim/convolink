@@ -1,4 +1,7 @@
 import { describe, expect, it } from "bun:test";
+import * as path from "node:path";
+import * as fs from "node:fs";
+import * as os from "node:os";
 import { McpServer } from "../../src/entrypoints/mcp.server.js";
 import { SessionOrchestrator } from "../../src/core/services/orchestrator.js";
 import { FakeBrowserPort } from "../fakes/fake-browser.js";
@@ -7,7 +10,7 @@ import { LockService } from "../../src/core/services/lock.service.js";
 import { PolicyService } from "../../src/core/services/policy.service.js";
 
 describe("McpServer (JSON-RPC over stdio)", () => {
-  const createTestServer = () => {
+  const createTestServer = (options?: { workDir?: string }) => {
     const browser = new FakeBrowserPort();
     browser.evalResponseMap.set("resolveSelectors", {
       ok: true, layoutVariant: "v1", composerSelector: "textarea", sendButtonSelector: "button",
@@ -25,7 +28,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
       policyGate: new PolicyService(),
     });
 
-    return new McpServer(orchestrator);
+    return new McpServer({ orchestrator, workDir: options?.workDir });
   };
 
   it("handles initialize method and returns server capabilities", async () => {
@@ -173,7 +176,8 @@ describe("McpServer (JSON-RPC over stdio)", () => {
   });
 
   it("handles tools/call for convo_profile list and select", async () => {
-    const server = createTestServer();
+    const sandboxDir = fs.mkdtempSync(path.join(os.tmpdir(), "convo-mcp-profile-test-"));
+    const server = createTestServer({ workDir: sandboxDir });
     const listRes = await server.handleMessage({
       jsonrpc: "2.0",
       id: 39,
@@ -191,6 +195,21 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     });
     expect(selectRes?.id).toBe(40);
     expect(selectRes?.result?.content?.[0]?.text).toBeDefined();
+
+    // Verify custom write-in ('Other') path in select
+    const customRes = await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 41,
+      method: "tools/call",
+      params: { name: "convo_profile", arguments: { action: "select", target: "/custom/profile/dir" } },
+    });
+    expect(customRes?.id).toBe(41);
+    expect(customRes?.result?.content?.[0]?.text).toContain("Saved custom active profile");
+
+    // Clean up sandbox completely
+    try {
+      fs.rmSync(sandboxDir, { recursive: true, force: true });
+    } catch {}
   });
 
   it("handles tools/call for convo_ask", async () => {
@@ -245,6 +264,50 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     });
     expect(response?.id).toBe(11);
     expect(response?.result?.content).toBeDefined();
+  });
+
+  it("when transport is offline and no profile is configured, convo_ask guides agent to select a profile", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `convo-empty-root-${Date.now()}`);
+    fs.mkdirSync(tmpRoot, { recursive: true });
+    process.env.CONVO_PROJECT_ROOT = tmpRoot;
+
+    try {
+      const offlineBrowser = new FakeBrowserPort();
+      offlineBrowser.health = async () => ({
+        ok: false,
+        adapterId: "fake",
+        endpoint: "fake",
+        openTabsCount: 0,
+        latencyMs: 0,
+      });
+
+      const orchestrator = new SessionOrchestrator({
+        browser: offlineBrowser,
+        drivers: [new DeepSeekDriver()],
+        lockService: new LockService(),
+        policyGate: new PolicyService(),
+      });
+
+      const server = new McpServer(orchestrator);
+      const response = await server.handleMessage({
+        jsonrpc: "2.0",
+        id: 42,
+        method: "tools/call",
+        params: {
+          name: "convo_ask",
+          arguments: { prompt: "Hello" },
+        },
+      });
+
+      expect(response?.id).toBe(42);
+      expect(response?.result?.isError).toBe(true);
+      const text = response?.result?.content?.[0]?.text ?? "";
+      expect(text).toContain("No browser profile configured");
+      expect(text).toContain("convo_profile");
+    } finally {
+      delete process.env.CONVO_PROJECT_ROOT;
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
   });
 
   it("runMcpServer processes JSON-RPC requests from input stream without echoing", async () => {

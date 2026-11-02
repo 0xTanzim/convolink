@@ -67,3 +67,8 @@ coverage/
 
 # OpenSpec Archive (main specifications live in openspec/specs/)
 openspec/changes/archive/
+report/
+.commandcode/
+Next_plan.md
+openspec/
+.opencode/

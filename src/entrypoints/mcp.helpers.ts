@@ -1,6 +1,8 @@
 import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
+import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js";
 import { GhostCleanupService } from "../adapters/browsers/ghost-cleanup.js";
 import { ConfigService } from "../core/services/config.service.js";
+import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { DoctorReport } from "../core/services/orchestrator.types.js";
 
 export interface McpToolResult {
@@ -45,14 +47,15 @@ export async function runSelfHealingClean(): Promise<{ killed: number; purged: s
   return { killed, purged };
 }
 
-export async function getProfilesListText(): Promise<string> {
+export async function getProfilesListText(workDir?: string): Promise<string> {
   const discovery = new BrowserDiscoveryService();
   const profiles = await discovery.discoverProfiles();
-  const config = await new ConfigService().loadConfig();
+  const config = await new ConfigService(workDir).loadConfig();
   const lines = ["Discovered Browser Profiles:"];
   profiles.forEach((p, idx) => {
-    const isActive = (config?.profileEmail && p.email === config.profileEmail) ||
-      (config?.profilePath && p.userDataDir === config.profilePath);
+    const isActive = config?.profilePath
+      ? p.userDataDir === config.profilePath
+      : Boolean(config?.profileEmail && p.email === config.profileEmail);
     const emailTag = p.email ? ` <${p.email}>` : "";
     const activeTag = isActive ? " [ACTIVE IN THIS WORKSPACE]" : "";
     lines.push(`  ${idx + 1}) [${p.browser}] ${p.name}${emailTag}${activeTag}`);
@@ -62,7 +65,7 @@ export async function getProfilesListText(): Promise<string> {
   return lines.join("\n");
 }
 
-export async function selectProfile(target: string): Promise<McpToolResult> {
+export async function selectProfile(target: string, workDir?: string): Promise<McpToolResult> {
   const trimmed = target.trim();
   if (!trimmed) {
     return { text: "Error: 'target' argument is required for action 'select'. Call convo_profile({ action: 'list' }) to see options.", isError: true };
@@ -75,15 +78,116 @@ export async function selectProfile(target: string): Promise<McpToolResult> {
     : profiles.find((p) => p.email.toLowerCase().includes(trimmed.toLowerCase()) || p.name.toLowerCase().includes(trimmed.toLowerCase()));
 
   if (!matched) {
+    const isEmail = trimmed.includes("@");
+    const isPath = trimmed.startsWith("/") || trimmed.startsWith("~") || trimmed.startsWith(".");
+    if (isEmail || isPath) {
+      await new ConfigService(workDir).updateConfig({
+        profileId: "Custom",
+        profileEmail: isEmail ? trimmed : undefined,
+        profilePath: isPath ? trimmed : undefined,
+        browser: "Custom",
+      });
+      return { text: `Saved custom active profile for this repository into .convo/config.json: ${trimmed}` };
+    }
     return { text: `Error: No profile matched '${trimmed}'. Call convo_profile({ action: 'list' }) to view installed profiles.`, isError: true };
   }
 
-  await new ConfigService().updateConfig({
+  const isGecko = matched.browser.toLowerCase().includes("firefox") || matched.browser.toLowerCase().includes("zen");
+  await new ConfigService(workDir).updateConfig({
     profileId: matched.profileId,
     profileEmail: matched.email,
     profilePath: matched.userDataDir,
+    browser: matched.browser,
+    transport: isGecko ? "firefox-bidi" : "raw-cdp",
   });
 
   const email = matched.email ? ` <${matched.email}>` : "";
   return { text: `Saved active profile for this repository into .convo/config.json: ${matched.name}${email} (${matched.browser})` };
+}
+
+export interface EnsureMcpBrowserOptions {
+  workDir?: string;
+  browser?: string;
+  profile?: string;
+  discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
+  ensureBrowserRunning?: (opts: import("../adapters/browsers/browser-launcher.js").EnsureBrowserOptions) => Promise<boolean>;
+}
+
+export interface McpBrowserReadyResult {
+  ok: boolean;
+  errorText?: string;
+  requiresUserSelection?: boolean;
+  question?: string;
+  options?: string[];
+}
+
+export async function ensureMcpBrowserReady(
+  orchestrator: SessionOrchestrator,
+  optionsOrWorkDir?: string | EnsureMcpBrowserOptions,
+): Promise<McpBrowserReadyResult> {
+  const opts = typeof optionsOrWorkDir === "string" ? { workDir: optionsOrWorkDir } : (optionsOrWorkDir ?? {});
+  const workDir = opts.workDir;
+
+  try {
+    const report = await orchestrator.doctor();
+    if (report.transportHealth.ok) {
+      return { ok: true };
+    }
+  } catch {}
+
+  const configService = new ConfigService(workDir);
+  if (opts.profile) {
+    await selectProfile(opts.profile, workDir);
+  }
+
+  let config = await configService.loadConfig();
+  if (!config) {
+    const discover = opts.discoverProfiles ?? (() => new BrowserDiscoveryService().discoverProfiles());
+    const profiles = await discover();
+
+    if (profiles.length === 1) {
+      const single = profiles[0]!;
+      const isGecko = single.browser.toLowerCase().includes("firefox") || single.browser.toLowerCase().includes("zen");
+      await configService.updateConfig({
+        profileId: single.profileId,
+        profileEmail: single.email,
+        profilePath: single.userDataDir,
+        browser: single.browser,
+        transport: isGecko ? "firefox-bidi" : "raw-cdp",
+      });
+      config = await configService.loadConfig();
+    } else if (profiles.length > 1) {
+      const options = profiles.map((p) => `${p.name}${p.email ? ` <${p.email}>` : ""} (${p.browser})`);
+      const profileList = await getProfilesListText();
+      const question = "Which browser profile do you want active for this project (.convo/config.json)?";
+
+      return {
+        ok: false,
+        requiresUserSelection: true,
+        question,
+        options,
+        errorText: [
+          "⚠️ No browser profile configured for this workspace, and remote debugging is offline.",
+          "",
+          profileList,
+          "",
+          "💡 Harness Elicitation: Prompt the user using your harness ask_question / interactive modal:",
+          `  • Question: '${question}'`,
+          `  • Options: ${JSON.stringify(options)}`,
+          "  • Action: Allow Submit, Other (custom write-in path), or Skip.",
+          "",
+          "After the user submits their choice, persist it via: convo_profile({ action: 'select', target: '<choice>' })",
+        ].join("\n"),
+      };
+    }
+  }
+
+  if (opts.ensureBrowserRunning) {
+    await opts.ensureBrowserRunning({
+      profilePath: config?.profilePath,
+      profileDirectory: config?.profileId,
+      browser: opts.browser ?? config?.browser,
+    });
+  }
+  return { ok: true };
 }

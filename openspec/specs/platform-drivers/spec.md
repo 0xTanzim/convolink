@@ -6,23 +6,23 @@ Provides platform-specific DOM adapters for web AI interfaces (ChatGPT, Claude, 
 ## Requirements
 
 ### Requirement: Reactive Input Injection
-The system SHALL inject text into target AI web composers using platform-appropriate reactive mechanisms to avoid silent input drops.
+The system SHALL inject text into target AI web composers using native protocol delegation with clipboard paste semantics and pre-send deliberation pauses to prevent anti-bot detection and silent input drops.
 
 #### Scenario: DeepSeek prompt injection
 - **WHEN** user sends prompt to DeepSeek
-- **THEN** system invokes HTMLTextAreaElement prototype value setter and dispatches bubbling input event, enabling the send button
+- **THEN** system focuses composer via native click, inputs prompt using paste semantics, pauses for deliberation, and triggers submission via native protocol click
 
 #### Scenario: ChatGPT ProseMirror prompt injection
 - **WHEN** user sends prompt to modern ChatGPT
-- **THEN** system targets `div.ProseMirror[contenteditable="true"]` using native text insertion without breaking multi-line markdown newlines
+- **THEN** system targets `div.ProseMirror[contenteditable="true"]` via native click, pastes prompt with paste event semantics, pauses for deliberation, and clicks send using native trusted events
 
 #### Scenario: Claude prompt injection
 - **WHEN** user sends prompt to Claude
-- **THEN** system targets contenteditable composer container and triggers send button click
+- **THEN** system targets contenteditable composer container, applies clipboard paste input with pre-send pause, and triggers send button via native protocol click
 
 #### Scenario: Gemini Quill prompt injection
 - **WHEN** user sends prompt to Gemini
-- **THEN** system targets `rich-textarea div.ql-editor` and triggers dynamic send message button click
+- **THEN** system targets `rich-textarea div.ql-editor`, executes clipboard paste input with human deliberation delay, and clicks send using native trusted events
 
 ### Requirement: Code Indentation Fidelity
 The system SHALL extract conversation turns while preserving 100% of indentation whitespace and code block formatting.

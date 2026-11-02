@@ -15,57 +15,68 @@ import {
   handleProfile,
 } from "./cli.ops.js";
 import { handleExt } from "./cli.ext.js";
+import { handleDaemon } from "./cli.daemon.js";
 import { handleAsk, handleCompare } from "./cli.query.js";
 
 export async function runCli(args: string[]): Promise<number> {
   const command = args[0] || "doctor";
   const transportFlagIdx = args.indexOf("--transport");
   const transport = transportFlagIdx !== -1 ? (args[transportFlagIdx + 1] as BrowserAdapterId) : undefined;
-  const container = createContainer({ transport });
+  const browserFlagIdx = args.indexOf("--browser") !== -1 ? args.indexOf("--browser") : args.indexOf("-b");
+  const browserName = browserFlagIdx !== -1 ? args[browserFlagIdx + 1] : undefined;
+  const container = createContainer({ transport, browserName });
 
-  switch (command) {
-    case "doctor":
-      return handleDoctor(container.orchestrator, args.slice(1));
-    case "list":
-      return handleList(container.orchestrator);
-    case "ask":
-      return handleAsk(container.orchestrator, args.slice(1), transport);
-    case "compare":
-      return handleCompare(container.orchestrator, args.slice(1));
-    case "tab":
-      return handleTab(container.orchestrator, args.slice(1));
-    case "back":
-      await container.orchestrator.goBack(args[1]);
-      console.log(`⬅️ Navigated back in browser history.`);
-      return 0;
-    case "undo":
-      return handleUndo(container.orchestrator, args[1]);
-    case "history":
-      return handleHistory(container, args[1]);
-    case "resume":
-      return handleResume(container.orchestrator, args[1]);
-    case "export":
-      return handleExport(container.orchestrator, args.slice(1));
-    case "search":
-      return handleSearch(container.orchestrator, args.slice(1).join(" "));
-    case "clean":
-      return handleClean();
-    case "profile":
-      return handleProfile(args.slice(1));
-    case "ext":
-      return handleExt(args.slice(1));
-    case "mcp":
-      await runMcpServer();
-      return 0;
-    case "help":
-    case "--help":
-    case "-h":
-      printHelp();
-      return 0;
-    default:
-      console.error(`Unknown command: ${command}`);
-      printHelp();
-      return 1;
+  try {
+    switch (command) {
+      case "doctor":
+        return await handleDoctor(container.orchestrator, args.slice(1));
+      case "list":
+        return await handleList(container.orchestrator);
+      case "ask":
+        return await handleAsk(container.orchestrator, args.slice(1), transport);
+      case "compare":
+        return await handleCompare(container.orchestrator, args.slice(1));
+      case "tab":
+        return await handleTab(container.orchestrator, args.slice(1));
+      case "back":
+        await container.orchestrator.goBack(args[1]);
+        console.log(`⬅️ Navigated back in browser history.`);
+        return 0;
+      case "undo":
+        return await handleUndo(container.orchestrator, args[1]);
+      case "history":
+        return await handleHistory(container, args[1]);
+      case "resume":
+        return await handleResume(container.orchestrator, args[1]);
+      case "export":
+        return await handleExport(container.orchestrator, args.slice(1));
+      case "search":
+        return await handleSearch(container.orchestrator, args.slice(1).join(" "));
+      case "clean":
+        return await handleClean();
+      case "profile":
+        return await handleProfile(args.slice(1));
+      case "ext":
+        return await handleExt(args.slice(1));
+      case "daemon":
+        return await handleDaemon(args.slice(1));
+      case "mcp":
+        await runMcpServer();
+        return 0;
+      case "help":
+      case "--help":
+      case "-h":
+        printHelp();
+        return 0;
+      default:
+        console.error(`Unknown command: ${command}`);
+        printHelp();
+        return 1;
+    }
+  } finally {
+    try {
+      await container.browser.disconnect?.();
+    } catch {}
   }
 }
 

@@ -60,41 +60,90 @@ export async function ensureProjectProfile(
 
   const interactive = options.isInteractive ?? isInteractiveSession();
   if (!interactive) {
-    // Non-interactive fallback: auto-select primary profile without blocking stdin
-    const primary = profiles[0]!;
-    const config: ConvoProjectConfig = {
-      profileId: primary.profileId,
-      profileEmail: primary.email,
-      profilePath: primary.userDataDir,
-      browser: primary.browser,
-    };
-    await configService.updateConfig(config);
-    return config;
+    // Never auto-select a profile without explicit user instruction
+    return null;
   }
 
-  // Interactive modern UX wizard
-  console.log("\n🧭 ConvoLink Setup: Link Browser Profile");
-  console.log("No active profile configured in .convo/config.json.\n");
+  // Interactive user prompt: all profiles are presented equally with no assumed ranking
+  console.log("\n🧭 ConvoLink Setup: Which browser profile do you want active for this project (.convo/config.json)?\n");
   profiles.forEach((p, idx) => {
     const num = idx + 1;
     const emailTag = p.email ? ` <${p.email}>` : "";
-    const recTag = idx === 0 ? " (Recommended)" : "";
-    console.log(`  ${num}) [${p.browser}] ${p.name}${emailTag}${recTag}`);
+    console.log(`  ${num}) [${p.browser}] ${p.name}${emailTag}`);
   });
+  const otherIdx = profiles.length + 1;
+  console.log(`  ${otherIdx}) Other (write custom profile path or email)`);
+  console.log(`  0) Skip (cancel without setting profile)\n`);
 
   const prompt = options.promptInput ?? defaultPromptInput;
-  const answer = (await prompt(`\nSelect a profile to link to this project [1-${profiles.length}] (default: 1): `)).trim();
-  const selectedIdx = answer === "" ? 0 : Math.max(0, parseInt(answer, 10) - 1);
-  const chosen = profiles[selectedIdx] ?? profiles[0]!;
+  const answer = (await prompt(`Select a profile [1-${profiles.length}], '${otherIdx}' for Other, or 'skip' [0]: `)).trim();
+  if (!answer || answer === "0" || answer.toLowerCase() === "skip" || answer.toLowerCase() === "s") {
+    console.log("⏩ Profile selection skipped.");
+    return null;
+  }
 
-  const config: ConvoProjectConfig = {
-    profileId: chosen.profileId,
-    profileEmail: chosen.email,
-    profilePath: chosen.userDataDir,
-    browser: chosen.browser,
-  };
-  await configService.updateConfig(config);
+  const num = parseInt(answer, 10);
+  if (!isNaN(num) && num >= 1 && num <= profiles.length) {
+    const chosen = profiles[num - 1]!;
+    const isGecko = chosen.browser.toLowerCase().includes("firefox") || chosen.browser.toLowerCase().includes("zen");
+    const config: ConvoProjectConfig = {
+      profileId: chosen.profileId,
+      profileEmail: chosen.email,
+      profilePath: chosen.userDataDir,
+      browser: chosen.browser,
+      transport: isGecko ? "firefox-bidi" : "raw-cdp",
+    };
+    await configService.updateConfig(config);
 
-  console.log(`\n✅ Linked workspace to ${chosen.name} (${chosen.email || chosen.browser}). Saved to .convo/config.json.\n`);
-  return config;
+    console.log(`\n✅ Linked workspace to ${chosen.name} (${chosen.email || chosen.browser}). Saved to .convo/config.json.\n`);
+    return config;
+  }
+
+  // Handle write-in custom path, email, or 'Other' option
+  let customValue = answer;
+  if (num === otherIdx) {
+    customValue = (await prompt("Enter custom profile directory path or email: ")).trim();
+    if (!customValue || customValue.toLowerCase() === "skip") {
+      console.log("⏩ Profile selection skipped.");
+      return null;
+    }
+  }
+
+  const isEmail = customValue.includes("@");
+  const isPath = customValue.startsWith("/") || customValue.startsWith("~") || customValue.startsWith(".");
+
+  if (isEmail || isPath || num === otherIdx) {
+    const config: ConvoProjectConfig = {
+      profileId: "Custom",
+      profileEmail: isEmail ? customValue : undefined,
+      profilePath: isPath ? customValue : undefined,
+      browser: "Custom",
+    };
+    await configService.updateConfig(config);
+    console.log(`\n✅ Linked workspace to custom profile (${customValue}). Saved to .convo/config.json.\n`);
+    return config;
+  }
+
+  console.error(`Invalid selection: ${answer}. Profile setup cancelled.`);
+  return null;
+}
+
+export async function resolveLaunchProfile(
+  config: ConvoProjectConfig | null,
+  browserName?: string,
+  discoveryService?: { getProfilesForBrowser: (b?: string) => Promise<DiscoveredProfile[]> },
+): Promise<{ profilePath?: string; profileDirectory?: string }> {
+  if (!browserName || !config?.browser) {
+    return { profilePath: config?.profilePath, profileDirectory: config?.profileId };
+  }
+  const bLower = browserName.toLowerCase();
+  const cLower = config.browser.toLowerCase();
+  if (bLower.includes(cLower) || cLower.includes(bLower)) {
+    return { profilePath: config.profilePath, profileDirectory: config.profileId };
+  }
+
+  const discovery = discoveryService ?? new BrowserDiscoveryService();
+  const matching = await discovery.getProfilesForBrowser(browserName);
+  const chosen = matching[0];
+  return { profilePath: chosen?.userDataDir, profileDirectory: chosen?.profileId };
 }

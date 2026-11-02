@@ -17,7 +17,7 @@ import type { AskOptions, AskResult, DiscoveredTab, DoctorReport, OrchestratorDe
 export * from "./orchestrator.types.js";
 
 export class SessionOrchestrator {
-  private readonly browser: BrowserPort;
+  private browser: BrowserPort;
   private readonly drivers: readonly PlatformPort[];
   private readonly lockService: LockService;
   private readonly policyGate: PolicyGatePort;
@@ -25,7 +25,7 @@ export class SessionOrchestrator {
   private readonly fileSink?: WorkspaceSinkPort;
   private readonly journalService?: StateJournalService;
   private readonly threadStore?: ThreadStore;
-  private readonly tabManager: TabManagerService;
+  private tabManager: TabManagerService;
   private readonly comparisonCoordinator: ComparisonCoordinator;
 
   public constructor(deps: OrchestratorDependencies) {
@@ -49,18 +49,18 @@ export class SessionOrchestrator {
 
   public async doctor(): Promise<DoctorReport> {
     let tabs: DiscoveredTab[] = [];
-    try {
-      tabs = await this.listTabs();
-    } catch {
-      // Browser offline or unreachable; runDoctorAudit will capture transport health
-    }
+    try { tabs = await this.listTabs(); } catch {}
     return runDoctorAudit(this.browser, tabs, (url) => TabResolver.findDriver(url, this.drivers), this.lockService);
   }
 
-  public createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> {
-    return this.tabManager.createTab(platformOrUrl);
-  }
+  public createTab(platformOrUrl: PlatformId | string): Promise<DiscoveredTab> { return this.tabManager.createTab(platformOrUrl); }
   public closeTab(targetId: string): Promise<void> { return this.tabManager.closeTab(targetId); }
+  public getBrowser(): BrowserPort { return this.browser; }
+  public setBrowser(browser: BrowserPort): void {
+    this.browser = browser;
+    this.tabManager = new TabManagerService(browser, this.drivers, this.lockService, this.journalService);
+  }
+  public getDrivers(): readonly PlatformPort[] { return this.drivers; }
   public getHistory(targetId?: string): readonly SessionCheckpoint[] { return this.journalService?.list(targetId) ?? []; }
 
   public async startNewChat(targetId?: string, platform?: PlatformId): Promise<DiscoveredTab> {
@@ -166,6 +166,11 @@ export class SessionOrchestrator {
           writtenFiles: writtenFiles.length > 0 ? writtenFiles : undefined,
           canvasDocument,
         };
+      } catch (err) {
+        if (targetTab.isNewlyCreated) {
+          try { await this.tabManager.closeTab(targetTab.targetId); } catch {}
+        }
+        throw err;
       } finally {
         if (sessionHandle) await this.browser.detach(sessionHandle);
       }
@@ -186,10 +191,7 @@ export class SessionOrchestrator {
       const next = await driver.awaitCompletion(
         handle, this.browser, { turnCount: current.turnIndex + 1, lastTurnHash: String(current.turnIndex) }, timeoutMs,
       );
-      current = {
-        ...current, markdownContent: `${current.markdownContent}\n${next.turn.markdownContent}`,
-        codeBlocks: [...current.codeBlocks, ...next.turn.codeBlocks],
-      };
+      current = { ...current, markdownContent: `${current.markdownContent}\n${next.turn.markdownContent}`, codeBlocks: [...current.codeBlocks, ...next.turn.codeBlocks] };
     }
     return current;
   }

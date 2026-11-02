@@ -40,3 +40,15 @@ The system SHALL support headless cloud environments and containers by automatic
 #### Scenario: Execution without display server
 - **WHEN** browser launch is requested on Linux with no `$DISPLAY` and no `$WAYLAND_DISPLAY`
 - **THEN** system appends `--headless=new`, `--disable-gpu`, `--disable-dev-shm-usage`, and `--no-sandbox` to the process arguments
+
+### Requirement: Native Protocol Event Dispatch and Stealth Preload
+The system SHALL dispatch mouse and keyboard interactions across Chromium and Gecko engines using native protocol-level commands yielding `event.isTrusted: true` and SHALL inject preload scripts to mask browser automation artifacts before page scripts execute.
+
+#### Scenario: Native protocol click dispatch
+- **WHEN** client invokes click on a DOM selector via CDP or BiDi
+- **THEN** system dispatches protocol-level pointer movements along a Bézier curve followed by native mouse down and mouse up events with `isTrusted: true`
+
+#### Scenario: Automation indicator masking
+- **WHEN** a new document or browsing context is initialized
+- **THEN** system automatically injects preload scripts that scrub `navigator.webdriver`, stub standard `window.chrome` properties, and sanitize automation markers
+

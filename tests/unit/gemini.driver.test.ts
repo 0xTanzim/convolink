@@ -68,7 +68,7 @@ describe("GeminiDriver", () => {
 
   it("submits prompt targeting Quill editor and dynamic send button", async () => {
     const browser = new FakeBrowserPort();
-    browser.evalResponseMap.set("submitPrompt", {
+    browser.evalResponseMap.set("/* submitPrompt */", {
       turnCount: 2,
       lastTurnHash: "2",
       submittedPromptHash: "20",
@@ -78,8 +78,7 @@ describe("GeminiDriver", () => {
     const fp = await driver.submitPrompt(handle, browser, "Hello Gemini from test");
 
     expect(fp.turnCount).toBe(2);
-    expect(browser.evaluatedExpressions.length).toBe(1);
-    expect(browser.evaluatedExpressions[0]).toContain("Hello Gemini from test");
+    expect(browser.filledTexts.some((f) => f.text === "Hello Gemini from test")).toBe(true);
   });
 
   it("awaits completion detecting spinner absence and stable output", async () => {
