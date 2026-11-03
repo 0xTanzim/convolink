@@ -15,12 +15,20 @@ export interface BuildDistResult {
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 
+async function resolveBuildVersion(): Promise<string> {
+  const pkg = (await Bun.file(path.join(ROOT_DIR, "package.json")).json()) as { version?: string };
+  return pkg.version ?? "0.0.0-dev";
+}
+
 export async function buildDist(options: BuildDistOptions = {}): Promise<BuildDistResult> {
   const outDir = options.outDir || path.join(ROOT_DIR, "dist");
   const cliPath = path.join(outDir, "cli.js");
   const mcpPath = path.join(outDir, "mcp.js");
 
   try {
+    const version = await resolveBuildVersion();
+    const define = { __CONVOLINK_VERSION__: JSON.stringify(version) };
+
     if (!fs.existsSync(outDir)) {
       fs.mkdirSync(outDir, { recursive: true });
     }
@@ -34,6 +42,7 @@ export async function buildDist(options: BuildDistOptions = {}): Promise<BuildDi
       format: "esm",
       banner: "#!/usr/bin/env bun\n",
       minify: false,
+      define,
     });
 
     if (!cliBuild.success) {
@@ -50,6 +59,7 @@ export async function buildDist(options: BuildDistOptions = {}): Promise<BuildDi
       format: "esm",
       banner: "#!/usr/bin/env bun\n",
       minify: false,
+      define,
     });
 
     if (!mcpBuild.success) {

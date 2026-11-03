@@ -5,6 +5,7 @@ import { handleFirefoxConnect } from "./cli.firefox.js";
 import { handleSetup } from "./cli.setup.command.js";
 import { ensureConfigured } from "./cli.setup.js";
 import { loadResolution } from "./config-context.js";
+import { handleVersionCommand } from "./cli.version.js";
 import { hasJsonFlag, printError } from "./cli.output.js";
 import type { BrowserId, TransportId } from "../core/ports/config.port.js";
 import {
@@ -28,6 +29,9 @@ const BROWSER_COMMANDS = new Set(["list", "ask", "compare", "tab"]);
 export async function runCli(args: string[]): Promise<number> {
   const command = args[0] || "doctor";
   const json = hasJsonFlag(args);
+
+  const versionExit = handleVersionCommand(command);
+  if (versionExit !== null) return versionExit;
 
   if (command === "setup") return await handleSetup(args.slice(1));
   if (command === "mcp" || command === "profile" || command === "clean" || command === "ext" || command === "daemon") {
