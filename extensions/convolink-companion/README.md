@@ -98,7 +98,7 @@ Every build writes `build-meta.json` next to `background.js`. The service worker
 
 ```bash
 bun run convo ext status
-#   • chrome [Personal] v1.1.0 · build mw0con1f · 2 tab(s)
+#   • chrome [Personal] v1.2.0 · build mw0lihog · 2 tab(s)
 ```
 
 **Chrome caches an unpacked extension's bundle in memory.** Restarting the service worker does not re-read `background.js`, so a rebuild only takes effect after:

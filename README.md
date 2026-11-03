@@ -8,7 +8,7 @@
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
 [![Tests](https://img.shields.io/badge/Tests-309%20passing%20(bun:test)-success)](https://bun.sh)
-[![Release](https://img.shields.io/badge/Release-v1.1.0-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
+[![Release](https://img.shields.io/badge/Release-v1.2.0-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
 [![Documentation](https://img.shields.io/badge/Documentation-Live%20Site-blue)](https://0xtanzim.github.io/convolink/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -123,7 +123,7 @@ ConvoLink adheres to the **Zero Ghost Browser Law**: it never spawns unauthentic
 Drives the browser you are already signed into, with **no startup flags** and **no browser
 restarts**. Your ChatGPT Plus, Claude Pro and DeepSeek sessions stay exactly where they are.
 
-1. Download the extension ZIP from [GitHub Releases v1.1.0](https://github.com/0xTanzim/convolink/releases/tag/v1.1.0):
+1. Download the extension ZIP from [GitHub Releases v1.2.0](https://github.com/0xTanzim/convolink/releases/tag/v1.2.0):
    - **Chrome / Brave / Edge:** `convolink-companion-chrome.zip`
    - **Firefox:** `convolink-companion-firefox.zip`
 2. Open `chrome://extensions/` (or `about:debugging` in Firefox), enable **Developer mode**, and click **Load unpacked**.
