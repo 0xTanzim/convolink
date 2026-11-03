@@ -1,0 +1,76 @@
+---
+title: The Setup Contract
+description: Exit codes, nextAction semantics, and which decisions belong to the human.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+## Exit codes are the API
+
+Every command that can stop before doing work returns a code that says **who** must fix it.
+Branch on the code, never on prose.
+
+| Exit | Meaning | Who acts | Agent behaviour |
+|---|---|---|---|
+| `0` | Success | — | Continue |
+| `2` | Configuration problem (`configuration-required`, `configuration-invalid`, `no-browser-found`) | Agent, or the user if a choice is needed | Run the remediation; pass the documented argument |
+| `3` | Transport problem (`browser-unreachable`, `default-profile-blocked`, `transport-disconnected`, `transport-timeout`) | Agent | Start the daemon, switch transport, or run `convo doctor` |
+| `4` | **A human must act in the browser** (`login-required`, `challenge-detected`, `not-owned`, `session-busy`) | User | Show the instruction, stop. Retrying cannot succeed |
+| `5` | Reached but not usable (`not-ready`, `submission-failed`) | Agent | Read `error.remediation`; one retry at most |
+| `6` | Internal (`internal`) | Nobody, yet | Report it; do not loop |
+
+`--json` wraps every outcome in one envelope:
+
+```json
+{ "ok": true,  "command": "ask", "data": { }, "error": null }
+{ "ok": false, "command": "ask", "data": null, "error": { "code": "not-owned", "message": "…", "remediation": "…", "retryable": false } }
+```
+
+## `nextAction` is the whole point
+
+`convo onboard --json` returns a single next step instead of a list of suggestions. It is
+ordered: daemon → extension pairing → profile → transport. Doing them out of order is why a
+fresh agent loops between `convo_setup`, `convo_profile` and `convo_doctor`.
+
+```
+{ "kind": "command", "command": "convo daemon start", "why": "The daemon owns port 9224…" }
+{ "kind": "user",    "instruction": "Open chrome://extensions … Token: 43a5…", "why": "…" }
+{ "kind": "tool",    "tool": "convo_profile", "args": { "action": "select", "target": "1" } }
+```
+
+## Elicitation: the agent can ask, and wait
+
+MCP clients that advertise the `elicitation` capability get a real question instead of a wall
+of text. `convo_setup` with **no arguments** then:
+
+1. sends `elicitation/create` with the discovered profiles as an enum,
+2. waits for the answer (5-minute cap),
+3. writes `.convo/config.json` itself and returns `answeredBy: "elicitation"`.
+
+Clients without the capability — Claude Code and Codex today — get the same choice as a
+`requiresUserSelection` text block, and nothing hangs. Decline, cancel and timeout all fall
+back to that block.
+
+<Aside type="note" title="Elicitation is capability-gated on purpose">
+A client that never answers must not strand a tool call. The timeout resolves as `cancel`,
+which degrades to the text path instead of blocking the turn.
+</Aside>
+
+## Decisions that are never automated
+
+| Decision | Why it stays with the human |
+|---|---|
+| Which profile | Choosing silently drives the wrong session; the config is durable |
+| Loading the extension | Requires Developer mode and a click the agent cannot make |
+| Approving a CAPTCHA / login wall | Needs a real human in the browser |
+| Closing a tab ConvoLink did not open | Refused with `not-owned`, exit 4 |
+
+## Recovery matrix
+
+| Report | Run |
+|---|---|
+| daemon `todo` | `convo daemon start` |
+| extension `todo` | print the pairing instruction |
+| profile `todo` | ask, then `convo profile select <index\|email>` |
+| transport `blocked` | `convo doctor` and follow its remediation |
+| `warnings[]` non-empty | the extension bundle is stale — tell the user to reload `chrome://extensions` |

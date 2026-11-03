@@ -1,9 +1,9 @@
-# ConvoLink MCP Tools Reference (All 8 Tools)
+# ConvoLink MCP Tools Reference (All 11 Tools)
 
 > **Target Audience:** Autonomous AI coding agents, tool-calling LLMs, and MCP client authors.  
 > **Direct Raw Ingestion URL:** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md`
 
-Exhaustive JSON schemas, parameters, and behaviors for ConvoLink's 8 composite MCP tools.
+Exhaustive JSON schemas, parameters, and behaviors for ConvoLink's 11 composite MCP tools.
 
 ---
 
@@ -184,6 +184,51 @@ or blocked combination returns a structured error and writes nothing.
 { "browser": "firefox", "profile": "/home/you/.mozilla/firefox/xxxx.default-release", "verifyTab": false }
 ```
 
+
+## Tool 11: `convo_onboard`
+
+Returns what is ready for this project and the single next step. Prefer it over calling
+`convo_doctor`, `convo_profile` and `convo_status` in sequence: those three describe state,
+this one says what to do about it.
+
+```json
+{
+  "ok": false,
+  "transport": "extension-bridge",
+  "port": 9224,
+  "steps": [
+    { "id": "daemon", "status": "done", "summary": "Daemon answering at http://127.0.0.1:9224" },
+    { "id": "extension", "status": "todo", "summary": "No companion extension has connected to the bridge.",
+      "action": { "kind": "user", "instruction": "Open chrome://extensions … Token: …", "why": "Only a human can load the unpacked extension." } },
+    { "id": "profile", "status": "todo", "summary": "No .convo/config.json for this project yet." },
+    { "id": "transport", "status": "blocked", "summary": "extension-bridge is not answering." }
+  ],
+  "nextAction": { "kind": "user", "instruction": "…", "why": "…" },
+  "requiresUserSelection": { "question": "Which browser profile should ConvoLink drive for this project?", "options": ["Personal <you@example.com> (chrome)"] },
+  "warnings": []
+}
+```
+
+`nextAction.kind` is `command` (agent runs `nextAction.command`), `user` (print the
+instruction and stop) or `tool` (call `nextAction.tool` with `nextAction.args`).
+
+## Elicitation (`elicitation/create`)
+
+When a client advertises the `elicitation` capability during `initialize`, tools that need a
+human decision send a server→client request instead of returning prose:
+
+```json
+{ "jsonrpc": "2.0", "id": "elicit-1", "method": "elicitation/create",
+  "params": { "message": "Which browser profile should ConvoLink drive?",
+              "requestedSchema": { "type": "object",
+                "properties": { "profile": { "type": "string", "enum": ["Personal <you@example.com> (chrome)"] } },
+                "required": ["profile"] } } }
+```
+
+The client answers `{"action":"accept","content":{"profile":"…"}}`, `decline` or `cancel`.
+`convo_setup` with no arguments then writes `.convo/config.json` and reports
+`answeredBy: "elicitation"`. Decline, cancel and a five-minute timeout all fall back to the
+`requiresUserSelection` text block, so a client without the capability never hangs.
 
 ## Extension transport diagnostics
 

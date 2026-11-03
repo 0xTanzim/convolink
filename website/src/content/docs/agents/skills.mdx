@@ -1,0 +1,59 @@
+---
+title: Install the Agent Skill
+description: One command puts ConvoLink's operating rules into your harness, so the agent stops rediscovering them.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## Why a skill
+
+A harness starts every session with no memory of ConvoLink. Without a skill it rediscovers
+the transport, the pairing flow and the exit codes by reading the repository — slowly, and
+often wrongly. The skill is one file that states those rules up front.
+
+```bash
+convo skill install --harness opencode   # or claude, cursor, codex, antigravity
+convo skill list                         # show every destination
+```
+
+| Harness | Destination |
+|---|---|
+| OpenCode | `.opencode/skills/convolink/SKILL.md` |
+| Claude Code | `.claude/skills/convolink/SKILL.md` |
+| Cursor | `.cursor/rules/convolink.mdc` |
+| Codex | `.codex/skills/convolink/SKILL.md` |
+| Antigravity | `.agents/skills/convolink/SKILL.md` |
+
+Unknown layout? Point it at a directory you control:
+
+```bash
+convo skill install --dir ./agent-context --harness claude
+```
+
+The installer refuses to overwrite an edited file unless you pass `--force` (exit `4`), so a
+hand-tuned skill is never silently replaced.
+
+<Aside type="tip" title="Commit the installed skill">
+The skill is project state, not machine state. Commit it with your repo so every agent that
+opens the project — and every teammate — gets the same instructions.
+</Aside>
+
+## What the skill tells the agent
+
+- Start with `convo onboard --json` and obey `nextAction`.
+- Exit `4` means a human must act; show the instruction and stop.
+- Never edit `.convo/config.json` by hand, never spawn a browser, never close a tab
+  ConvoLink did not open.
+- Extension is the transport for the user's real profile (`9224`); CDP is for dedicated
+  profiles (`9222`).
+- `--json` envelopes: branch on `ok` and `error.code`.
+
+## Verify it took
+
+```bash
+ls .opencode/skills/convolink/SKILL.md     # wherever you installed it
+convo onboard --json                       # the skill's first instruction
+```
+
+The skill and this site's [setup contract](/convolink/agents/setup-contract/) must agree. If
+they ever diverge, the skill in the repository is the source of truth — reinstall it.

@@ -50,6 +50,14 @@ export default defineConfig({
           ],
         },
         {
+          label: "For AI Agents",
+          items: [
+            { label: "Bootstrap a Fresh Project", slug: "agents/bootstrap" },
+            { label: "The Setup Contract", slug: "agents/setup-contract" },
+            { label: "Install the Agent Skill", slug: "agents/skills" },
+          ],
+        },
+        {
           label: "Agent & IDE Integrations",
           items: [
             { label: "AI Coding Harnesses Matrix", slug: "integrations/ai-harnesses" },

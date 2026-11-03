@@ -435,11 +435,74 @@ ConvoLink includes an ephemeral, lightweight Model Context Protocol (MCP) server
 
 ---
 
-## 🧰 Complete Tool Suites: 16 CLI Tools & 8 MCP Tools
+## 🤖 For AI Agents: One Command, Zero Guessing
 
-ConvoLink provides both a complete **16-command CLI suite** for terminal workflows and an **8-tool cognitive MCP suite** optimized for autonomous agents:
+A fresh agent usually burns ten minutes rediscovering the transport, the pairing token and
+the config schema. Two commands remove that entirely.
 
-### 1. The 16 Command-Line (CLI) Tools
+### 1. Ask what is ready, get one next step
+
+```bash
+convo onboard --json
+```
+
+```json
+{
+  "ok": false,
+  "data": {
+    "steps": [
+      { "id": "daemon", "status": "done" },
+      { "id": "extension", "status": "todo", "action": { "kind": "user", "instruction": "Open chrome://extensions … Token: 43a5…" } },
+      { "id": "profile", "status": "todo" }
+    ],
+    "nextAction": { "kind": "user", "instruction": "…", "why": "Only a human can load the unpacked extension." },
+    "requiresUserSelection": { "question": "Which browser profile should ConvoLink drive?", "options": ["Personal <you@example.com> (chrome)"] }
+  }
+}
+```
+
+`nextAction.kind` is `command` (the agent runs it), `user` (print the instruction and stop) or
+`tool` (call that MCP tool). Repeat until `ok: true`. This is also exposed as the
+`convo_onboard` MCP tool.
+
+**Never hand-edit `.convo/config.json`.** The profile is a human decision; `onboard` returns
+the choice, and `convo profile select` writes it.
+
+Exit codes are the contract: `0` ok, `2` configuration, `3` transport down, `4` **a human
+must act in the browser**, `5` reached but not ready, `6` internal.
+
+### 2. Install the skill so the next session already knows this
+
+```bash
+convo skill install --harness opencode    # or claude, cursor, codex, antigravity
+convo skill list
+```
+
+| Harness | Destination |
+|---|---|
+| OpenCode | `.opencode/skills/convolink/SKILL.md` |
+| Claude Code | `.claude/skills/convolink/SKILL.md` |
+| Cursor | `.cursor/rules/convolink.mdc` |
+| Codex | `.codex/skills/convolink/SKILL.md` |
+| Antigravity | `.agents/skills/convolink/SKILL.md` |
+
+The installer refuses to overwrite an edited skill without `--force` (exit `4`). Commit the
+installed file with the project.
+
+### 3. Clients that support MCP elicitation get a real question
+
+If the harness advertises `elicitation`, `convo_setup` with **no arguments** asks the user to
+pick a profile in a native modal, waits up to five minutes, writes `.convo/config.json` and
+returns `answeredBy: "elicitation"`. Clients without the capability (Claude Code, Codex
+today) receive the same choice as a `requiresUserSelection` text block — nothing hangs.
+
+---
+
+## 🧰 Complete Tool Suites: 19 CLI Tools & 11 MCP Tools
+
+ConvoLink provides both a complete **19-command CLI suite** for terminal workflows and an **11-tool cognitive MCP suite** optimized for autonomous agents:
+
+### 1. The 19 Command-Line (CLI) Tools
 *Detailed Reference: [CLI Reference (Web)](https://0xtanzim.github.io/convolink/commands/overview/) • [Raw Markdown](https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/CLI_REFERENCE.md)*
 
 | # | Command | Primary Usage | Functional Purpose |
@@ -460,15 +523,21 @@ ConvoLink provides both a complete **16-command CLI suite** for terminal workflo
 | **14** | `profile select` | `convo profile select <id\|email>` | Persist selected browser profile in workspace `.convo/config.json`. |
 | **15** | `ext pair` | `convo ext pair [--rotate]` | Generate and display cryptographic token for zero-flag Companion Extension. |
 | **16** | `clean` | `convo clean` | Self-heal by terminating orphan ghost Chrome processes and stale mutex locks. |
+| **17** | `onboard` | `convo onboard [--json]` | Report readiness (daemon, pairing, profile, transport) and the single next step, with agent-branchable exit codes. |
+| **18** | `skill` | `convo skill install --harness <name>` | Write the ConvoLink agent skill into the harness's skill directory. |
+| **19** | `daemon` | `convo daemon [status\|start\|stop]` | Manage the background bridge daemon that owns port 9224. |
 | **+** | `mcp` | `convo mcp [--idle-timeout]` | Launch Model Context Protocol (MCP) JSON-RPC 2.0 stdio server for agents. |
 
 ---
 
-### 2. The 8 Composite MCP Cognitive Tools (for Autonomous Agents)
+### 2. The 11 Composite MCP Cognitive Tools (for Autonomous Agents)
 *Detailed Reference: [MCP Reference (Web)](https://0xtanzim.github.io/convolink/integrations/mcp/) • [Raw Markdown](https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md)*
 
 | Tool | Autonomous Agent Role | Key Parameters |
 |:---|:---|:---|
+| `convo_onboard` | Readiness report plus the single next step (`command` / `user` / `tool`). Call this first, and again after acting on it. | *(none)* |
+| `convo_status` | Resolved browser, profile, transport and endpoint for the project, with the source of each value. | *(none)* |
+| `convo_setup` | Persist browser + profile. Called with no arguments it returns the profile choice, or asks the user directly when the client supports elicitation. | `browser?`, `profile?`, `transport?`, `verifyTab?` |
 | `convo_ask` | Dispatch prompts to active web AI tab, stream responses, and auto-extract code artifacts (`// filepath:`). | `prompt`, `platform?`, `targetId?`, `writeFiles?`, `outDir?`, `newChat?`, `openTab?`, `think?`, `search?` |
 | `convo_compare` | Multi-model consensus: broadcast across models in parallel with Stage 2 Technical Arbiter synthesis. | `prompt`, `platforms?`, `arbitrate?`, `arbiter?` |
 | `convo_doctor` | Inspect connection health and open AI tabs. Pass `fix: true` to self-heal stale mutex locks and ghost processes. | `fix?` |
@@ -485,7 +554,7 @@ ConvoLink provides both a complete **16-command CLI suite** for terminal workflo
 If you are an AI agent, indexing bot, or automated crawler reading this repository, direct Markdown documentation is available at:
 - **AI Coding Harnesses Guide (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/AI_HARNESSES.md`
 - **16-Command CLI Reference (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/CLI_REFERENCE.md`
-- **8-Tool MCP Specification (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md`
+- **11-Tool MCP Specification (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/MCP_REFERENCE.md`
 - **Architecture Masterplan (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/ARCHITECTURE.md`
 - **Architecture Decision Records (Raw):** `https://raw.githubusercontent.com/0xTanzim/convolink/main/docs/ADR.md`
 

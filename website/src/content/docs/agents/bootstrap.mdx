@@ -1,0 +1,82 @@
+---
+title: Bootstrap a Fresh Project
+description: What an agent should run, in order, the first time it meets ConvoLink in a project.
+---
+
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
+
+## The one command that replaces guessing
+
+A fresh agent usually asks five questions — is the CLI installed, is the daemon up,
+is the extension paired, which profile, which transport — and answers them by reading
+source files and editing JSON. Don't. One call answers all five:
+
+```bash
+convo onboard --json
+```
+
+```json
+{
+  "ok": false,
+  "command": "onboard",
+  "data": {
+    "transport": "extension-bridge",
+    "port": 9224,
+    "steps": [
+      { "id": "daemon", "status": "done", "summary": "Daemon answering at http://127.0.0.1:9224" },
+      { "id": "extension", "status": "todo", "summary": "No companion extension has connected to the bridge.",
+        "action": { "kind": "user", "instruction": "Open chrome://extensions … Folder: … Token: …" } },
+      { "id": "profile", "status": "todo", "summary": "No .convo/config.json for this project yet." },
+      { "id": "transport", "status": "blocked", "summary": "extension-bridge is not answering." }
+    ],
+    "nextAction": { "kind": "user", "instruction": "…", "why": "Only a human can load the unpacked extension and paste the token." },
+    "requiresUserSelection": { "question": "Which browser profile should ConvoLink drive for this project?", "options": ["Personal <you@example.com> (chrome)"] },
+    "warnings": []
+  },
+  "error": { "code": "not-ready", "message": "…", "remediation": "…", "retryable": false }
+}
+```
+
+`nextAction.kind` decides who acts:
+
+| `kind` | Who | What to do |
+|---|---|---|
+| `command` | the agent | Run `nextAction.command`, then call `onboard` again |
+| `user` | the human | Print `nextAction.instruction` verbatim and stop |
+| `tool` | the agent | Call that MCP tool with `nextAction.args` |
+
+Repeat until `ok: true`. That is the whole bootstrap.
+
+## Why not just edit `.convo/config.json`?
+
+Because the profile is the human's decision. Picking one silently is how a project ends up
+driving the wrong browser session. `onboard` returns the choice set; the user picks; the
+config is written by `convo profile select` — never by hand.
+
+<Aside type="caution" title="Never spawn a browser to fix a connection">
+A second browser with a fresh `--user-data-dir` has no cookies and no sessions. It looks
+connected and answers nothing. Use the extension the user already has loaded.
+</Aside>
+
+## Transport: pick once
+
+| Situation | Transport | Port |
+|---|---|---|
+| Chrome / Brave / Edge / Chromium, user's profile | `extension-bridge` | `9224` |
+| Dedicated automation profile, headless, CI | `raw-cdp` | `9222` |
+| Firefox / Zen | `firefox-bidi` | n/a |
+
+Chrome 136+ refuses `--remote-debugging-port` on the default profile. If `onboard` reports
+`Blocked: this endpoint is the browser's default profile`, the answer is the extension, not
+another flag.
+
+## First real call
+
+```bash
+convo doctor                     # transport, tabs, selector health
+convo list --json                # target ids
+convo ask "reply with: ok" -p chatgpt --transport extension-bridge --json
+```
+
+Then read [the setup contract](/convolink/agents/setup-contract/) for every exit code, and
+[install the skill](/convolink/agents/skills/) so the agent knows this without being told.

@@ -47,7 +47,26 @@ disabled = false
 
 ---
 
-## 3. The 8 Composite MCP Tools Exposed
+## 3. First-Run Sequence (do not guess)
+
+1. `convo onboard --json` — readiness report plus one `nextAction`.
+2. Follow `nextAction`: `command` → run it; `user` → show the instruction and stop; `tool` → call it.
+3. Repeat until `ok: true`, then `convo doctor` and `convo list --json`.
+
+Exit codes: `0` ok · `2` configuration · `3` transport · `4` human must act in the browser ·
+`5` not ready · `6` internal. Never hand-edit `.convo/config.json`; the profile is a human
+decision.
+
+## 4. Install the agent skill
+
+```bash
+convo skill install --harness <opencode|claude|cursor|codex|antigravity> [--dir <project>] [--force]
+```
+
+This writes `skills/convolink/SKILL.md` where the harness reads skills, so the next session
+starts with the transport rules instead of rediscovering them. Commit the installed file.
+
+## 5. The 11 Composite MCP Tools Exposed
 
 1. `convo_ask`: Submit prompt to web AI with reasoning (`think`) and web search (`search`) toggles; auto-extracts code blocks (`// filepath:`).
 2. `convo_compare`: Parallel multi-model benchmarking with Stage 2 Technical Arbiter synthesis (`arbitrate`).
