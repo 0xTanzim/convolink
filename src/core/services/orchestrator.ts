@@ -203,7 +203,12 @@ export class SessionOrchestrator {
         }
 
         debug("duplicate-none");
-        if (options.toggles) {
+        // An empty toggle object still forced drivers to evaluate script that
+        // scriptless transports cannot translate.
+        const wantsToggle = Boolean(
+          options.toggles && (options.toggles.search !== undefined || options.toggles.think !== undefined),
+        );
+        if (wantsToggle && options.toggles) {
           await driver.applyToggles(sessionHandle, this.browser, options.toggles);
         }
 

@@ -6,8 +6,18 @@ export interface OpResult {
 }
 
 /** Self-contained functions: executeScript serializes them without closures. */
+
 export function fillTextOp(selector: string, text: string): OpResult {
-  const el = document.querySelector(selector) as HTMLElement | null;
+  // executeScript serializes only this body; keep the visible-first pick inline.
+  const pick = (): HTMLElement | null => {
+    const candidates = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+    for (const candidate of candidates) {
+      const rect = candidate.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) return candidate;
+    }
+    return candidates[0] ?? null;
+  };
+  const el = pick();
   if (!el) return { ok: false, error: `Element not found: ${selector}` };
   el.scrollIntoView({ block: "center", inline: "nearest" });
   if (typeof el.focus === "function") el.focus();
@@ -44,7 +54,11 @@ export function fillTextOp(selector: string, text: string): OpResult {
 }
 
 export function clickOp(selector: string): OpResult {
-  const el = document.querySelector(selector) as HTMLElement | null;
+  const candidates = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  const el = candidates.find((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) ?? candidates[0] ?? null;
   if (!el) return { ok: false, error: `Element not found: ${selector}` };
   el.scrollIntoView({ block: "center", inline: "nearest" });
   if (typeof el.focus === "function") el.focus();
@@ -53,7 +67,11 @@ export function clickOp(selector: string): OpResult {
 }
 
 export function focusOp(selector: string): OpResult {
-  const el = document.querySelector(selector) as HTMLElement | null;
+  const candidates = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  const el = candidates.find((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) ?? candidates[0] ?? null;
   if (!el) return { ok: false, error: `Element not found: ${selector}` };
   if (typeof el.focus === "function") el.focus();
   return { ok: true };
@@ -117,7 +135,11 @@ export function probeQuietOp() {
 }
 
 export function probeComposerTextOp(selector: string): boolean {
-  const el = document.querySelector(selector) as HTMLElement | null;
+  const candidates = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  const el = candidates.find((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) ?? candidates[0] ?? null;
   if (!el) return false;
   return ((el.innerText || (el as unknown as { value?: string }).value || "") as string).trim().length > 0;
 }
@@ -127,8 +149,24 @@ export function getUrlOp(): string {
 }
 
 export function getTextOp(selector: string): string {
-  const el = document.querySelector(selector) as HTMLElement | null;
+  const candidates = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  const el = candidates.find((candidate) => {
+    const rect = candidate.getBoundingClientRect();
+    return rect.width > 0 && rect.height > 0;
+  }) ?? candidates[0] ?? null;
   return el ? (el.innerText || el.textContent || "").trim() : "";
+}
+
+export function getLastTextOp(selector: string): string {
+  const nodes = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+  for (let i = nodes.length - 1; i >= 0; i--) {
+    const node = nodes[i];
+    if (!node) continue;
+    const rect = node.getBoundingClientRect();
+    const text = (node.innerText || node.textContent || "").trim();
+    if (text && (rect.width > 0 || rect.height > 0)) return text;
+  }
+  return "";
 }
 
 export function bodyIncludesOp(marker: string): boolean {
@@ -226,7 +264,14 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
     // ChatGPT keeps the stop control in the DOM after a response; only a
     // visible stop control means generation is still running.
     isGenerating: visibleInPage(document.querySelector(selectors.stop)),
-    isThinking: visibleInPage(document.querySelector(selectors.thinking)),
+    // A reasoning panel stays mounted after it finishes; only an animated
+    // indicator inside it means the model is still thinking.
+    isThinking: Boolean(
+      visibleInPage(document.querySelector(selectors.thinking)) &&
+        document.querySelector(selectors.thinking)?.querySelector(
+          '[class*="spin"], [class*="animate"], [class*="loading"], [class*="pulse"], [class*="blink"], [role="progressbar"], svg[class*="spin"]',
+        ),
+    ),
     assistantText,
     text: assistantText,
     codeBlocks: assistantNode ? codeBlocksOf(assistantNode) : [],

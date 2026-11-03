@@ -178,7 +178,12 @@ export function buildHydratedExpr(
 
 /** Immediate boolean probe. Never returns a promise, so it cannot block the socket. */
 export function buildMountedProbeExpr(composerSelector: string): string {
-  return `(() => document.readyState === "complete" && Boolean(document.querySelector(${JSON.stringify(composerSelector)})))()`;
+  // The comment is a machine-readable selector contract; the extension
+  // transport reads it instead of guessing which quoted literal is a selector.
+  return `(() => {
+    /* convolink:selectors ${JSON.stringify({ composer: composerSelector })} */
+    return document.readyState === "complete" && Boolean(document.querySelector(${JSON.stringify(composerSelector)}));
+  })()`;
 }
 
 /**
@@ -188,6 +193,7 @@ export function buildMountedProbeExpr(composerSelector: string): string {
  */
 export function buildReadyProbeExpr(composerSelector: string, sendSelector: string): string {
   return `(() => {
+    /* convolink:selectors ${JSON.stringify({ composer: composerSelector, send: sendSelector })} */
     if (document.readyState !== "complete") return false;
     if (!document.querySelector(${JSON.stringify(composerSelector)})) return false;
     const send = document.querySelector(${JSON.stringify(sendSelector)});

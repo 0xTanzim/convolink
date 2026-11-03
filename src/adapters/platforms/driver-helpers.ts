@@ -151,6 +151,7 @@ async function composerHasText(
     browser,
     handle,
     `(() => {
+      /* convolink:selectors ${JSON.stringify({ composer: selector })} */
       const c = document.querySelector(${JSON.stringify(selector)});
       if (!c) return false;
       return (c.value || c.innerText || '').trim().length > 0;
@@ -426,30 +427,48 @@ export async function pollUntilSettled(
 ): Promise<SettleResult<CompletionProbeStatus>> {
   const start = Date.now();
   const deadline = start + options.timeoutMs;
+  // A hidden tab can keep a virtualized transcript unrendered; one nudge here
+  // is enough because the tab stays alive for the whole wait.
+  await browser.keepAliveInBackground(handle).catch(() => undefined);
   let lastStatus: CompletionProbeStatus | undefined;
   let lastText = "";
   let lastChange = start;
   let lastDebug = 0;
   let lastProbeError: unknown;
+  let consecutiveErrors = 0;
 
   while (Date.now() < deadline) {
     const status = await probe<CompletionProbeStatus>(browser, handle, probeExpr, (error) => {
       lastProbeError = error;
+      consecutiveErrors += 1;
     });
+    if (status) consecutiveErrors = 0;
+    if (!status && consecutiveErrors >= 5) {
+      // A probe that keeps failing is a configuration fault, not a slow model.
+      const detail = lastProbeError instanceof Error ? lastProbeError.message : String(lastProbeError ?? "unknown error");
+      throw new Error(`Status probe failed repeatedly: ${detail}`);
+    }
     if (status) {
       lastStatus = status;
       const text = options.textOf(status);
-      if (status.isGenerating || status.isThinking || text.length !== lastText.length) {
+      // Only real progress resets the quiescence clock. A reasoning flag that
+      // never clears (DeepSeek keeps its panel mounted) would otherwise hold
+      // the loop open until the timeout.
+      if (status.isGenerating || text.length !== lastText.length) {
         lastChange = Date.now();
-        lastText = text;
       }
+      lastText = text;
       if (process.env.CONVOLINK_DEBUG === "1" && Date.now() - lastDebug > 3000) {
         lastDebug = Date.now();
         process.stderr.write(
           `[settle] turns=${status.turnsCount ?? status.turnIndex ?? status.mdCount ?? "?"} new=${Boolean(status.hasNewTurn)} generating=${Boolean(status.isGenerating)} thinking=${Boolean(status.isThinking)} text=${options.textOf(status).length}\n`,
         );
       }
-      if (options.isNew(status) && !status.isGenerating && !status.isThinking && Date.now() - lastChange >= options.quiescenceMs) {
+      const stableFor = Date.now() - lastChange;
+      // Reasoning panels often stay mounted after the answer finishes, so
+      // "thinking" only blocks completion while the output is still moving.
+      const thinkingActive = Boolean(status.isThinking) && stableFor < Math.max(options.quiescenceMs, 1_200);
+      if (options.isNew(status) && !status.isGenerating && !thinkingActive && stableFor >= options.quiescenceMs) {
         return { status, elapsedMs: Date.now() - start, timedOut: false };
       }
     }

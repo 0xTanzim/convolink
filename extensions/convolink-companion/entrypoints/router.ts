@@ -6,6 +6,7 @@ import {
   clickOp,
   fillTextOp,
   focusOp,
+  getLastTextOp,
   getTextOp,
   getUrlOp,
   pressKeyOp,
@@ -68,6 +69,10 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
 
       case "GET_URL":
         ctx.sendResult(id, await ctx.runInTab(targetId, getUrlOp, []));
+        return;
+
+      case "GET_LAST_TEXT":
+        ctx.sendResult(id, await ctx.runInTab(targetId, getLastTextOp, [String(message.selector ?? "")]));
         return;
 
       case "GET_TEXT":
@@ -228,6 +233,19 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
       case "PRESS_KEY":
         ctx.sendResult(id, await ctx.runInTab(targetId, pressKeyOp, [String(message.selector), String(message.key)]));
         return;
+
+      case "TRUSTED_FILL": {
+        // Rich-text editors ignore DOM-only text injection for submit gating:
+        // the visible text changes but the editor state stays empty. Clear via
+        // the DOM, then type through the browser input pipeline.
+        const selector = String(message.selector);
+        const text = String(message.text ?? "");
+        await ctx.runInTab(targetId, fillTextOp, [selector, ""]);
+        await sendTrustedText(api, targetId, text);
+        const filled = await ctx.runInTab(targetId, probeComposerTextOp, [selector]);
+        ctx.sendResult(id, { ok: Boolean(filled), trusted: true });
+        return;
+      }
 
       case "TRUSTED_KEY":
         await sendTrustedKey(api, targetId, String(message.key || "Enter"));

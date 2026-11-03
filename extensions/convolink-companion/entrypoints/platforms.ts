@@ -28,7 +28,9 @@ export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
     assistant: "[data-conversation-role='assistant']",
     stop: "button[data-testid='stop-button'], button[aria-label='Stop generating'], button[aria-label='Stop streaming'], button[aria-label='Stop response'], button[aria-label='Stop']:not([aria-label*='dictation' i])",
     thinking: "[data-testid*='thought'], [data-testid*='thinking'], [class*='thinking']",
-    composer: "div.ProseMirror[contenteditable='true'], #prompt-textarea, div[contenteditable='true']",
+    // A generic `div[contenteditable]` matches sidebar fields first, and
+    // querySelector returns document order, not selector order.
+    composer: "#prompt-textarea, div.ProseMirror[contenteditable='true']",
     send: "button[aria-label='Send'], button[data-testid='send-button'], button[aria-label='Send prompt']",
     turnRoleAttr: "data-conversation-role",
   },

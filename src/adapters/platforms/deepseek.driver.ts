@@ -42,6 +42,7 @@ export class DeepSeekDriver implements PlatformPort {
   }
 
   public async applyToggles(handle: SessionHandle, browser: BrowserPort, toggles: ToggleOptions): Promise<void> {
+    if (toggles.search === undefined && toggles.think === undefined) return;
     const expression = `(() => {
       const toggleButtons = Array.from(document.querySelectorAll('.ds-toggle-button'));
       for (const btn of toggleButtons) {
@@ -108,7 +109,23 @@ export class DeepSeekDriver implements PlatformPort {
     );
     if (timedOut) throw new TimeoutError("DeepSeek response timed out", timeoutMs);
 
-    const text = completionText(status);
+    // `completionText` includes the mounted reasoning panel; the answer itself
+    // is rendered in the markdown block.
+    // The newest assistant answer, not the first one on the page: the trailing
+    // message is the user prompt, so the answer is the previous message node.
+    const answer = await browser
+      .evaluate<string>(
+        handle,
+        `(() => {
+          /* getLastText */
+          const all = Array.from(document.querySelectorAll(".ds-assistant-message-main-content"));
+          const el = all[all.length - 1];
+          return el ? (el.innerText || "").trim() : "";
+        })()`,
+      )
+      .catch(() => "");
+    const answerText = typeof answer === "string" ? answer.trim() : "";
+    const text = answerText || completionText(status);
     return {
       status: "complete",
       turn: {

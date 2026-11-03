@@ -170,7 +170,15 @@ export class ExtensionBridgeAdapter implements BrowserPort {
 
   public async detach(_handle: SessionHandle): Promise<void> {}
 
-  public async keepAliveInBackground(_handle: SessionHandle): Promise<void> {}
+  /**
+   * Some SPAs (DeepSeek) only render the transcript in a visible tab, so a
+   * hidden tab reports zero turns forever. Activating the tab is the only
+   * lever available to a content-script transport; callers use it once, when
+   * they have committed to waiting for a response.
+   */
+  public async keepAliveInBackground(handle: SessionHandle): Promise<void> {
+    await this.sendAction("ACTIVATE_TAB", handle.targetId, {}).catch(() => undefined);
+  }
 
   public async bringToFront(handle: SessionHandle): Promise<void> {
     await this.sendAction("BRING_TO_FRONT", handle.targetId, {});
@@ -187,6 +195,25 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   }
 
   public async fillText(handle: SessionHandle, selector: string, text: string): Promise<void> {
+    // Trusted input first: a DOM-only fill leaves the platform's editor state
+    // empty, so its send control ignores the click. The atomic TRUSTED_FILL is
+    // preferred, and the composed sequence keeps older bundles working.
+    try {
+      const trusted = await this.sendRequest<{ ok?: boolean }>("TRUSTED_FILL", { selector, text }, handle.targetId);
+      if (trusted?.ok) return;
+    } catch {
+      // Older bundles do not implement TRUSTED_FILL; compose the same steps.
+      try {
+        // Clearing an already-empty composer reports not-ready; that is fine.
+        await this.sendRequest("FILL_TEXT", { selector, text: "" }, handle.targetId).catch(() => undefined);
+        await this.sendRequest("FOCUS", { selector }, handle.targetId).catch(() => undefined);
+        await this.sendAction("TRUSTED_TYPE", handle.targetId, { text });
+        const hasText = await this.sendRequest<boolean>("PROBE_COMPOSER_TEXT", { selector }, handle.targetId);
+        if (hasText) return;
+      } catch {
+        // Fall through to the DOM path below.
+      }
+    }
     const result = await this.sendRequest<{ ok?: boolean; error?: string }>(
       "FILL_TEXT",
       { selector, text },
@@ -215,10 +242,15 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     const client = this.registry.getAll().length === 1 ? this.registry.getAll()[0]! : this.registry.getPrimary();
     if (!client) throw new BrowserConnectionError(`ws://127.0.0.1:${this.port}`, "Extension is not connected");
     const result = await this.sendRequestToClient<{ tabId?: number; title?: string; url?: string }>(client.ws, "CREATE_TAB", { url });
+    const nativeId = Number(result?.tabId);
     // Refresh the client's tab cache before callers probe the new tab; platform
     // routing is derived from that cache.
     await this.listTabs().catch(() => []);
-    const nativeId = Number(result?.tabId);
+    // Virtualized transcripts (DeepSeek) never render in a hidden tab, so a
+    // freshly created automation tab is brought to the front immediately.
+    if (Number.isFinite(nativeId)) {
+      await this.sendAction("ACTIVATE_TAB", String(nativeId), {}).catch(() => undefined);
+    }
     const multi = this.registry.getAll().length > 1;
     return {
       targetId: multi ? formatCompoundTargetId(client.clientId, nativeId) : String(nativeId),
@@ -262,6 +294,17 @@ export class ExtensionBridgeAdapter implements BrowserPort {
       throw new TabNotFoundError(undefined, targetId ?? "<no-target>");
     }
     const body = route ? { ...payload, targetId: route.rawTabId, platform: this.platformFor(route.client, targetId) } : payload;
+    if (route && body.platform === null) {
+      // The cached tab list can be stale after a reconnect; ask the extension
+      // for the live URL rather than sending an unselectable command.
+      try {
+        const info = await this.sendRequestToClient<{ url?: string }>(client.ws, "TAB_INFO", { targetId: route.rawTabId });
+        const platform = platformForUrl(info?.url ?? "");
+        if (platform) return this.sendRequestToClient<T>(client.ws, type, { ...body, platform });
+      } catch {
+        // Fall through and let the extension report the real failure.
+      }
+    }
     return this.sendRequestToClient<T>(client.ws, type, body);
   }
 
@@ -271,7 +314,10 @@ export class ExtensionBridgeAdapter implements BrowserPort {
 
   private sendRequestToClient<T>(ws: ServerWebSocket<unknown>, type: string, payload: Record<string, unknown>): Promise<T> {
     const id = ++this.messageCounter;
-    this.trace(`→ ${type} id=${id} target=${String(payload.targetId ?? "-")} platform=${String(payload.platform ?? "-")}`);
+    this.trace(
+      `→ ${type} id=${id} target=${String(payload.targetId ?? "-")} platform=${String(payload.platform ?? "-")} ` +
+        `payload=${JSON.stringify(payload).slice(0, 220)}`,
+    );
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
@@ -292,19 +338,28 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   private platformFor(client: ConnectedClient, targetId?: string): string | null {
     const compound = targetId ? parseCompoundTargetId(targetId) : null;
     const nativeId = compound ? String(compound.tabId) : targetId;
-    const tab = client.tabs.find((candidate) => candidate.targetId === targetId || candidate.targetId.endsWith(`::${nativeId}`));
+    // A managed-tab record can outlive the connection that produced its id, so
+    // compare on the trailing native id instead of demanding an exact match.
+    const nativeOf = (value: string): string => value.split("::").pop() ?? value;
+    const tab = client.tabs.find(
+      (candidate) => candidate.targetId === targetId || nativeOf(candidate.targetId) === nativeId,
+    );
     return tab ? platformForUrl(tab.url) : null;
   }
 
   private translateExpression(targetId: string, expression: string): { type: string; payload: Record<string, unknown> } {
     if (expression === "location.href") return { type: "GET_URL", payload: {} };
+    if (expression.includes("/* getLastText */")) {
+      return { type: "GET_LAST_TEXT", payload: { selector: firstQuoted(expression) ?? "" } };
+    }
+    if (expression.includes("/* getText */")) return { type: "GET_TEXT", payload: { selector: firstQuoted(expression) ?? "" } };
     if (expression.includes("location.reload")) return { type: "RELOAD", payload: {} };
     if (expression.includes("findContinuationTrigger")) return { type: "PROBE_CONTINUATION", payload: {} };
     if (expression.includes("findDownloadLinks")) return { type: "PROBE_DOWNLOADS", payload: {} };
     if (expression.includes("inspectCanvas")) return { type: "INSPECT_CANVAS", payload: {} };
     if (expression.includes("startNewChat")) return { type: "START_NEW_CHAT", payload: { baseUrl: firstQuoted(expression) ?? "" } };
-    if (expression.includes("send.click()")) return { type: "CLICK", payload: { selector: firstQuoted(expression) ?? "" } };
-    if (expression.includes("c.focus()")) return { type: "FOCUS", payload: { selector: firstQuoted(expression) ?? "" } };
+    if (expression.includes("send.click()")) return { type: "CLICK", payload: { selector: lastQuoted(expression) ?? "" } };
+    if (expression.includes("c.focus()")) return { type: "FOCUS", payload: { selector: lastQuoted(expression) ?? "" } };
     if (expression.includes("querySelectorAll(\"*\")") || expression.includes("querySelectorAll('*')")) {
       return { type: "PROBE_QUIET", payload: {} };
     }
@@ -316,15 +371,18 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     if (expression.includes("document.body.innerText")) {
       return { type: "GET_BODY_INCLUDES", payload: { text: allQuoted(expression).filter(Boolean).pop() ?? "" } };
     }
+    const contract = selectorContract(expression);
     if (expression.includes("c.value || c.innerText")) {
-      return { type: "PROBE_COMPOSER_TEXT", payload: { selector: firstQuoted(expression) ?? "" } };
+      return { type: "PROBE_COMPOSER_TEXT", payload: { selector: contract?.composer ?? lastQuoted(expression) ?? "" } };
     }
     if (expression.includes("aria-disabled")) {
-      const quoted = allQuoted(expression);
-      return { type: "PROBE_READY", payload: { composer: quoted[0] ?? "", send: quoted[1] ?? "" } };
+      return {
+        type: "PROBE_READY",
+        payload: { composer: contract?.composer ?? "", send: contract?.send ?? "" },
+      };
     }
     if (expression.includes("document.readyState") && expression.includes("querySelector")) {
-      return { type: "PROBE_MOUNTED", payload: { composer: firstQuoted(expression) ?? "" } };
+      return { type: "PROBE_MOUNTED", payload: { composer: contract?.composer ?? lastQuoted(expression) ?? "" } };
     }
     throw new ConvoError(
       "extension-unsupported",
@@ -443,6 +501,31 @@ function allQuoted(expression: string): string[] {
   });
 }
 
+interface SelectorContract {
+  readonly composer?: string;
+  readonly send?: string;
+}
+
+function selectorContract(expression: string): SelectorContract | null {
+  const match = expression.match(/\/\*\s*convolink:selectors\s+(\{[\s\S]*?\})\s*\*\//);
+  if (!match || !match[1]) return null;
+  try {
+    return JSON.parse(match[1]) as SelectorContract;
+  } catch {
+    return null;
+  }
+}
+
 function firstQuoted(expression: string): string | null {
   return allQuoted(expression)[0] ?? null;
+}
+
+/**
+ * Selectors are appended after any literal in the expression (for example
+ * `document.readyState === "complete"`), so the last quoted string is the
+ * selector. Taking the first one silently sent "complete" as a CSS selector.
+ */
+function lastQuoted(expression: string, offsetFromEnd = 0): string | null {
+  const quoted = allQuoted(expression);
+  return quoted[quoted.length - 1 - offsetFromEnd] ?? null;
 }

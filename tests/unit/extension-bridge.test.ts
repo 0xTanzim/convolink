@@ -278,8 +278,14 @@ describe("ExtensionBridgeAdapter", () => {
         ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: [{ tabId: 777, title: "AI Tab", url: "https://chatgpt.com/" }] }));
       } else if (msg.type === "GET_URL") {
         ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: "https://chatgpt.com/c/777" }));
-      } else if (["FILL_TEXT", "CLICK", "PRESS_KEY", "BRING_TO_FRONT"].includes(msg.type)) {
+      } else if (msg.type === "PROBE_COMPOSER_TEXT") {
+        ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: true }));
+      } else if (
+        ["FILL_TEXT", "CLICK", "PRESS_KEY", "BRING_TO_FRONT", "FOCUS", "TRUSTED_FILL", "TRUSTED_TYPE", "ACTIVATE_TAB"].includes(msg.type)
+      ) {
         ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: { ok: true } }));
+      } else {
+        ws.send(JSON.stringify({ v: 2, id: msg.id, ok: false, error: { code: "unsupported", message: `Unknown command: ${msg.type}` } }));
       }
     };
 
@@ -306,7 +312,10 @@ describe("ExtensionBridgeAdapter", () => {
     await adapter.pressKey(session, "textarea#prompt", "Enter");
 
     expect(receivedActions.some((a) => a.type === "GET_URL")).toBe(true);
-    expect(receivedActions.some((a) => a.type === "FILL_TEXT" && a.text === "Hello AI")).toBe(true);
+    // Trusted input is preferred; either path must carry the text.
+    expect(
+      receivedActions.some((a) => (a.type === "TRUSTED_FILL" || a.type === "FILL_TEXT") && a.text === "Hello AI"),
+    ).toBe(true);
     expect(receivedActions.some((a) => a.type === "CLICK" && a.selector === "button#send")).toBe(true);
     expect(receivedActions.some((a) => a.type === "PRESS_KEY" && a.key === "Enter")).toBe(true);
 

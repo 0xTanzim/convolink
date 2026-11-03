@@ -7,7 +7,14 @@ import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-error
 import { buildStatusProbeExpr } from "./page-events.js";
 import { submitWithRecovery, pollUntilSettled, completionText, hasNewCompletion, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
-import { CHATGPT_RESOLVE_SELECTORS_EXPR, getChatGPTReadThreadExpr, getChatGPTFingerprintExpr, getChatGPTAwaitCompletionExpr } from "./chatgpt.scripts.js";
+import {
+  CHATGPT_COMPOSER_SELECTOR,
+  CHATGPT_RESOLVE_SELECTORS_EXPR,
+  CHATGPT_SEND_SELECTOR,
+  getChatGPTReadThreadExpr,
+  getChatGPTFingerprintExpr,
+  getChatGPTAwaitCompletionExpr,
+} from "./chatgpt.scripts.js";
 
 export class ChatGPTDriver implements PlatformPort {
   public readonly id: PlatformId = "chatgpt";
@@ -75,10 +82,10 @@ export class ChatGPTDriver implements PlatformPort {
       if (cancel) cancel.click();
     })()`).catch(() => {});
 
-    const composerSelector = 'div.ProseMirror[contenteditable="true"], [aria-label="Ask ChatGPT"], #prompt-textarea, div[contenteditable="true"]';
+    const composerSelector = CHATGPT_COMPOSER_SELECTOR;
     await browser.fillText(handle, composerSelector, prompt);
 
-    const sendBtnSelector = 'button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]';
+    const sendBtnSelector = CHATGPT_SEND_SELECTOR;
     await submitWithRecovery(browser, handle, composerSelector, sendBtnSelector, prompt);
 
     return fingerprint;
