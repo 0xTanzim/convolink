@@ -3,6 +3,7 @@ import { HostEnv } from "../core/env/host-env.js";
 import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
 import * as path from "node:path";
 import { DaemonClient } from "../adapters/daemon/daemon-client.js";
+import { describeBuildMismatch, readExpectedBuildId } from "./extension-build.js";
 
 export async function handleExt(args: string[], tokenService?: BridgeTokenService): Promise<number> {
   const subCommand = args[0] || "pair";
@@ -33,7 +34,8 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
     const json = args.includes("--json");
     const status = await fetchExtensionBridgeStatus();
     if (json) {
-      console.log(JSON.stringify({ ok: status.running, command: "ext", data: status, error: null }, null, 2));
+      const buildMismatch = describeBuildMismatch(status.clients, readExpectedBuildId());
+      console.log(JSON.stringify({ ok: status.running, command: "ext", data: { ...status, buildMismatch }, error: null }, null, 2));
       return status.running ? 0 : 3;
     }
     if (!status.running) {
@@ -51,6 +53,8 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
       const build = client.buildId && client.buildId !== "unknown" ? ` · build ${client.buildId}` : "";
       console.log(`   • ${client.browserFamily} [${client.profileLabel}] v${client.extensionVersion}${build} · ${client.tabCount} tab(s)`);
     }
+    const mismatch = describeBuildMismatch(status.clients, readExpectedBuildId());
+    if (mismatch) console.log(`\n   ⚠️ ${mismatch}`);
     console.log("");
     return 0;
   }
