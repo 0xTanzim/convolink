@@ -117,3 +117,14 @@ describe("convo_onboard", () => {
     }
   });
 });
+
+describe("convo_setup tool schema", () => {
+  it("advertises the no-argument choice call it actually supports", async () => {
+    const { MCP_TOOLS } = await import("../../src/entrypoints/mcp.schema.js");
+    const setup = MCP_TOOLS.find((tool) => tool.name === "convo_setup");
+    const schema = setup?.inputSchema as { required?: string[]; properties?: Record<string, unknown> };
+
+    expect(schema.required ?? []).not.toContain("browser");
+    expect(setup?.description).toContain("elicitation");
+  });
+});

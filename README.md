@@ -444,6 +444,8 @@ the config schema. Two commands remove that entirely.
 
 ```bash
 convo onboard --json
+# If `convo` is not on PATH yet (fresh machine), the same command is:
+bunx convolink@latest onboard --json
 ```
 
 ```json

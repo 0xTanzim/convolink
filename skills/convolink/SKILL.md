@@ -42,6 +42,8 @@ It returns `steps[]`, `nextAction`, and `requiresUserSelection`. **Obey `nextAct
 
 ```bash
 convo onboard --json
+# Not on PATH (fresh machine, npx/bunx-only harness)? Same binary:
+bunx convolink@latest onboard --json
 ```
 
 Exit codes are the contract:

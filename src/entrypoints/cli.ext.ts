@@ -1,7 +1,7 @@
 import { BridgeTokenService } from "../core/services/bridge-token.service.js";
+import { resolveExtensionUnpackedPath } from "./extension-path.js";
 import { HostEnv } from "../core/env/host-env.js";
 import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
-import * as path from "node:path";
 import { DaemonClient } from "../adapters/daemon/daemon-client.js";
 import { describeBuildMismatch, readExpectedBuildId } from "./extension-build.js";
 
@@ -20,10 +20,16 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
     console.log("\n🔐 ConvoLink Extension Pairing Token:");
     console.log(`\n  Token:  ${token}`);
     console.log(`  Path:   ${HostEnv.getBridgeTokenPath()}\n`);
-    const unpacked = path.resolve(import.meta.dir, "../../extensions/convolink-companion/.output/chrome-mv3");
+    const unpacked = resolveExtensionUnpackedPath();
     console.log("To pair your browser extension:");
-    console.log(`  1. chrome://extensions -> Developer mode -> Load unpacked -> ${unpacked}`);
-    console.log("     (Load the .output/chrome-mv3 folder, not extensions/convolink-companion itself.)");
+    if (unpacked) {
+      console.log(`  1. chrome://extensions -> Developer mode -> Load unpacked -> ${unpacked}`);
+      console.log("     (Load the .output/chrome-mv3 folder, not extensions/convolink-companion itself.)");
+    } else {
+      console.log("  1. chrome://extensions -> Developer mode -> Load unpacked");
+      console.log("     No unpacked bundle ships with this install. Download the Companion zip from");
+      console.log("     https://github.com/0xTanzim/convolink/releases/latest, unzip it, and load that folder.");
+    }
     console.log("  2. Start the bridge and keep it running: convo daemon start");
     console.log("  3. Open the extension popup and paste this token into 'Pairing Token'.");
     console.log("  4. Click 'Save Settings & Connect', then run: convo ext status\n");

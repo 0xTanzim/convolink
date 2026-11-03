@@ -8,10 +8,10 @@ import type { OnboardFacts, OnboardProfileOption } from "../core/services/onboar
 import { loadResolution } from "./config-context.js";
 import { readDaemonStatus } from "./daemon-status.js";
 import { describeBuildMismatch, readExpectedBuildId } from "./extension-build.js";
+import { resolveExtensionUnpackedPath } from "./extension-path.js";
 
 const BRIDGE_PORT = 9224;
 const TCP_PROBE_TIMEOUT_MS = 400;
-const EXT_UNPACKED_PATH = path.resolve(import.meta.dir, "../../extensions/convolink-companion/.output/chrome-mv3");
 
 function probeTcp(port: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -62,7 +62,7 @@ export async function collectOnboardFacts(): Promise<OnboardFacts> {
       connected,
       clients: extensionStatus.clients.length,
       buildMismatch,
-      unpackedPath: EXT_UNPACKED_PATH,
+      unpackedPath: resolveExtensionUnpackedPath(),
       pairingToken: new BridgeTokenService().getToken(),
     },
     profiles,

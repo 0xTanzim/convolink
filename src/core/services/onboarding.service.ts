@@ -16,7 +16,7 @@ export interface OnboardFacts {
     readonly connected: boolean;
     readonly clients: number;
     readonly buildMismatch: string | null;
-    readonly unpackedPath: string;
+    readonly unpackedPath: string | null;
     readonly pairingToken: string;
   };
   readonly profiles: readonly OnboardProfileOption[];
@@ -65,10 +65,13 @@ function profileLabel(profile: OnboardProfileOption): string {
 }
 
 function pairingInstruction(facts: OnboardFacts): string {
+  const load = facts.extension.unpackedPath
+    ? `  Folder: ${facts.extension.unpackedPath}`
+    : "  Get it: https://github.com/0xTanzim/convolink/releases/latest — download the Companion zip, unzip it, and load that folder (this install ships no unpacked bundle).";
   return [
-    "Open chrome://extensions, enable Developer mode, Load unpacked the folder below,",
+    "Open chrome://extensions, enable Developer mode, Load unpacked,",
     "open the ConvoLink Companion popup, paste the pairing token, then click Save Settings & Connect.",
-    `  Folder: ${facts.extension.unpackedPath}`,
+    load,
     `  Token:  ${facts.extension.pairingToken}`,
   ].join("\n");
 }

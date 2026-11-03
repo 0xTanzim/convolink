@@ -118,7 +118,7 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
   },
   {
     name: "convo_setup",
-    description: "Set the browser and profile for this project (for example after the user switches browsers). Never prompts: pass browser and profile explicitly. Verifies the combination before writing .convo/config.json.",
+    description: "Set the browser and profile for this project. Call it with NO arguments to get the profile choice: when the client supports MCP elicitation the user is asked in a native modal and .convo/config.json is written for you; otherwise the same choices come back as requiresUserSelection. Pass browser (and optionally profile) to set it explicitly. The combination is verified before anything is written.",
     inputSchema: {
       type: "object",
       properties: {
@@ -127,7 +127,6 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         transport: { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"] },
         verifyTab: { type: "boolean", description: "Also verify a platform page in a temporary tab" },
       },
-      required: ["browser"],
     },
   },
   {

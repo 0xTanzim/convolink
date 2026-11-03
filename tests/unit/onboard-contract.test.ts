@@ -72,3 +72,18 @@ describe("Onboarding contract", () => {
     expect(report.warnings).toEqual(["running mw0bcpqe, built mw0con1f"]);
   });
 });
+
+describe("Onboarding instructions on a machine without the repository", () => {
+  it("points at the release archive when no unpacked extension is bundled", () => {
+    const report = buildOnboardReport(
+      facts({
+        extension: { connected: false, clients: 0, buildMismatch: null, unpackedPath: null, pairingToken: "token-abc" },
+      }),
+    );
+
+    const instruction = report.nextAction?.instruction ?? "";
+    expect(instruction).toContain("token-abc");
+    expect(instruction).toContain("releases/latest");
+    expect(instruction).not.toContain("Folder:");
+  });
+});
