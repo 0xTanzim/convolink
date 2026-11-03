@@ -100,6 +100,13 @@ convo compare "<prompt>" --platforms chatgpt,deepseek
 | Firefox trusted input | `chrome.debugger` is a different protocol on Gecko; BiDi covers Firefox |
 | Reading a transcript that never mounts | The platform must render it; the extension restores the window to help |
 
+## Open platform issues
+
+Two platform-side behaviours are documented with evidence and options in
+[`EXTENSION_TRANSPORT_ISSUES.md`](./EXTENSION_TRANSPORT_ISSUES.md): DeepSeek may accept a
+prompt without mounting the transcript, and Gemini renders its controls inside a shadow
+root (so `DIAGNOSE` reports `sendFound: false` on a working tab).
+
 ## Failure modes and what you see
 
 | Situation | Observed behaviour |

@@ -18,14 +18,63 @@ Automated tools often bypass this by spawning a fresh Chrome with a custom `--us
 
 ## The 4-Tier Connection Engine
 
-ConvoLink implements the **Zero Ghost Browser Law** (`AGENTS.md`) using a prioritized 4-tier strategy:
+ConvoLink implements the **Zero Ghost Browser Law** (`AGENTS.md`) using one rule above all
+others: **it never asks you to relaunch your everyday browser with debug flags.**
 
-| Tier | Strategy | Mechanism | User Impact |
+| Situation | What to use | Port | Flags needed |
 | :--- | :--- | :--- | :--- |
-| **Tier 1** | Everyday Active Session | Scans dynamic ports written to `DevToolsActivePort` | Zero restarts, zero flags (Chrome 144+) |
-| **Tier 2** | Configured CDP Port | Connects to active `127.0.0.1:9222` / `9229` | Attaches without spawning new processes |
-| **Tier 3** | Companion Extension | WebSocket bridge via `chrome.debugger` | Works on everyday profile with **zero flags** |
-| **Tier 4** | Dedicated Profile | Spawns dedicated persistent profile | Explicit fallback only; never the default |
+| **Chrome, Brave, Edge, Chromium — your normal profile** | **Companion Extension** (recommended) | `9224` (WebSocket bridge) | **None** |
+| A separate profile you deliberately use for automation | Direct CDP (`raw-cdp`) | `9222` (or any port you choose) | `--remote-debugging-port` + `--user-data-dir` |
+| Headless / CI containers | Direct CDP on a dedicated profile | `9222` | Headless flags |
+| Firefox / Zen | Firefox BiDi (`firefox-bidi`) | n/a | `convo connect --firefox` |
+
+<Aside type="caution" title="Chrome 136+ blocks CDP on your default profile">
+Since Chrome 136, `--remote-debugging-port` is ignored for the default user-data
+directory. The endpoint still accepts TCP, but `/json/version` answers **HTTP 404** and any
+WebSocket attempt stalls. ConvoLink probes that endpoint and fails fast instead of
+hanging:
+
+```text
+debug-endpoint  fail  Blocked: this endpoint is the browser's default profile, which
+                      Chrome blocks from remote debugging even after approval.
+                      Use the Companion Extension, or point at a dedicated debug profile.
+```
+
+The fix is **not** a flag. Use the extension for your normal profile; use a dedicated
+profile for CDP.
+</Aside>
+
+## Extension or CDP? Choose Once, Stop Guessing
+
+Both transports drive the same platforms and the same commands (`convo ask`,
+`convo compare`, `convo list`, `convo tab`). They differ in what the browser allows.
+
+| | Companion Extension | Direct CDP |
+| :--- | :--- | :--- |
+| Works on your everyday, logged-in profile | **Yes** | No (blocked on Chrome 136+) |
+| Needs browser flags or a restart | **No** | Yes (`--remote-debugging-port`) |
+| Port | `9224` (bridge) | `9222` by default |
+| Arbitrary JavaScript evaluation | No — a fixed operation set | Yes |
+| Screenshots | Needs `<all_urls>` or a user gesture, otherwise `unsupported` | Yes |
+| Close a tab you opened | Refused (`not-owned`, exit 4) — by design | Same policy |
+| Trusted typing on rich text editors | Yes (`chrome.debugger`) | Yes (CDP `Input.insertText`) |
+| Best for | Real work in your real browser | Automation profiles, headless, CI |
+
+**Rule of thumb:** if you are sitting in front of the browser and you are logged in,
+use the extension. Reach for CDP only when you are driving a dedicated profile you can
+relaunch freely.
+
+### Confirm which transport is active
+
+```bash
+convo doctor            # shows the configured transport and whether the endpoint works
+convo ext status        # extension only: client, profile, build id, tab count
+```
+
+`convo ext status` prints the id of the running bundle. If it differs from
+`.output/chrome-mv3/build-meta.json`, Chrome is still running an older bundle — reload at
+`chrome://extensions`. ConvoLink reports that mismatch explicitly instead of letting you
+debug the wrong code.
 
 ## Cross-Platform Setup
 

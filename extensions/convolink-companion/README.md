@@ -109,6 +109,13 @@ bun run convo ext status
 
 If the identifier differs from `.output/chrome-mv3/build-meta.json`, you are running an old bundle — unrelated behaviour differences are explained by that, not by the platform.
 
+### Known platform issues
+
+- **DeepSeek** can accept the prompt without mounting the transcript (`turns: 0`). Reloading
+  the tab renders it. See `docs/EXTENSION_TRANSPORT_ISSUES.md`.
+- **Gemini** renders inside a shadow root, so `DIAGNOSE` reports `sendFound: false` on a tab
+  that works, and completion is the slowest in the fleet.
+
 ### Capability notes
 
 - Typed input uses the browser input pipeline (`chrome.debugger`), because a DOM-only fill leaves the platform editor state empty and its send control ignores the click. If another debugger session is attached, the extension falls back to DOM injection and the fill is reported as not accepted.

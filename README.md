@@ -110,20 +110,60 @@ bun add -g convolink
 
 ConvoLink adheres to the **Zero Ghost Browser Law**: it never spawns unauthenticated blank browser profiles. It connects directly to your existing authenticated sessions:
 
-#### Path A: Companion Extension (Recommended — 100% Zero Flags)
-Connects directly to your everyday browser session with **zero Chrome startup flags** and **zero browser restarts**.
+> ### ⚠️ Which path do I need?
+> **Chrome, Brave, Edge or Chromium, using your normal profile? → Path A (the extension).**
+> It is the only supported way to drive that profile: Chrome 136+ blocks remote debugging
+> on the default profile, and no flag re-enables it.
+>
+> **Dedicated automation profile, headless container, or CI? → Path B (CDP).**
+> CDP needs its own `--user-data-dir`; it will not attach to your everyday profile.
+
+#### Path A: Companion Extension (Recommended for Chrome users — zero flags, zero restarts)
+
+Drives the browser you are already signed into, with **no startup flags** and **no browser
+restarts**. Your ChatGPT Plus, Claude Pro and DeepSeek sessions stay exactly where they are.
+
 1. Download the extension ZIP from [GitHub Releases v1.0.0](https://github.com/0xTanzim/convolink/releases/tag/v1.0.0):
    - **Chrome / Brave / Edge:** `convolink-companion-chrome.zip`
    - **Firefox:** `convolink-companion-firefox.zip`
 2. Open `chrome://extensions/` (or `about:debugging` in Firefox), enable **Developer mode**, and click **Load unpacked**.
 3. Pair the extension with your local runtime:
    ```bash
-   convo ext pair
+   convo ext pair          # prints the token and the exact folder Chrome must load
+   convo daemon start      # keeps the bridge alive on port 9224
+   convo ext status        # client, profile, build id, tab count
+   ```
+4. Confirm the transport works before scripting anything:
+   ```bash
+   convo ask -p chatgpt --transport extension-bridge "Reply with the single word: ready"
    ```
 
-#### Path B: Direct Remote Debugging (Cross-Platform)
+The extension exposes a **fixed operation set** (probe, read, fill, click, key, navigate).
+It cannot run arbitrary JavaScript — MV3's content-script CSP forbids `eval()`. That is a
+security boundary, not a limitation to work around: unsupported probes fail loudly as
+`extension-unsupported` instead of executing something unexpected.
 
-Connect directly via Chrome DevTools Protocol (CDP) or native launchers:
+<details>
+<summary><b>What the extension refuses to do (by design)</b></summary>
+
+| Refused | Reason |
+|---|---|
+| Close a tab you opened | Reports `not-owned` (exit 4). Automation must not destroy your work. |
+| Evaluate arbitrary JavaScript | MV3 CSP; the extension maps known probes to typed operations instead. |
+| Screenshot without permission | `captureVisibleTab` needs `<all_urls>` or a user gesture; otherwise `unsupported`. |
+| Silently drive the wrong browser | Every command is bound to a specific target id. |
+
+</details>
+
+#### Path B: Direct Remote Debugging (dedicated profiles, headless, CI)
+
+> **⚠️ CDP cannot attach to a default Chrome / Brave / Edge / Chromium profile on version 136 or newer.**
+> The port accepts TCP, but `/json/version` returns **404** and ConvoLink reports
+> `Blocked: this endpoint is the browser's default profile` in `convo doctor`.
+> Use the extension for your normal profile, or start a dedicated profile below.
+> The CDP port is `9222`; the extension bridge uses `9224` — different transports, different ports.
+
+Connect directly via Chrome DevTools Protocol (CDP) against a profile you own:
 
 <details>
 <summary><b>🐧 Fedora & RHEL / CentOS Linux</b></summary>
@@ -255,6 +295,17 @@ google-chrome --remote-debugging-port=9222 --headless=new --disable-gpu --disabl
   google-chrome --remote-debugging-port=9222 --user-data-dir="$HOME/.config/convolink/profiles/ai-profile" &
   ```
 
+#### Extension vs CDP at a glance
+
+| | Companion Extension | Direct CDP |
+| :--- | :--- | :--- |
+| Your everyday logged-in profile | **Yes** | Blocked on Chrome 136+ |
+| Browser flags / restart | **None** | `--remote-debugging-port` + `--user-data-dir` |
+| Port | `9224` (WebSocket bridge) | `9222` (default) |
+| Arbitrary JavaScript | No — fixed operation set | Yes |
+| Screenshots | `<all_urls>` or a user gesture | Yes |
+| Best for | Real work in your real browser | Automation profiles, headless, CI |
+
 ### 3. Verify Connection Health (`convo doctor`)
 ```bash
 convo doctor
@@ -272,6 +323,18 @@ convo doctor
 ---
 
 
+## ⚠️ Known extension-transport limitations
+
+Two platform-side behaviours are open; neither returns a wrong answer silently.
+
+| Platform | Behaviour | Workaround |
+|---|---|---|
+| DeepSeek | The prompt is delivered but the transcript may not mount (`turns: 0`), ending as `transport-timeout` | Reload the tab; the conversation renders with the answer |
+| Gemini | UI lives in a shadow root, so `DIAGNOSE` shows `sendFound: false` on a working tab, and completion is the slowest in the fleet (3.6 s to > 100 s) | Prefer ChatGPT/Claude/DeepSeek for latency-sensitive work; submission still succeeds via the Enter fallback |
+
+Full analysis, evidence and options: [`docs/EXTENSION_TRANSPORT_ISSUES.md`](docs/EXTENSION_TRANSPORT_ISSUES.md).
+Command surface and the unsupported boundary: [`docs/EXTENSION_CONTROL.md`](docs/EXTENSION_CONTROL.md).
+
 ## 🧭 First Run and Browser Support
 
 Run `convo setup` once per project. It lists the browsers and profiles it can see,
@@ -288,17 +351,20 @@ convo setup --reset        # forget the selection
 
 | Browser | Debug on the real default profile? | What ConvoLink does |
 |---|---|---|
-| Chrome | No — blocked even after the approval dialog | Requires a dedicated `--user-data-dir`; refuses the default profile before opening a socket |
-| Brave | No | Same as Chrome |
-| Edge | No | Same as Chrome |
-| Chromium | No | Same as Chrome |
+| Chrome | No — blocked even after the approval dialog | Real profile: **use the Companion Extension**. CDP: requires a dedicated `--user-data-dir`; the default profile is refused before a socket is opened |
+| Brave | No | Same as Chrome: extension for the real profile, CDP only on a dedicated one |
+| Edge | No | Same as Chrome: extension for the real profile, CDP only on a dedicated one |
+| Chromium | No | Same as Chrome: extension for the real profile, CDP only on a dedicated one |
 | Firefox | Yes, but one BiDi session and one process per profile | Reuses the running session, or starts the same profile with `convo connect --firefox`; never spawns a second instance |
 | Zen | Yes, same rules as Firefox | Same as Firefox |
 
-Firefox and Zen allow the real profile, so your logins come along. Chromium-family
-browsers need a separate data directory, because their default profile hard-blocks
-remote debugging. No path enables the extension automatically, and no path kills a
-browser you did not ask it to restart.
+Firefox and Zen allow the real profile over BiDi, so your logins come along.
+Chromium-family browsers hard-block remote debugging on the default profile, so there are
+only two honest options: **the Companion Extension for your real profile**, or **CDP
+against a separate `--user-data-dir`**. Nothing else attaches to your everyday Chrome.
+
+No path enables the extension automatically, and no path kills a browser you did not ask
+it to restart.
 
 ## 🛠️ The 4 Core Workflows
 
