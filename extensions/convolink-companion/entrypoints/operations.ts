@@ -258,7 +258,11 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
   const answerTextOf = (node: HTMLElement): string => {
     // Icon fonts and screen-reader labels are part of innerText; neither is
     // part of the answer. Prefer the markdown body when the platform has one.
-    const body = node.querySelector(".standard-markdown, .ds-markdown, .markdown, [class*='markdown']") as HTMLElement | null;
+    // DeepSeek renders its reasoning in `.ds-markdown` before the answer, so
+    // the answer container must win or the reasoning is returned as the answer.
+    const body = node.querySelector(
+      ".ds-assistant-message-main-content, .standard-markdown, .markdown, [class*='markdown']",
+    ) as HTMLElement | null;
     const source = body ?? node;
     const clone = source.cloneNode(true) as HTMLElement;
     clone.querySelectorAll(".sr-only").forEach((el) => el.remove());

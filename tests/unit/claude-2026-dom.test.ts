@@ -38,5 +38,7 @@ describe("statusOp turn rules", () => {
     expect(source).toContain("sr-only");
     expect(source).toContain("\\uE000-\\uF8FF");
     expect(source).toContain("standard-markdown");
+    // The DeepSeek answer container must be preferred over the reasoning body.
+    expect(source).toContain("ds-assistant-message-main-content");
   });
 });
