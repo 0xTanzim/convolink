@@ -4,7 +4,7 @@ description: Drive the browser the user is already logged into (ChatGPT, Claude,
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
-  version: 1.2.0
+  version: 1.2.1
   package: convolink
   homepage: https://0xtanzim.github.io/convolink/
   repository: https://github.com/0xTanzim/convolink
