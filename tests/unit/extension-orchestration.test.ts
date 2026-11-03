@@ -43,78 +43,93 @@ describe("Extension Bridge End-to-End Provider Orchestration", () => {
     let handshaked = false;
     ws.onmessage = (event) => {
       const msg = JSON.parse(event.data.toString());
-      if (msg.type === "HANDSHAKE_ACK") {
-        handshaked = true;
-      } else if (msg.type === "LIST_TABS") {
-        ws.send(JSON.stringify({
-          id: msg.id,
-          result: [
-            { tabId: 901, title: "ChatGPT Active Thread", url: "https://chatgpt.com/c/test-thread-123" },
-          ],
-        }));
-      } else if (msg.type === "ATTACH" || msg.type === "DETACH" || msg.type === "FILL_TEXT" || msg.type === "CLICK" || msg.type === "PRESS_KEY") {
-        ws.send(JSON.stringify({ id: msg.id, result: { ok: true } }));
-      } else if (msg.type === "EVALUATE") {
-        const expr = msg.expression || "";
-        if (expr.includes("resolveSelectors")) {
-          ws.send(JSON.stringify({
-            id: msg.id,
-            result: {
-              value: {
-                ok: true,
-                layoutVariant: "chatgpt-2026-prosemirror",
-                composerSelector: "div.ProseMirror[contenteditable='true']",
-                sendButtonSelector: 'button[data-testid="send-button"]',
-                stopIndicatorSelector: null,
-                turnContainerSelector: "article",
-              },
-            },
-          }));
-        } else if (expr.includes("submitPrompt")) {
-          ws.send(JSON.stringify({ id: msg.id, result: { value: true } }));
-        } else if (expr.includes("readThread")) {
-          ws.send(JSON.stringify({
-            id: msg.id,
-            result: {
-              value: {
-                layoutVariant: "chatgpt-2026-turnkey",
-                turns: [
-                  { turnIndex: 0, role: "user", markdownContent: "Build me a helper", codeBlocks: [] },
-                  {
-                    turnIndex: 1,
-                    role: "assistant",
-                    markdownContent: "Here is your helper file:\n```typescript\n// filepath: src/helper.ts\nexport const helper = 42;\n```",
-                    codeBlocks: [{ language: "typescript", code: "// filepath: src/helper.ts\nexport const helper = 42;\n" }],
-                  },
-                ],
-              },
-            },
-          }));
-        } else if (expr.includes("document.readyState")) {
-          ws.send(JSON.stringify({ id: msg.id, result: { value: true } }));
-        } else {
-          // Default settling or general evaluate
-          ws.send(JSON.stringify({
-            id: msg.id,
-            result: {
-              value: {
-                turnsCount: 2,
-                hasNewTurn: true,
-                isGenerating: false,
-                isThinking: false,
-                assistantText: "Here is your helper file:\n```typescript\n// filepath: src/helper.ts\nexport const helper = 42;\n```",
+      const reply = (result: unknown) => ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result }));
+      switch (msg.type) {
+        case "HANDSHAKE_ACK":
+          handshaked = msg.success === true;
+          break;
+        case "LIST_TABS":
+          reply([{ tabId: 901, title: "ChatGPT Active Thread", url: "https://chatgpt.com/c/test-thread-123" }]);
+          break;
+        case "READ_THREAD":
+          reply({
+            layoutVariant: "companion-v2",
+            turns: [
+              { turnIndex: 0, role: "user", markdownContent: "Earlier unrelated request", codeBlocks: [], contentHash: "u" },
+              {
+                turnIndex: 1,
+                role: "assistant",
+                markdownContent: "Here is your helper file:\n```typescript\n// filepath: src/helper.ts\nexport const helper = 42;\n```",
                 codeBlocks: [{ language: "typescript", code: "// filepath: src/helper.ts\nexport const helper = 42;\n" }],
+                contentHash: "a",
               },
-            },
-          }));
-        }
+            ],
+          });
+          break;
+        case "PROBE_SELECTORS":
+          reply({
+            ok: true,
+            layoutVariant: "companion-v2",
+            composerSelector: "div.ProseMirror[contenteditable='true']",
+            sendButtonSelector: "button[data-testid='send-button']",
+            stopIndicatorSelector: null,
+            turnContainerSelector: "article",
+          });
+          break;
+        case "PROBE_READY":
+        case "PROBE_MOUNTED":
+          reply(true);
+          break;
+        case "PROBE_QUIET":
+          reply({ readyState: "complete", nodes: 10, text: 100 });
+          break;
+        case "PROBE_COMPOSER_TEXT":
+          reply(false);
+          break;
+        case "GET_URL":
+          reply("https://chatgpt.com/c/test-thread-123");
+          break;
+        case "PROBE_STATUS":
+          reply({
+            turnsCount: 2,
+            turnIndex: 1,
+            hasNewTurn: true,
+            isGenerating: false,
+            isThinking: false,
+            assistantText: "Here is your helper file:\n```typescript\n// filepath: src/helper.ts\nexport const helper = 42;\n```",
+            codeBlocks: [{ language: "typescript", code: "// filepath: src/helper.ts\nexport const helper = 42;\n" }],
+          });
+          break;
+        case "PROBE_CONTINUATION":
+          reply({ hasContinuation: false });
+          break;
+        case "INSPECT_CANVAS":
+          reply(null);
+          break;
+        case "FILL_TEXT":
+          reply({ ok: true });
+          break;
+        case "CLICK":
+        case "PRESS_KEY":
+        case "FOCUS":
+        case "NAVIGATE":
+          reply({ ok: true });
+          break;
+        case "CREATE_TAB":
+          reply({ tabId: 902, title: "", url: "https://chatgpt.com/" });
+          break;
+        case "CLOSE_TAB":
+          reply({ closed: true });
+          break;
+        default:
+          reply(null);
       }
     };
 
     // Perform handshake with pairing token
     ws.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "test-companion-client",
       installationProfileId: "prof-wxt-test",
       connectionId: "conn-wxt-1",

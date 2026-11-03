@@ -26,6 +26,7 @@ Exhaustive reference for all 16 commands provided by `convo` / `convolink`.
 | **`profile list`** | `convo profile list` | Discovers local Google Chrome, Brave, and Edge profiles with Google emails. |
 | **`profile select`**| `convo profile select <id\|email>` | Persists selected browser profile in `.convo/config.json`. |
 | **`ext pair`** | `convo ext pair [--rotate]` | Generates/displays cryptographic pairing token for zero-flag extension bridge. |
+| **`ext status`** | `convo ext status [--json]` | Shows bridge endpoint, connection state, and every connected browser/profile/version. |
 | **`clean`** | `convo clean` | Terminates orphaned ghost browser processes and clears stale mutex locks. |
 | **`mcp`** | `convo mcp [--idle-timeout=15m]` | Runs Model Context Protocol (MCP) JSON-RPC 2.0 stdio server. |
 
@@ -43,6 +44,14 @@ Exhaustive reference for all 16 commands provided by `convo` / `convolink`.
 - `--write-files`, `-w`: Extract files tagged with `// filepath:` to disk.
 - `--out-dir`, `-o`: Output directory for written files (default: `./artifacts`).
 - `--transport`: Engine: `raw-cdp` (default), `extension-bridge`, `firefox-bidi`, `agent-browser`.
+
+### Extension transport (protocol v2)
+
+The Companion bridge is a loopback WebSocket at `ws://127.0.0.1:9224`. Clients must handshake with protocol version `2`; older unpacked builds are rejected with `protocol-mismatch` and must be reloaded.
+
+- `convo ext status` reports whether the bridge is running and lists connected clients.
+- `convo doctor` includes extension clients in its capability report.
+- The extension executes a fixed operation set. It cannot evaluate arbitrary JavaScript because MV3 content scripts block `eval()`. An unsupported probe returns `extension-unsupported` instead of silently failing.
 - `--timeout`: Milliseconds before request timeouts (default: `120000`).
 - `--no-continue`: Disable automated multi-chunk stream continuation.
 

@@ -1,4 +1,5 @@
 import type { PlatformId, ConversationTurn } from "../ports/platform.port.js";
+import type { ThreadTarget } from "./setup/thread-target.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
 import type { ExtractedArtifact } from "./artifact.service.js";
 
@@ -54,4 +55,7 @@ export interface CompareOptions {
   readonly autoSpawn?: boolean;
   readonly arbitrate?: boolean;
   readonly arbiter?: PlatformId;
+  /** Per-platform conversation URLs; each one is explicitly user-named. */
+  readonly threads?: Partial<Record<PlatformId, ThreadTarget>>;
+  readonly continueThreads?: boolean;
 }

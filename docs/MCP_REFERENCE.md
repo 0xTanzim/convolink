@@ -183,3 +183,8 @@ or blocked combination returns a structured error and writes nothing.
 ```json
 { "browser": "firefox", "profile": "/home/you/.mozilla/firefox/xxxx.default-release", "verifyTab": false }
 ```
+
+
+## Extension transport diagnostics
+
+`convo_doctor` reports the Companion bridge state and every connected client (browser family, profile label, extension version, tab count). When no client is connected, use `convo ext pair` and reload the extension. Protocol v2 clients only; a v1 build is rejected with `protocol-mismatch`.

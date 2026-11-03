@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach, afterEach } from "bun:test";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
-import { buildExtension } from "../../scripts/build-extension.js";
+import { buildExtension, buildManifest, getProjectVersion } from "../../scripts/build-extension.js";
 
 describe("Extension Build & Packaging Pipeline", () => {
   let tempDir: string;
@@ -48,6 +48,30 @@ describe("Extension Build & Packaging Pipeline", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.background.scripts).toEqual(["background.js"]);
     expect(manifest.browser_specific_settings?.gecko?.id).toBe("companion@convolink.local");
+  });
+
+  it("generates both manifests from one version and host list", () => {
+    const version = getProjectVersion();
+    const chrome = buildManifest("chrome", version);
+    const firefox = buildManifest("firefox", version);
+
+    expect(chrome.version).toBe(version);
+    expect(firefox.version).toBe(version);
+    expect(chrome.host_permissions).toEqual([
+      "https://chatgpt.com/*",
+      "https://chat.deepseek.com/*",
+      "https://gemini.google.com/*",
+      "https://claude.ai/*",
+    ]);
+    expect(chrome.host_permissions).toEqual(firefox.host_permissions);
+    expect(chrome.permissions).not.toContain("debugger");
+  });
+
+  it("has no duplicate manifest or build-output tree left in the source extension", () => {
+    const extRoot = path.resolve(import.meta.dir, "../../extensions/convolink-companion");
+    expect(fs.existsSync(path.join(extRoot, "manifest.json"))).toBe(false);
+    expect(fs.existsSync(path.join(extRoot, "wxt.config.ts"))).toBe(false);
+    expect(fs.existsSync(path.join(extRoot, "dist"))).toBe(false);
   });
 
   it("creates downloadable release zip archives when zip is enabled", async () => {

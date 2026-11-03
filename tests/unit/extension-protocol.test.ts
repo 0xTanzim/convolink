@@ -25,7 +25,7 @@ describe("Extension Protocol & Identity Contracts", () => {
 
   it("validates ClientHandshake data structure", () => {
     const handshake: ClientHandshake = {
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-abc",
       installationProfileId: "prof-xyz",
       connectionId: "conn-123",
@@ -34,7 +34,7 @@ describe("Extension Protocol & Identity Contracts", () => {
       extensionVersion: "1.0.0",
       token: "secret-token",
     };
-    expect(handshake.protocolVersion).toBe(1);
+    expect(handshake.protocolVersion).toBe(2);
     expect(handshake.browserFamily).toBe("chrome");
     expect(handshake.clientId).toBe("client-abc");
   });

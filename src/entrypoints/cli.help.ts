@@ -16,6 +16,7 @@ Usage:
   convo setup [--show|--reset]   Choose and verify the browser + profile; saves .convo/config.json
   convo profile [list|select]    View and persist active browser profile in .convo/config.json
   convo ext pair [--rotate]      Display or rotate extension pairing token for browser bridge
+  convo ext status [--json]      Show bridge state and connected extension clients
   convo daemon [status|start|stop] Manage background singleton bridge daemon
   convo clean                    Purge stray ghost browser processes and temporary debug profiles
   convo mcp                      Launch Model Context Protocol (MCP) JSON-RPC server on stdio

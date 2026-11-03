@@ -18,14 +18,16 @@ export class FirefoxBidiAdapter implements BrowserPort {
 
   private readonly port: number;
   private readonly messenger?: BidiMessenger;
+  private readonly commandTimeoutMs: number;
   private socket?: WebSocket;
   private exitCleanupRegistered = false;
   private messageCounter = 0;
   private readonly pending = new Map<number, { resolve: (val: any) => void; reject: (err: Error) => void }>();
 
-  constructor(port: number = 9223, messenger?: BidiMessenger) {
+  constructor(port: number = 9223, messenger?: BidiMessenger, options: { commandTimeoutMs?: number } = {}) {
     this.port = port;
     this.messenger = messenger;
+    this.commandTimeoutMs = options.commandTimeoutMs ?? 12_000;
   }
 
   public async health(): Promise<TransportHealth> {
@@ -46,7 +48,7 @@ export class FirefoxBidiAdapter implements BrowserPort {
       for (const c of contexts) {
         let title = c.url || "Firefox Tab";
         try {
-          const evalRes = await this.send("script.evaluate", { expression: "document.title", target: { context: c.context }, awaitPromise: true, resultOwnership: "none" });
+          const evalRes = await this.send("script.evaluate", { expression: "document.title", target: { context: c.context }, awaitPromise: true, resultOwnership: "none" }, 3000);
           if (evalRes?.result?.value) title = String(evalRes.result.value);
         } catch {}
         tabs.push({ targetId: c.context, url: c.url || "about:blank", title: title || c.url || "Firefox Tab" });
@@ -172,7 +174,7 @@ export class FirefoxBidiAdapter implements BrowserPort {
   public async createTab(url: string): Promise<TabDescriptor> {
     const res = await this.send("browsingContext.create", { type: "tab" });
     const contextId = res.context;
-    if (url && url !== "about:blank") await this.send("browsingContext.navigate", { context: contextId, url, wait: "interactive" });
+    if (url && url !== "about:blank") await this.send("browsingContext.navigate", { context: contextId, url, wait: "interactive" }, 30_000);
     return { targetId: contextId, url, title: `Firefox Tab` };
   }
 
@@ -181,7 +183,7 @@ export class FirefoxBidiAdapter implements BrowserPort {
   }
 
   public async navigate(handle: SessionHandle, url: string): Promise<void> {
-    await this.send("browsingContext.navigate", { context: handle.targetId, url, wait: "interactive" });
+    await this.send("browsingContext.navigate", { context: handle.targetId, url, wait: "interactive" }, 30_000);
   }
 
   public async goBack(handle: SessionHandle): Promise<void> {
@@ -196,10 +198,33 @@ export class FirefoxBidiAdapter implements BrowserPort {
     });
   }
 
-  private async send(method: string, params: Record<string, unknown>): Promise<any> {
-    if (this.messenger) return this.messenger(method, params);
-    const ws = await this.ensureSocket();
-    return this.sendRaw(ws, method, params);
+  private async send(method: string, params: Record<string, unknown>, timeoutMs = this.commandTimeoutMs): Promise<any> {
+    const work = this.messenger
+      ? this.messenger(method, params)
+      : await this.ensureSocket().then((ws) => this.sendRaw(ws, method, params));
+    return await this.withCommandTimeout(work, method, timeoutMs);
+  }
+
+  /**
+   * A stuck command used to poison the shared session: the caller waited until
+   * its own long deadline while every later command queued behind it. Failing
+   * the single command keeps one bad tab from taking down a comparison.
+   */
+  private async withCommandTimeout<T>(work: Promise<T>, method: string, timeoutMs: number): Promise<T> {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      return await Promise.race([
+        work,
+        new Promise<T>((_, reject) => {
+          timer = setTimeout(
+            () => reject(new Error(`BiDi command ${method} timed out after ${timeoutMs}ms`)),
+            timeoutMs,
+          );
+        }),
+      ]);
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
   }
 
   private async ensureSocket(): Promise<WebSocket> {

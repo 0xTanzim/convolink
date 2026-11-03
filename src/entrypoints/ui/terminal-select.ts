@@ -40,6 +40,8 @@ export interface SelectOptions {
   readonly mouse?: boolean;
   readonly probeMs?: number;
   readonly maxRows?: number;
+  /** Line reader used when the terminal cannot enter raw mode. */
+  readonly ask?: (prompt: string) => Promise<string>;
 }
 
 const DEFAULT_ROWS = 10;
@@ -57,7 +59,11 @@ export async function selectFromList(
   const output = options.output ?? (process.stdout as unknown as RenderTarget);
   if (!input.isTTY || !output.isTTY) throw new SelectUnavailableError("selection requires a TTY");
 
-  input.setRawMode?.(true);
+  if (typeof input.setRawMode !== "function") {
+    return await selectNumbered(title, items, options.ask ?? defaultAskLine, output);
+  }
+
+  input.setRawMode(true);
   input.resume?.();
   output.write(CURSOR_HIDE);
 
@@ -150,4 +156,45 @@ export async function probeMouse(
     input.on("data", onData);
     output.write("\u001b[c");
   });
+}
+
+async function defaultAskLine(prompt: string): Promise<string> {
+  const readline = await import("node:readline/promises");
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  try {
+    return await rl.question(prompt);
+  } finally {
+    rl.close();
+  }
+}
+
+/**
+ * Raw mode is not available on every terminal (CI wrappers, dumb terminals,
+ * Windows shells). A numbered prompt keeps setup usable there instead of
+ * failing the whole command.
+ */
+export async function selectNumbered(
+  title: string,
+  items: readonly SelectionItem[],
+  ask: (prompt: string) => Promise<string>,
+  output: RenderTarget,
+): Promise<SelectionItem | null> {
+  output.write(`\n${title}\n`);
+  items.forEach((item, index) => output.write(`  ${index + 1}) ${item.label}\n`));
+
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const raw = (await ask(`Select 1-${items.length} (q to cancel): `)).trim();
+    if (!raw || raw.toLowerCase() === "q") return null;
+
+    const numeric = Number.parseInt(raw, 10);
+    if (Number.isInteger(numeric) && numeric >= 1 && numeric <= items.length) {
+      return items[numeric - 1] ?? null;
+    }
+    const match = items.find(
+      (item) => item.id.toLowerCase() === raw.toLowerCase() || item.label.toLowerCase().includes(raw.toLowerCase()),
+    );
+    if (match) return match;
+    output.write(`  '${raw}' did not match any entry.\n`);
+  }
+  return null;
 }

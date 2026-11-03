@@ -1,6 +1,7 @@
 export interface McpToolDefinition {
   readonly name: string;
   readonly description: string;
+  readonly outputSchema?: Record<string, unknown>;
   readonly inputSchema: {
     readonly type: "object";
     readonly properties: Record<string, unknown>;
@@ -24,10 +25,24 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         openTab: { type: "boolean", description: "Whether to spawn a new background tab" },
         think: { type: "boolean", description: "Toggle deep thinking/reasoning mode (e.g. DeepSeek Reasoner, Claude Thinking, ChatGPT o-series)" },
         search: { type: "boolean", description: "Toggle live web search/DeepSearch grounding" },
-        browser: { type: "string", description: "Preferred browser to use or launch (chrome, firefox, zen, brave, edge)" },
+        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Preferred browser to use or launch" },
         profile: { type: "string", description: "Optional browser profile name, email, or index to target" },
+        threadUrl: { type: "string", format: "uri", description: "Conversation URL to continue (https://chatgpt.com/c/…, https://chat.deepseek.com/a/chat/s/…, https://claude.ai/chat/…)" },
       },
       required: ["prompt"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        platform: { type: "string" },
+        tabId: { type: "string" },
+        threadId: { type: ["string", "null"] },
+        threadUrl: { type: ["string", "null"] },
+        elapsedMs: { type: "number" },
+        continued: { type: "boolean" },
+        text: { type: "string" },
+      },
+      required: ["platform", "tabId", "elapsedMs", "text"],
     },
   },
   {
@@ -40,16 +55,66 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
         platforms: { type: "array", items: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"] }, description: "Models to compare" },
         arbitrate: { type: "boolean", description: "Execute stage 2 consensus synthesis via Technical Arbiter" },
         arbiter: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Designate arbiter platform" },
-        browser: { type: "string", description: "Preferred browser to use or launch (chrome, firefox, zen, brave, edge)" },
+        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Preferred browser to use or launch" },
         profile: { type: "string", description: "Optional browser profile name, email, or index to target" },
+        threads: {
+          type: "object",
+          description: "Per-platform conversation URLs to continue. Omitted platforms start a fresh chat.",
+          properties: {
+            chatgpt: { type: "string", format: "uri" },
+            claude: { type: "string", format: "uri" },
+            deepseek: { type: "string", format: "uri" },
+            gemini: { type: "string", format: "uri" },
+          },
+          additionalProperties: false,
+        },
+        continue: { type: "boolean", description: "Reuse the currently open conversations instead of starting fresh (default: false)" },
       },
       required: ["prompt"],
+    },
+    outputSchema: {
+      type: "object",
+      properties: {
+        comparisonId: { type: "string" },
+        durationMs: { type: "number" },
+        platforms: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              platform: { type: "string" },
+              status: { type: "string", enum: ["success", "failed", "timeout"] },
+              elapsedMs: { type: "number" },
+              threadId: { type: ["string", "null"] },
+            },
+            required: ["platform", "status", "elapsedMs"],
+          },
+        },
+      },
+      required: ["comparisonId", "platforms"],
     },
   },
   {
     name: "convo_status",
     description: "Report the browser, profile, transport, and endpoint ConvoLink will use for this project, with the source of each value. Use this before other browser tools to avoid guessing.",
     inputSchema: { type: "object", properties: {} },
+    outputSchema: {
+      type: "object",
+      properties: {
+        ok: { type: "boolean" },
+        setup: {
+          type: "object",
+          properties: {
+            browserId: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"] },
+            transport: { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"] },
+            endpoint: { type: "string" },
+            profilePath: { type: "string" },
+          },
+          required: ["browserId", "transport", "endpoint"],
+        },
+      },
+      required: ["ok"],
+    },
   },
   {
     name: "convo_setup",
@@ -72,14 +137,34 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       type: "object",
       properties: {
         fix: { type: "boolean", description: "When true, automatically terminates orphan ghost browser processes and clears stale lockfiles to self-heal. Default: false" },
-        browser: { type: "string", description: "Optional target browser to diagnose (e.g. chrome, firefox, zen)" },
+        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Optional target browser to diagnose" },
       },
     },
   },
   {
     name: "convo_list_tabs",
-    description: "Inspect all open browser tabs. Returns targetId, platform, title, and current URL. Always call this first before managing tabs.",
+    description: "Inspect all open browser tabs. Returns targetId, platform, title, current URL, threadId, and whether ConvoLink owns the tab. Always call this first before managing tabs.",
     inputSchema: { type: "object", properties: {} },
+    outputSchema: {
+      type: "object",
+      properties: {
+        tabs: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              targetId: { type: "string" },
+              platform: { type: ["string", "null"] },
+              url: { type: "string" },
+              threadId: { type: ["string", "null"] },
+              managed: { type: "boolean" },
+            },
+            required: ["targetId", "url", "managed"],
+          },
+        },
+      },
+      required: ["tabs"],
+    },
   },
   {
     name: "convo_tab",

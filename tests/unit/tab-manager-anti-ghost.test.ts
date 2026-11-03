@@ -1,15 +1,20 @@
 import { describe, expect, it } from "bun:test";
+import { recordManagedTab } from "../../src/adapters/browsers/tab-registry.js";
 import { TabManagerService } from "../../src/core/services/tab-manager.service.js";
 import { FakeBrowserPort } from "../fakes/fake-browser.js";
 import { DeepSeekDriver } from "../../src/adapters/platforms/deepseek.driver.js";
 import { ChatGPTDriver } from "../../src/adapters/platforms/chatgpt.driver.js";
 import { LockService } from "../../src/core/services/lock.service.js";
 import type { DiscoveredTab } from "../../src/core/services/orchestrator.types.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+process.env.XDG_RUNTIME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "convo-runtime-"));
 
 describe("TabManagerService Anti-Ghost Lifecycle Invariants", () => {
   const drivers = [new DeepSeekDriver(), new ChatGPTDriver()];
 
-  it("strictly reuses existing open tab for platform without spawning ghost tab", async () => {
+  it("reuses a ConvoLink-owned tab without spawning another", async () => {
     let createTabCalled = false;
     const fakeBrowser = new FakeBrowserPort();
     fakeBrowser.createTab = async (_url: string) => {
@@ -29,6 +34,7 @@ describe("TabManagerService Anti-Ghost Lifecycle Invariants", () => {
       },
     ];
 
+    recordManagedTab({ targetId: "existing-deepseek-tab", platform: "deepseek", url: "https://chat.deepseek.com", threadId: null, createdAt: "x" });
     const resolved = await manager.resolveOrAutoOpenTab(
       { platform: "deepseek", openTab: false },
       existingTabs,

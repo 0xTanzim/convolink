@@ -50,9 +50,11 @@ export async function runCli(args: string[]): Promise<number> {
   try {
     if (command === "history" || command === "search") {
       const container = createContainer();
+      const release = guardSignals(() => container.shutdown());
       try {
         return await dispatch(command, container, args);
       } finally {
+        release();
         await container.shutdown();
       }
     }
@@ -76,9 +78,11 @@ export async function runCli(args: string[]): Promise<number> {
       await assertDaemonMatches(resolution);
     }
     const container = createContainer({ ...(resolution ? { resolution } : {}) });
+    const release = guardSignals(() => container.shutdown());
     try {
       return await dispatch(command, container, args, { json });
     } finally {
+      release();
       await container.shutdown();
     }
   } catch (error) {
@@ -104,6 +108,22 @@ async function assertDaemonMatches(resolution: { transport: string }): Promise<v
       "Run `convo daemon stop` and start it again, or stop using the daemon for this project.",
     );
   }
+}
+
+/**
+ * A killed process never reaches `finally`, and Gecko keeps the session until
+ * the holder ends it. Release on signals before exiting.
+ */
+function guardSignals(shutdown: () => Promise<void>): () => void {
+  const handler = () => {
+    void shutdown().finally(() => process.exit(130));
+  };
+  process.once("SIGINT", handler);
+  process.once("SIGTERM", handler);
+  return () => {
+    process.removeListener("SIGINT", handler);
+    process.removeListener("SIGTERM", handler);
+  };
 }
 
 function flagValue(args: readonly string[], flag: string): string | undefined {

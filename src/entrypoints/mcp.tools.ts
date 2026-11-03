@@ -5,6 +5,8 @@ import { buildCapabilities } from "./cli.doctor.js";
 import { applySetup } from "./cli.setup.js";
 import { toConvoError } from "../core/errors/convo-error.js";
 import type { BrowserId, TransportId } from "../core/ports/config.port.js";
+import { isContinuableThread, parseThreadUrl, type ThreadTarget } from "../core/services/setup/thread-target.js";
+import { isManagedTabRef } from "../adapters/browsers/tab-registry.js";
 import {
   formatDoctorReport,
   runSelfHealingClean,
@@ -17,6 +19,8 @@ export { MCP_TOOLS, type McpToolDefinition } from "./mcp.schema.js";
 export interface McpToolExecutionResult {
   readonly text: string;
   readonly isError?: boolean;
+  /** Mirrors the declared outputSchema so clients need not parse prose. */
+  readonly structured?: Record<string, unknown>;
   readonly writtenFiles?: readonly string[];
   readonly riskLabels?: readonly string[];
   readonly redactedSecretsCount?: number;
@@ -25,6 +29,28 @@ export interface McpToolExecutionResult {
 export interface ExecuteToolOptions {
   readonly workDir?: string;
   readonly onProgress?: { report(event: { stage: string; elapsedMs: number; platform?: string }): void };
+}
+
+function threadFrom(raw: unknown): ThreadTarget | undefined {
+  if (typeof raw !== "string" || !raw.trim()) return undefined;
+  const parsed = parseThreadUrl(raw);
+  if (!parsed.ok) throw new Error(`${parsed.error.message} ${parsed.error.remediation}`);
+  return parsed.target;
+}
+
+function threadsFrom(raw: unknown): Partial<Record<PlatformId, ThreadTarget>> | undefined {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return undefined;
+  const map: Partial<Record<PlatformId, ThreadTarget>> = {};
+  for (const [platform, value] of Object.entries(raw as Record<string, unknown>)) {
+    if (typeof value !== "string") continue;
+    const parsed = parseThreadUrl(value);
+    if (!parsed.ok) throw new Error(`${parsed.error.message} ${parsed.error.remediation}`);
+    if (parsed.target.platform !== platform) {
+      throw new Error(`${value} is a ${parsed.target.platform} URL, not ${platform}.`);
+    }
+    map[platform as PlatformId] = parsed.target;
+  }
+  return Object.keys(map).length > 0 ? map : undefined;
 }
 
 export async function executeMcpTool(
@@ -52,9 +78,11 @@ export async function executeMcpTool(
         const think = typeof args.think === "boolean" ? args.think : undefined;
         const search = typeof args.search === "boolean" ? args.search : undefined;
 
+        const thread = threadFrom(args.threadUrl);
         const res = await orchestrator.ask({
           prompt, platform, targetId, writeFiles, outDir, newChat, openTab,
           toggles: think !== undefined || search !== undefined ? { think, search } : undefined,
+          ...(thread ? { thread } : {}),
           ...(options?.onProgress ? { progress: options.onProgress } : {}),
         });
         return {
@@ -62,6 +90,15 @@ export async function executeMcpTool(
           writtenFiles: res.writtenFiles ?? [],
           riskLabels: res.riskLabels,
           redactedSecretsCount: res.redactedSecretsCount,
+          structured: {
+            platform: res.tab.platformId,
+            tabId: res.tab.targetId,
+            threadId: res.tab.threadId,
+            threadUrl: res.tab.platformId && isContinuableThread(res.tab.platformId, res.tab.threadId) ? res.tab.url : null,
+            elapsedMs: res.elapsedMs,
+            continued: Boolean(thread) || !newChat,
+            text: res.turn.markdownContent,
+          },
         };
       }
 
@@ -76,8 +113,26 @@ export async function executeMcpTool(
         const platforms = Array.isArray(args.platforms) ? (args.platforms as PlatformId[]) : undefined;
         const arbitrate = typeof args.arbitrate === "boolean" ? args.arbitrate : undefined;
         const arbiter = typeof args.arbiter === "string" ? (args.arbiter as PlatformId) : undefined;
-        const report = await orchestrator.compare({ prompt, platforms, arbitrate, arbiter });
-        return { text: report.markdownReport };
+        const threads = threadsFrom(args.threads);
+        const report = await orchestrator.compare({
+          prompt, platforms, arbitrate, arbiter,
+          ...(threads ? { threads } : {}),
+          continueThreads: args.continue === true,
+        });
+        return {
+          text: report.markdownReport,
+          structured: {
+            comparisonId: report.comparisonId,
+            durationMs: report.totalDurationMs,
+            platforms: report.results.map((result) => ({
+              platform: result.platform,
+              status: result.status,
+              elapsedMs: result.elapsedMs,
+              threadId: result.tab.threadId,
+              threadUrl: isContinuableThread(result.platform, result.tab.threadId) ? result.tab.url : null,
+            })),
+          },
+        };
       }
 
       case "convo_status": {
@@ -88,7 +143,10 @@ export async function executeMcpTool(
             isError: true,
           };
         }
-        return { text: JSON.stringify({ ok: true, setup: resolution.value }), };
+        return {
+          text: JSON.stringify({ ok: true, setup: resolution.value }),
+          structured: { ok: true, setup: resolution.value },
+        };
       }
 
       case "convo_setup": {
@@ -106,13 +164,8 @@ export async function executeMcpTool(
           verifyTab: args.verifyTab === true,
           ...(options?.workDir ? { workDir: options.workDir } : {}),
         });
-        return {
-          text: JSON.stringify({
-            ok: true,
-            config: outcome.config,
-            warning: outcome.warning ?? null,
-          }),
-        };
+        const structured = { ok: true, config: outcome.config, warning: outcome.warning ?? null };
+        return { text: JSON.stringify(structured), structured };
       }
 
       case "convo_doctor": {
@@ -125,22 +178,33 @@ export async function executeMcpTool(
           transportOk: report.transportHealth.ok,
           ...(report.transportHealth.error ? { transportError: report.transportHealth.error } : {}),
         });
-        return {
-          text: JSON.stringify({
-            ok: report.transportHealth.ok,
-            configured: resolution.ok ? resolution.value : null,
-            capabilities,
-            transportHealth: report.transportHealth,
-            tabs: report.tabs,
-            ...(fixResult ? { fixResult } : {}),
-          }),
+        const structured = {
+          ok: report.transportHealth.ok,
+          configured: resolution.ok ? resolution.value : null,
+          capabilities,
+          transportHealth: report.transportHealth,
+          tabs: report.tabs,
+          ...(fixResult ? { fixResult } : {}),
         };
+        return { text: JSON.stringify(structured), structured };
       }
 
       case "convo_list_tabs": {
         const tabs = await orchestrator.listTabs();
-        const text = tabs.map((t) => `• [${t.platformId ?? "OTHER"}] ${t.title} (Target: ${t.targetId}, URL: ${t.url})`).join("\n");
-        return { text: text || "No open tabs found. Call convo_tab({ action: 'new', target: 'deepseek' }) to open one." };
+        const structured = {
+          tabs: tabs.map((tab) => ({
+            targetId: tab.targetId,
+            platform: tab.platformId,
+            title: tab.title,
+            url: tab.url,
+            threadId: tab.threadId,
+            managed: isManagedTabRef(tab),
+          })),
+        };
+        const text = tabs
+          .map((tab) => `• [${tab.platformId ?? "OTHER"}] ${tab.title} (Target: ${tab.targetId}, URL: ${tab.url}${tab.threadId ? `, thread: ${tab.threadId}` : ""})`)
+          .join("\n");
+        return { text: text || "No open tabs found. Call convo_tab({ action: 'new', target: 'deepseek' }) to open one.", structured };
       }
 
       case "convo_tab": {

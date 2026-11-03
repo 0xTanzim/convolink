@@ -44,38 +44,6 @@ export function getDeepSeekReadThreadExpr(lastN: number): string {
   })()`;
 }
 
-export function getDeepSeekSubmitPromptExpr(prompt: string): string {
-  return `(async () => {
-    /* submitPrompt */
-    const selector = '#chat-input, textarea[placeholder*="Send"], textarea.chat-input, textarea';
-    let ta = document.querySelector(selector);
-    if (!ta) {
-      const deadline = Date.now() + 6000;
-      while (Date.now() < deadline && !ta) {
-        await new Promise(r => setTimeout(r, 200));
-        ta = document.querySelector(selector);
-      }
-    }
-    if (!ta) throw new Error("DeepSeek textarea not found");
-
-    const beforeCount = document.querySelectorAll('.ds-markdown').length;
-    const lastBefore = beforeCount > 0 ? document.querySelectorAll('.ds-markdown')[beforeCount - 1] : null;
-    const lastTurnHash = lastBefore ? (lastBefore.innerText || '').trim() : '';
-
-    const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')?.set;
-    if (setter) setter.call(ta, ${JSON.stringify(prompt)});
-    else ta.value = ${JSON.stringify(prompt)};
-    ta.dispatchEvent(new Event('input', { bubbles: true }));
-
-    await new Promise(r => setTimeout(r, 60));
-    const sendBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button, button[class*="send"]');
-    if (sendBtn && !sendBtn.className.includes('disabled')) sendBtn.click();
-    else ta.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true }));
-
-    return { turnCount: beforeCount, lastTurnHash, submittedPromptHash: String(${prompt.length}) };
-  })()`;
-}
-
 export function getDeepSeekFingerprintExpr(promptLength: number): string {
   return `(() => {
     /* submitPrompt */

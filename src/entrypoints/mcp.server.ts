@@ -109,6 +109,7 @@ export class McpServer {
           result: {
             content: [{ type: "text", text: toolResult.text }],
             isError: Boolean(toolResult.isError),
+            ...(toolResult.structured !== undefined ? { structuredContent: toolResult.structured } : {}),
             ...(toolResult.writtenFiles !== undefined ? { writtenFiles: toolResult.writtenFiles } : {}),
             ...(toolResult.riskLabels !== undefined ? { riskLabels: toolResult.riskLabels } : {}),
             ...(toolResult.redactedSecretsCount !== undefined ? { redactedSecretsCount: toolResult.redactedSecretsCount } : {}),

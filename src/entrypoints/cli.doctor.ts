@@ -1,6 +1,6 @@
-import * as net from "node:net";
 import { BrowserLocator } from "../core/env/browser-locator.js";
 import { inspectFirefoxProfile } from "../adapters/browsers/firefox-profile.js";
+import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
 
 export interface CapabilityItem {
   readonly id: string;
@@ -76,27 +76,22 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
     );
   }
 
-  const extensionAlive = await isPortListening(input.extensionPort ?? 9224);
+  const extension = await fetchExtensionBridgeStatus(input.extensionPort ?? 9224);
+  const clients = extension.clients;
   items.push({
     id: "extension",
-    state: extensionAlive ? "ok" : "fail",
-    detail: extensionAlive ? `companion bridge on :${input.extensionPort ?? 9224}` : "companion bridge not running",
-    ...(extensionAlive ? {} : { remediation: "convo ext pair" }),
+    state: extension.running ? "ok" : "fail",
+    detail: extension.running
+      ? `companion bridge on :${input.extensionPort ?? 9224} · ${clients.length} client(s)${
+          clients.length > 0
+            ? ` (${clients.map((client) => `${client.browserFamily}/${client.profileLabel} v${client.extensionVersion}`).join(", ")})`
+            : ""
+        }`
+      : "companion bridge not running",
+    ...(extension.running ? {} : { remediation: "convo ext pair" }),
   });
 
   return items;
 }
 
-function isPortListening(port: number): Promise<boolean> {
-  return new Promise((resolve) => {
-    const socket = net.connect({ host: "127.0.0.1", port });
-    const done = (value: boolean) => {
-      socket.destroy();
-      resolve(value);
-    };
-    socket.setTimeout(300);
-    socket.once("connect", () => done(true));
-    socket.once("error", () => done(false));
-    socket.once("timeout", () => done(false));
-  });
-}
+

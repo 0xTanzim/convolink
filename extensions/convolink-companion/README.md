@@ -42,6 +42,8 @@ Build outputs are generated in:
 - Unpacked: `extensions/convolink-companion/.output/chrome-mv3` & `firefox-mv3`
 - ZIP Archives: `extensions/convolink-companion/.output/convolink-companion-chrome.zip` & `firefox.zip`
 
+The builder is the single source of truth: it reads the version from the root `package.json`, generates both manifests, and removes stale output before writing. There is no separate `manifest.json` or WXT build path to keep in sync.
+
 ---
 
 ## One-Time Pairing Handshake
@@ -61,6 +63,9 @@ To protect against local unauthorized processes, the extension uses a cryptograp
 ## CLI & MCP Usage
 
 ```bash
+# Show bridge state and every connected browser/profile/version
+bun run convo ext status
+
 # Verify connection health across all connected browsers
 bun run convo doctor
 
@@ -70,3 +75,13 @@ bun run convo list --transport extension-bridge
 # Ask ChatGPT / DeepSeek / Claude / Gemini with automated artifact extraction
 bun run convo ask --transport extension-bridge "Refactor this function to be pure"
 ```
+
+
+## Protocol v2 and recovery
+
+The companion speaks protocol v2. The bridge rejects older builds with `protocol-mismatch`; reload the unpacked extension after upgrading.
+
+- The service worker heartbeats every 15 seconds and reconnects with exponential backoff (1s..30s) after a disconnect.
+- Created tabs are tracked as ConvoLink-owned. The bridge will not close a tab the user opened.
+- The extension executes a fixed operation set (probe, read, fill, click, key, navigate). It cannot run arbitrary JavaScript: MV3 content-script CSP blocks `eval()`, and MAIN-world injection inherits the page CSP. Unsupported probes fail loudly as `extension-unsupported`.
+- If a platform changes its DOM, update `entrypoints/platforms.ts`; do not reintroduce eval.

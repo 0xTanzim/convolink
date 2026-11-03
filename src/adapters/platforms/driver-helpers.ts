@@ -1,6 +1,9 @@
 import type { BrowserPort, SessionHandle } from "../../core/ports/browser.port.js";
-import { buildMountedExpr, buildReadyExpr } from "./page-events.js";
+import type { TurnFingerprint } from "../../core/ports/platform.port.js";
+import { buildMountedProbeExpr, buildQuietProbeExpr, buildReadyProbeExpr } from "./page-events.js";
+import { isManagedTabRef } from "../browsers/tab-registry.js";
 import { ConvoError, isConvoError } from "../../core/errors/convo-error.js";
+import { TimeoutError } from "../../core/errors/bridge-errors.js";
 
 /**
  * Universal background-safe visibility evaluation for Chromium.
@@ -21,27 +24,97 @@ export const IS_VISIBLE_JS = `const isVisible = (el) => {
   return true;
 };`;
 
+const PROBE_TIMEOUT_MS = 3_000;
+const POLL_MS = 120;
+const QUIET_MS = 400;
+const DEFAULT_SUBMIT_BUDGET_MS = 30_000;
+
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Resolves `undefined` instead of rejecting so a throttled tab cannot hang a caller. */
+export async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([
+    promise.catch(() => undefined),
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms)),
+  ]);
+}
+
+function remaining(deadline: number): number {
+  return Math.max(0, deadline - Date.now());
+}
+
+async function probe<T>(browser: BrowserPort, handle: SessionHandle, expression: string): Promise<T | undefined> {
+  return withDeadline(browser.evaluate<T>(handle, expression), PROBE_TIMEOUT_MS);
+}
+
+export async function waitForMounted(
+  browser: BrowserPort,
+  handle: SessionHandle,
+  composerSelector: string,
+  budgetMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs;
+  const probeExpr = buildMountedProbeExpr(composerSelector);
+  while (Date.now() < deadline) {
+    if ((await probe<boolean>(browser, handle, probeExpr)) === true) return true;
+    await sleep(POLL_MS);
+  }
+  return false;
+}
+
+/**
+ * Host-side hydration barrier. Two identical DOM fingerprints this far apart
+ * mean the framework stopped re-rendering and its handlers are attached.
+ */
+export async function waitForDomQuiet(
+  browser: BrowserPort,
+  handle: SessionHandle,
+  budgetMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs;
+  const probeExpr = buildQuietProbeExpr();
+  let fingerprint = "";
+  let stableSince = 0;
+
+  while (Date.now() < deadline) {
+    const sample = await probe<{ readyState?: string; nodes: number; text: number }>(browser, handle, probeExpr);
+    if (sample && sample.readyState === "complete" && sample.nodes >= 0) {
+      const next = `${sample.nodes}:${sample.text}`;
+      if (next !== fingerprint) {
+        fingerprint = next;
+        stableSince = Date.now();
+      } else if (Date.now() - stableSince >= QUIET_MS) {
+        return true;
+      }
+    } else {
+      fingerprint = "";
+      stableSince = 0;
+    }
+    await sleep(POLL_MS);
+  }
+  return false;
+}
 
 /**
  * A freshly opened tab answers "composer exists" long before the framework has
  * hydrated its event handlers. Clicking then is ignored, which looks exactly
- * like a bot. This waits for a fully loaded document, a mounted composer, and an
- * enabled send control that stays that way for consecutive polls.
+ * like a bot. This polls until a loaded document, a mounted composer, and an
+ * enabled send control agree.
  */
 async function waitForComposerReady(
   browser: BrowserPort,
   handle: SessionHandle,
   composerSelector: string,
   sendSelector: string,
-  timeoutMs: number,
+  budgetMs: number,
 ): Promise<boolean> {
-  // One round trip: the page itself resolves when the composer is mounted and
-  // the send control is enabled and stable.
-  const ready = await browser
-    .evaluate<unknown>(handle, buildReadyExpr(composerSelector, sendSelector, { maxWaitMs: timeoutMs }))
-    .catch(() => false);
-  return ready === true;
+  const deadline = Date.now() + budgetMs;
+  const probeExpr = buildReadyProbeExpr(composerSelector, sendSelector);
+  while (Date.now() < deadline) {
+    if ((await probe<boolean>(browser, handle, probeExpr)) === true) return true;
+    await sleep(POLL_MS);
+  }
+  return false;
 }
 
 async function composerHasText(
@@ -49,21 +122,36 @@ async function composerHasText(
   handle: SessionHandle,
   selector: string,
 ): Promise<boolean> {
-  const result = await browser.evaluate<unknown>(
+  const result = await probe<boolean>(
+    browser,
     handle,
     `(() => {
       const c = document.querySelector(${JSON.stringify(selector)});
       if (!c) return false;
       return (c.value || c.innerText || '').trim().length > 0;
     })()`,
-  ).catch(() => false);
+  );
   return result === true;
+}
+
+async function waitForComposerEmpty(
+  browser: BrowserPort,
+  handle: SessionHandle,
+  composerSelector: string,
+  budgetMs: number,
+): Promise<boolean> {
+  const deadline = Date.now() + budgetMs;
+  while (Date.now() < deadline) {
+    if (!(await composerHasText(browser, handle, composerSelector))) return true;
+    await sleep(100);
+  }
+  return false;
 }
 
 /**
  * Activates send exactly once. Multiple synthetic activations (DOM click plus a
- * dispatched MouseEvent, or a second port click) submit the same prompt twice on
- * platforms that do not disable the button synchronously.
+ * dispatched MouseEvent) submit the same prompt twice on platforms that do not
+ * disable the button synchronously.
  *
  * Enter is used only when the composer still holds the text afterwards, which
  * means the click was ignored rather than pending.
@@ -75,8 +163,8 @@ export async function waitForAndClickSendButton(
   composerSelector: string,
   timeoutMs = 20_000,
 ): Promise<void> {
-  const ready = await waitForComposerReady(browser, handle, composerSelector, sendBtnSelector, timeoutMs);
-  if (!ready) {
+  const deadline = Date.now() + timeoutMs;
+  if (!(await waitForComposerReady(browser, handle, composerSelector, sendBtnSelector, remaining(deadline)))) {
     throw new ConvoError(
       "not-ready",
       `The send control (${sendBtnSelector}) never became enabled.`,
@@ -85,7 +173,8 @@ export async function waitForAndClickSendButton(
     );
   }
 
-  await browser.evaluate(
+  await probe<boolean>(
+    browser,
     handle,
     `(() => {
       const send = document.querySelector(${JSON.stringify(sendBtnSelector)});
@@ -94,14 +183,14 @@ export async function waitForAndClickSendButton(
       send.click();
       return true;
     })()`,
-  ).catch(() => {});
+  );
 
-  // Poll instead of assuming a fixed delay: under parallel load the click can
-  // land before the platform has attached its submit handler.
-  if (await waitForComposerEmpty(browser, handle, composerSelector, 2000)) return;
+  const clickWindow = Math.min(1500, Math.max(200, Math.floor(remaining(deadline) / 2)));
+  if (await waitForComposerEmpty(browser, handle, composerSelector, clickWindow)) return;
 
   // BiDi sends keys to the focused element, so focus the composer first.
-  await browser.evaluate(
+  await probe<boolean>(
+    browser,
     handle,
     `(() => {
       const c = document.querySelector(${JSON.stringify(composerSelector)});
@@ -109,11 +198,11 @@ export async function waitForAndClickSendButton(
       c.focus();
       return true;
     })()`,
-  ).catch(() => false);
+  );
 
   await browser.pressKey(handle, composerSelector, "Enter").catch(() => {});
 
-  if (await waitForComposerEmpty(browser, handle, composerSelector, 2500)) return;
+  if (await waitForComposerEmpty(browser, handle, composerSelector, Math.min(2500, remaining(deadline)))) return;
 
   throw new ConvoError(
     "submission-failed",
@@ -121,20 +210,6 @@ export async function waitForAndClickSendButton(
     "Retry the query; the platform may still be initializing the conversation.",
     { retryable: true },
   );
-}
-
-async function waitForComposerEmpty(
-  browser: BrowserPort,
-  handle: SessionHandle,
-  composerSelector: string,
-  timeoutMs: number,
-): Promise<boolean> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    if (!(await composerHasText(browser, handle, composerSelector))) return true;
-    await sleep(100);
-  }
-  return false;
 }
 
 function isRecoverable(error: unknown): boolean {
@@ -149,11 +224,17 @@ const NUDGE_EXPR = (composerSelector: string) => `(() => {
   return true;
 })()`;
 
+const RELOAD_EXPR = `(() => { location.reload(); return true; })()`;
+
+async function promptVisible(browser: BrowserPort, handle: SessionHandle, marker: string): Promise<boolean> {
+  return (await probe<boolean>(browser, handle, `(document.body.innerText || "").includes(${marker})`)) === true;
+}
+
 /**
- * Gemini's SPA occasionally keeps text in the composer without enabling its
- * send control; the only reliable cure is a reload. Recovery runs at most once,
- * and only when the prompt never reached the conversation, so a late submit
- * cannot be duplicated.
+ * Every platform's SPA can keep text in the composer without enabling its send
+ * control. Recovery runs once, only while the whole submit still fits its
+ * budget, and only after confirming the prompt never reached the conversation —
+ * a late submit must not be duplicated.
  */
 export async function submitWithRecovery(
   browser: BrowserPort,
@@ -161,11 +242,16 @@ export async function submitWithRecovery(
   composerSelector: string,
   sendBtnSelector: string,
   prompt: string,
-  timeoutMs = 20_000,
-  nudgeMs = 3000,
+  timeoutMs = DEFAULT_SUBMIT_BUDGET_MS,
+  nudgeMs = 4_000,
 ): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  // Recovery needs budget of its own. Without a reserve the first readiness
+  // wait consumes the whole deadline and the reload can never run.
+  const primaryDeadline = deadline - Math.floor(timeoutMs * 0.4);
+
   try {
-    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, timeoutMs);
+    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, remaining(primaryDeadline));
     return;
   } catch (error) {
     if (!isRecoverable(error)) throw error;
@@ -174,21 +260,46 @@ export async function submitWithRecovery(
   const marker = JSON.stringify(prompt.trim().slice(0, 80));
   if (await promptVisible(browser, handle, marker)) return;
 
-  await browser.evaluate(handle, NUDGE_EXPR(composerSelector)).catch(() => false);
+  await probe<boolean>(browser, handle, NUDGE_EXPR(composerSelector));
   try {
-    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, nudgeMs);
+    await waitForAndClickSendButton(
+      browser,
+      handle,
+      sendBtnSelector,
+      composerSelector,
+      Math.min(nudgeMs, remaining(deadline)),
+    );
     return;
   } catch (error) {
     if (!isRecoverable(error)) throw error;
     if (await promptVisible(browser, handle, marker)) return;
   }
 
-  await browser.evaluate(handle, "(() => { location.reload(); return true; })()").catch(() => false);
+  if (remaining(deadline) < 250) {
+    throw new ConvoError(
+      "not-ready",
+      "The composer never became ready and the submit budget was exhausted before recovery could run.",
+      "Retry the query; a slow first paint is usually transient.",
+      { retryable: true },
+    );
+  }
 
-  const remounted = await browser
-    .evaluate<unknown>(handle, buildMountedExpr(composerSelector, { maxWaitMs: 20_000 }))
-    .catch(() => false);
-  if (remounted !== true) {
+  const currentUrl = await probe<string>(browser, handle, "location.href");
+  const owned =
+    typeof currentUrl === "string"
+      ? isManagedTabRef({ targetId: handle.targetId, url: currentUrl, threadId: null })
+      : false;
+  if (!owned) {
+    throw new ConvoError(
+      "not-ready",
+      "The conversation is open in a tab ConvoLink does not own, and reloading it would discard the user's state.",
+      "Reload that tab manually, or re-run with a thread URL so ConvoLink opens its own tab.",
+      { retryable: true },
+    );
+  }
+
+  await probe<boolean>(browser, handle, RELOAD_EXPR);
+  if (!(await waitForMounted(browser, handle, composerSelector, Math.max(1000, remaining(deadline) - 5_000)))) {
     throw new ConvoError(
       "not-ready",
       "The page did not recover after an automatic reload.",
@@ -198,9 +309,74 @@ export async function submitWithRecovery(
   }
 
   await browser.fillText(handle, composerSelector, prompt);
-  await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, timeoutMs);
+  await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, remaining(deadline));
 }
 
-async function promptVisible(browser: BrowserPort, handle: SessionHandle, marker: string): Promise<boolean> {
-  return (await browser.evaluate<unknown>(handle, `(document.body.innerText || "").includes(${marker})`).catch(() => false)) === true;
+export interface CompletionProbeStatus {
+  readonly turnsCount?: number;
+  readonly turnIndex?: number;
+  readonly mdCount?: number;
+  readonly hasNewTurn?: boolean;
+  readonly isGenerating?: boolean;
+  readonly isThinking?: boolean;
+  readonly assistantText?: string;
+  readonly text?: string;
+  readonly codeBlocks?: Array<{ language: string; code: string }>;
+}
+
+export function completionText(status: CompletionProbeStatus): string {
+  return status.assistantText ?? status.text ?? "";
+}
+
+export function hasNewCompletion(status: CompletionProbeStatus, before: TurnFingerprint): boolean {
+  const text = completionText(status);
+  return Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+}
+
+export interface SettleResult<T> {
+  readonly status: T;
+  readonly elapsedMs: number;
+  readonly timedOut: boolean;
+}
+
+/**
+ * Host-side settle loop. In-page waits are impossible to bound reliably in a
+ * throttled background tab, so every driver polls a short immediate probe and
+ * decides quiescence here.
+ */
+export async function pollUntilSettled(
+  browser: BrowserPort,
+  handle: SessionHandle,
+  probeExpr: string,
+  options: {
+    readonly timeoutMs: number;
+    readonly quiescenceMs: number;
+    readonly textOf: (status: CompletionProbeStatus) => string;
+    readonly isNew: (status: CompletionProbeStatus) => boolean;
+  },
+): Promise<SettleResult<CompletionProbeStatus>> {
+  const start = Date.now();
+  const deadline = start + options.timeoutMs;
+  let lastStatus: CompletionProbeStatus | undefined;
+  let lastText = "";
+  let lastChange = start;
+
+  while (Date.now() < deadline) {
+    const status = await probe<CompletionProbeStatus>(browser, handle, probeExpr);
+    if (status) {
+      lastStatus = status;
+      const text = options.textOf(status);
+      if (status.isGenerating || status.isThinking || text.length !== lastText.length) {
+        lastChange = Date.now();
+        lastText = text;
+      }
+      if (options.isNew(status) && !status.isGenerating && !status.isThinking && Date.now() - lastChange >= options.quiescenceMs) {
+        return { status, elapsedMs: Date.now() - start, timedOut: false };
+      }
+    }
+    await sleep(POLL_MS);
+  }
+
+  if (!lastStatus) throw new TimeoutError("The page did not answer status probes.", options.timeoutMs);
+  return { status: lastStatus, elapsedMs: Date.now() - start, timedOut: true };
 }

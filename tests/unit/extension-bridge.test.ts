@@ -37,7 +37,16 @@ describe("ExtensionBridgeAdapter", () => {
     });
 
     // Mock extension sending handshake
-    ws.send(JSON.stringify({ type: "HANDSHAKE", extensionVersion: "1.0.0", profileName: "Everyday Chrome" }));
+    ws.send(JSON.stringify({
+      type: "HANDSHAKE",
+      protocolVersion: 2,
+      clientId: "client-everyday",
+      installationProfileId: "prof-everyday",
+      connectionId: "conn-everyday",
+      browserFamily: "chrome",
+      profileLabel: "Everyday Chrome",
+      extensionVersion: "2.0.0",
+    }));
 
     // Mock extension responding to LIST_TABS
     ws.onmessage = (event) => {
@@ -45,9 +54,11 @@ describe("ExtensionBridgeAdapter", () => {
       if (msg.type === "LIST_TABS") {
         ws.send(
           JSON.stringify({
+            v: 2,
             id: msg.id,
+            ok: true,
             result: [
-              { targetId: "ext-tab-1", title: "ChatGPT Everyday", url: "https://chatgpt.com/c/real-1" },
+              { tabId: 1, title: "ChatGPT Everyday", url: "https://chatgpt.com/c/real-1" },
             ],
           }),
         );
@@ -62,7 +73,7 @@ describe("ExtensionBridgeAdapter", () => {
 
     const tabs = await adapter.listTabs();
     expect(tabs.length).toBe(1);
-    expect(tabs[0]?.targetId).toBe("ext-tab-1");
+    expect(tabs[0]?.targetId).toBe("1");
     expect(tabs[0]?.title).toBe("ChatGPT Everyday");
 
     ws.close();
@@ -77,7 +88,7 @@ describe("ExtensionBridgeAdapter", () => {
     await new Promise<void>((r) => { wsChrome.onopen = () => r(); });
     wsChrome.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-chrome",
       installationProfileId: "prof-chrome",
       connectionId: "conn-c1",
@@ -91,7 +102,7 @@ describe("ExtensionBridgeAdapter", () => {
     await new Promise<void>((r) => { wsBrave.onopen = () => r(); });
     wsBrave.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-brave",
       installationProfileId: "prof-brave",
       connectionId: "conn-b1",
@@ -104,7 +115,9 @@ describe("ExtensionBridgeAdapter", () => {
       const msg = JSON.parse(event.data.toString());
       if (msg.type === "LIST_TABS") {
         wsChrome.send(JSON.stringify({
+          v: 2,
           id: msg.id,
+          ok: true,
           result: [{ tabId: 101, title: "ChatGPT Work", url: "https://chatgpt.com/" }],
         }));
       }
@@ -114,7 +127,9 @@ describe("ExtensionBridgeAdapter", () => {
       const msg = JSON.parse(event.data.toString());
       if (msg.type === "LIST_TABS") {
         wsBrave.send(JSON.stringify({
+          v: 2,
           id: msg.id,
+          ok: true,
           result: [{ tabId: 202, title: "DeepSeek Creative", url: "https://chat.deepseek.com/" }],
         }));
       }
@@ -143,7 +158,7 @@ describe("ExtensionBridgeAdapter", () => {
     await new Promise<void>((r) => { wsOld.onopen = () => r(); });
     wsOld.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-persisted",
       installationProfileId: "prof-persisted",
       connectionId: "conn-old",
@@ -159,7 +174,7 @@ describe("ExtensionBridgeAdapter", () => {
     await new Promise<void>((r) => { wsNew.onopen = () => r(); });
     wsNew.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-persisted",
       installationProfileId: "prof-persisted",
       connectionId: "conn-new",
@@ -215,7 +230,7 @@ describe("ExtensionBridgeAdapter", () => {
 
     wsBad.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-bad",
       token: "wrong-token",
     }));
@@ -236,7 +251,7 @@ describe("ExtensionBridgeAdapter", () => {
 
     wsGood.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-good",
       token: "valid-secret-token-1234567890abcdef",
     }));
@@ -260,17 +275,17 @@ describe("ExtensionBridgeAdapter", () => {
       const msg = JSON.parse(e.data.toString());
       receivedActions.push(msg);
       if (msg.type === "LIST_TABS") {
-        ws.send(JSON.stringify({ id: msg.id, result: [{ tabId: 777, title: "AI Tab", url: "https://chatgpt.com/" }] }));
-      } else if (msg.type === "EVALUATE") {
-        ws.send(JSON.stringify({ id: msg.id, result: { value: 42 } }));
-      } else if (["ATTACH", "FILL_TEXT", "CLICK", "PRESS_KEY"].includes(msg.type)) {
-        ws.send(JSON.stringify({ id: msg.id, result: { ok: true } }));
+        ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: [{ tabId: 777, title: "AI Tab", url: "https://chatgpt.com/" }] }));
+      } else if (msg.type === "GET_URL") {
+        ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: "https://chatgpt.com/c/777" }));
+      } else if (["FILL_TEXT", "CLICK", "PRESS_KEY", "BRING_TO_FRONT"].includes(msg.type)) {
+        ws.send(JSON.stringify({ v: 2, id: msg.id, ok: true, result: { ok: true } }));
       }
     };
 
     ws.send(JSON.stringify({
       type: "HANDSHAKE",
-      protocolVersion: 1,
+      protocolVersion: 2,
       clientId: "client-777",
       browserFamily: "chrome",
     }));
@@ -282,14 +297,15 @@ describe("ExtensionBridgeAdapter", () => {
     const session = await adapter.attach("777");
     expect(session.targetId).toBe("777");
 
-    const evalRes = await adapter.evaluate<number>(session, "1 + 41");
-    expect(evalRes).toBe(42);
+    const url = await adapter.evaluate<string>(session, "location.href");
+    expect(url).toContain("chatgpt.com");
+    await expect(adapter.evaluate(session, "1 + 41")).rejects.toMatchObject({ code: "extension-unsupported" });
 
     await adapter.fillText(session, "textarea#prompt", "Hello AI");
     await adapter.click(session, "button#send");
     await adapter.pressKey(session, "textarea#prompt", "Enter");
 
-    expect(receivedActions.some((a) => a.type === "EVALUATE" && a.expression === "1 + 41")).toBe(true);
+    expect(receivedActions.some((a) => a.type === "GET_URL")).toBe(true);
     expect(receivedActions.some((a) => a.type === "FILL_TEXT" && a.text === "Hello AI")).toBe(true);
     expect(receivedActions.some((a) => a.type === "CLICK" && a.selector === "button#send")).toBe(true);
     expect(receivedActions.some((a) => a.type === "PRESS_KEY" && a.key === "Enter")).toBe(true);

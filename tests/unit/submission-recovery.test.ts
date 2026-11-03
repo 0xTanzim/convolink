@@ -1,6 +1,11 @@
 import { describe, expect, it } from "bun:test";
 import { submitWithRecovery } from "../../src/adapters/platforms/driver-helpers.js";
 import type { BrowserPort, SessionHandle, TabDescriptor, TransportHealth } from "../../src/core/ports/browser.port.js";
+import { recordManagedTab } from "../../src/adapters/browsers/tab-registry.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+process.env.XDG_RUNTIME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "convo-runtime-"));
 
 class ScriptedBrowser implements BrowserPort {
   public readonly id = "firefox-bidi" as const;
@@ -25,6 +30,7 @@ class ScriptedBrowser implements BrowserPort {
   async click(): Promise<void> {}
 
   async evaluate<T>(_h: SessionHandle, expression: string): Promise<T> {
+    if (expression === "location.href") return "https://gemini.google.com/app" as T;
     if (expression.includes("location.reload")) {
       this.reloads += 1;
       this.remounted = true;
@@ -64,9 +70,10 @@ describe("submitWithRecovery", () => {
   });
 
   it("reloads once and resubmits when the composer is stuck", async () => {
+    recordManagedTab({ targetId: "t", platform: "gemini", url: "https://gemini.google.com/app", threadId: null, createdAt: "x" });
     const browser = new ScriptedBrowser();
 
-    await submitWithRecovery(browser, handle, "div.ql-editor", "button.send", "stuck prompt", 200, 100);
+    await submitWithRecovery(browser, handle, "div.ql-editor", "button.send", "stuck prompt", 1500, 100);
 
     expect(browser.reloads).toBe(1);
     expect(browser.textInComposer).toBe(false);

@@ -6,6 +6,8 @@ import type { AskResult } from "../core/services/orchestrator.types.js";
 import type { ComparisonReport } from "../core/services/comparison.types.js";
 import { printJson, printError, successEnvelope, failureEnvelope } from "./cli.output.js";
 import { ConvoError } from "../core/errors/convo-error.js";
+import { parseThreadList, parseThreadUrl, type ThreadTarget } from "../core/services/setup/thread-target.js";
+import type { PlatformId } from "../core/ports/platform.port.js";
 
 type Orchestrator = ReturnType<typeof createContainer>["orchestrator"];
 export interface OutputFlags {
@@ -29,7 +31,9 @@ export async function handleAsk(
     });
   }
 
-  if (await shouldUseDaemon(parsed.launch)) {
+  const thread = parsed.threadRaw ? requireThread(parsed.threadRaw) : undefined;
+
+  if (!thread && (await shouldUseDaemon(parsed.launch))) {
     const daemonClient = new DaemonClient();
     try {
       const res = await daemonClient.sendRequest<AskResult>("ask", {
@@ -57,6 +61,7 @@ export async function handleAsk(
       autoContinue: parsed.autoContinue,
       newChat: parsed.newChat,
       openTab: parsed.openTab,
+      ...(thread ? { thread } : {}),
       progress: { report: (event) => process.stderr.write(`${JSON.stringify({ type: "progress", ...event })}\n`) },
     });
     return emitAsk(result, flags);
@@ -109,7 +114,9 @@ export async function handleCompare(
 
   try {
     let report: ComparisonReport;
-    if (await shouldUseDaemon(parsed.launch)) {
+    const threads = parsed.threadsRaw ? requireThreadMap(parsed.threadsRaw) : undefined;
+
+    if (!threads && !parsed.continueThreads && (await shouldUseDaemon(parsed.launch))) {
       const res = await new DaemonClient().sendRequest<ComparisonReport>("compare", {
         prompt, platforms: parsed.platforms, mode: parsed.mode,
         timeoutMs: parsed.timeoutMs, outDir: parsed.outDir,
@@ -121,6 +128,8 @@ export async function handleCompare(
       report = await orchestrator.compare({
         prompt, platforms: parsed.platforms, mode: parsed.mode, timeoutMs: parsed.timeoutMs,
         outDir: parsed.outDir, arbitrate: parsed.arbitrate, arbiter: parsed.arbiter,
+        ...(threads ? { threads } : {}),
+        continueThreads: parsed.continueThreads,
       });
     }
     return emitCompare(report, flags);
@@ -160,4 +169,18 @@ function fail(flags: OutputFlags, command: string, error: unknown): number {
     return error instanceof ConvoError ? error.exitCode : 6;
   }
   return printError(error);
+}
+
+function requireThread(raw: string): ThreadTarget {
+  const parsed = parseThreadUrl(raw);
+  if (!parsed.ok) throw new ConvoError(parsed.error.code, parsed.error.message, parsed.error.remediation);
+  return parsed.target;
+}
+
+function requireThreadMap(raw: string): Partial<Record<PlatformId, ThreadTarget>> {
+  const parsed = parseThreadList(raw);
+  if (!parsed.ok) throw new ConvoError(parsed.error.code, parsed.error.message, parsed.error.remediation);
+  const map: Partial<Record<PlatformId, ThreadTarget>> = {};
+  for (const target of parsed.targets) map[target.platform] = target;
+  return map;
 }

@@ -1,11 +1,16 @@
 import { describe, expect, it } from "bun:test";
 import { SessionOrchestrator } from "../../src/core/services/orchestrator.js";
 import { FakeBrowserPort } from "../fakes/fake-browser.js";
+import { recordManagedTab } from "../../src/adapters/browsers/tab-registry.js";
 import { DeepSeekDriver } from "../../src/adapters/platforms/deepseek.driver.js";
 import { ChatGPTDriver } from "../../src/adapters/platforms/chatgpt.driver.js";
 import { LockService } from "../../src/core/services/lock.service.js";
 import { PolicyService } from "../../src/core/services/policy.service.js";
 import { TabNotFoundError } from "../../src/core/errors/bridge-errors.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+process.env.XDG_RUNTIME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "convo-runtime-"));
 
 describe("SessionOrchestrator", () => {
   it("lists discovered tabs and matches platform drivers", async () => {
@@ -90,6 +95,7 @@ describe("SessionOrchestrator", () => {
       policyGate,
     });
 
+    recordManagedTab({ targetId: "tab-ds", platform: "deepseek", url: "https://chat.deepseek.com/a/chat/s/uuid-1", threadId: "uuid-1", createdAt: "x" });
     const rawPrompt = "Here is sk-proj-123456789012345678901234567890 please write clean script";
     const result = await orchestrator.ask({
       prompt: rawPrompt,
@@ -121,4 +127,30 @@ describe("SessionOrchestrator", () => {
       TabNotFoundError,
     );
   });
+  it("returns the existing answer instead of submitting a duplicate prompt", async () => {
+    const browser = new FakeBrowserPort();
+    browser.listTabs = async () => [
+      { targetId: "tab-ds", title: "DeepSeek Chat", url: "https://chat.deepseek.com/a/chat/s/uuid-1" },
+    ];
+    browser.evalResponseMap.set("readThread", {
+      layoutVariant: "v1",
+      turns: [
+        { turnIndex: 0, role: "user", markdownContent: "same prompt", codeBlocks: [], contentHash: "u" },
+        { turnIndex: 1, role: "assistant", markdownContent: "cached answer", codeBlocks: [], contentHash: "a" },
+      ],
+    });
+
+    const orchestrator = new SessionOrchestrator({
+      browser,
+      drivers: [new DeepSeekDriver()],
+      lockService: new LockService(),
+      policyGate: new PolicyService(),
+    });
+
+    const result = await orchestrator.ask({ prompt: "same prompt", targetId: "tab-ds" });
+
+    expect(result.turn.markdownContent).toBe("cached answer");
+    expect(browser.filledTexts).toEqual([]);
+  });
+
 });

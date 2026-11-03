@@ -1,37 +1,118 @@
+export const EXTENSION_PROTOCOL_VERSION = 2 as const;
+
 export type BrowserFamily = "chrome" | "brave" | "edge" | "firefox";
 
+export type ExtensionErrorCode =
+  | "protocol-mismatch"
+  | "unauthorized"
+  | "unsupported"
+  | "unsupported-expression"
+  | "timeout"
+  | "tab-not-found"
+  | "not-owned"
+  | "not-ready"
+  | "submission-failed"
+  | "internal";
+
+export interface ExtensionError {
+  readonly code: ExtensionErrorCode;
+  readonly message: string;
+  readonly retryable: boolean;
+}
+
+export type ExtensionCommand =
+  | "PING"
+  | "LIST_TABS"
+  | "GET_URL"
+  | "GET_TEXT"
+  | "GET_BODY_INCLUDES"
+  | "PROBE_SELECTORS"
+  | "PROBE_MOUNTED"
+  | "PROBE_READY"
+  | "PROBE_QUIET"
+  | "PROBE_COMPOSER_TEXT"
+  | "READ_THREAD"
+  | "PROBE_STATUS"
+  | "PROBE_CONTINUATION"
+  | "PROBE_DOWNLOADS"
+  | "INSPECT_CANVAS"
+  | "FOCUS"
+  | "RELOAD"
+  | "START_NEW_CHAT"
+  | "FILL_TEXT"
+  | "CLICK"
+  | "PRESS_KEY"
+  | "BRING_TO_FRONT"
+  | "CREATE_TAB"
+  | "CLOSE_TAB"
+  | "NAVIGATE";
+
 export interface ClientHandshake {
-  protocolVersion: 1;
-  clientId: string; // Stable installation identity
-  installationProfileId: string;
-  connectionId: string; // Fresh random UUID per connection
-  browserFamily: BrowserFamily;
-  profileLabel: string;
-  extensionVersion: string;
-  token?: string;
+  readonly protocolVersion: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly clientId: string;
+  readonly installationProfileId: string;
+  readonly connectionId: string;
+  readonly browserFamily: BrowserFamily;
+  readonly profileLabel: string;
+  readonly extensionVersion: string;
+  readonly token?: string;
 }
 
 export interface HandshakeAck {
-  success: boolean;
-  serverGeneration: number;
-  error?: string;
+  readonly success: boolean;
+  readonly serverGeneration: number;
+  readonly protocolVersion: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly error?: string;
 }
 
 export interface BrowserTarget {
-  targetId: string; // Opaque live target ID
-  clientId: string; // Owning extension installation
-  connectionId: string; // Owning connection session
-  tabId: number; // Browser-scoped tab ID
-  url: string;
-  title: string;
-  browserFamily: BrowserFamily;
-  profileLabel: string;
+  readonly targetId: string;
+  readonly clientId: string;
+  readonly connectionId: string;
+  readonly tabId: number;
+  readonly url: string;
+  readonly title: string;
+  readonly browserFamily: BrowserFamily;
+  readonly profileLabel: string;
 }
 
 export interface DiscoveredExtensionTab {
-  tabId: number;
-  url: string;
-  title: string;
+  readonly tabId: number;
+  readonly url: string;
+  readonly title: string;
+  readonly windowId?: number;
+  readonly active?: boolean;
+  readonly owned?: boolean;
+  readonly platform?: string | null;
+}
+
+export interface ExtensionRequest {
+  readonly v: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly id: number;
+  readonly type: ExtensionCommand;
+  readonly [key: string]: unknown;
+}
+
+export interface ExtensionSuccess<T = unknown> {
+  readonly v: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly id: number;
+  readonly ok: true;
+  readonly result: T;
+}
+
+export interface ExtensionFailure {
+  readonly v: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly id: number;
+  readonly ok: false;
+  readonly error: ExtensionError;
+}
+
+export type ExtensionResponse<T = unknown> = ExtensionSuccess<T> | ExtensionFailure;
+
+export interface TabRemovedEvent {
+  readonly v: typeof EXTENSION_PROTOCOL_VERSION;
+  readonly event: "TAB_REMOVED";
+  readonly targetId: string;
 }
 
 export function formatCompoundTargetId(clientId: string, tabId: number): string {
@@ -45,4 +126,8 @@ export function parseCompoundTargetId(compoundId: string): { clientId: string; t
   const tabId = parseInt(parts[1], 10);
   if (isNaN(tabId)) return null;
   return { clientId: parts[0], tabId };
+}
+
+export function isExtensionError(value: unknown): value is ExtensionError {
+  return Boolean(value && typeof value === "object" && "code" in value && "message" in value);
 }

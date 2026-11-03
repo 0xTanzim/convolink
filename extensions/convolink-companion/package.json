@@ -1,19 +1,11 @@
 {
   "name": "@convolink/companion",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "wxt",
-    "dev:firefox": "wxt -b firefox",
-    "build": "wxt build",
-    "build:firefox": "wxt build -b firefox",
-    "zip": "wxt zip",
-    "zip:firefox": "wxt zip -b firefox"
-  },
-  "dependencies": {},
-  "devDependencies": {
-    "typescript": "^5.7.0",
-    "wxt": "^0.21.5"
+    "build": "bun run ../../scripts/build-extension.ts --target=all",
+    "build:chrome": "bun run ../../scripts/build-extension.ts --target=chrome",
+    "build:firefox": "bun run ../../scripts/build-extension.ts --target=firefox"
   }
 }

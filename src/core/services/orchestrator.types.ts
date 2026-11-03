@@ -9,6 +9,7 @@ import type {
 import type { BrowserPort } from "../ports/browser.port.js";
 import type { PolicyGatePort, RiskLabel } from "../ports/policy.port.js";
 import type { ProgressPort } from "../ports/progress.port.js";
+import type { ThreadTarget } from "./setup/thread-target.js";
 import type { LockService } from "./lock.service.js";
 import type { ArtifactService, ExtractedArtifact } from "./artifact.service.js";
 import type { WorkspaceSinkPort, ThreadStore } from "../ports/storage.port.js";
@@ -58,6 +59,8 @@ export interface AskOptions {
   readonly progress?: ProgressPort;
   /** Fired once the prompt has left the composer, before generation is awaited. */
   readonly onSubmitted?: () => void;
+  /** Explicit conversation URL; the user naming it is the consent to drive it. */
+  readonly thread?: ThreadTarget;
 }
 
 export interface AskResult {

@@ -11,11 +11,10 @@ import type {
   TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
-import { StreamSettlingDetector } from "./settling-detector.js";
-import { buildSettleExpr } from "./page-events.js";
-import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { buildStatusProbeExpr } from "./page-events.js";
+import { submitWithRecovery, pollUntilSettled, completionText, hasNewCompletion, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
-import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekSubmitPromptExpr, getDeepSeekFingerprintExpr, getDeepSeekAwaitCompletionExpr } from "./deepseek.scripts.js";
+import { DEEPSEEK_RESOLVE_SELECTORS_EXPR, getDeepSeekReadThreadExpr, getDeepSeekFingerprintExpr, getDeepSeekAwaitCompletionExpr } from "./deepseek.scripts.js";
 
 export class DeepSeekDriver implements PlatformPort {
   public readonly id: PlatformId = "deepseek";
@@ -84,7 +83,7 @@ export class DeepSeekDriver implements PlatformPort {
     await browser.fillText(handle, composerSelector, prompt);
 
     const sendBtnSelector = 'div[role="button"].ds-button--circle, div.ds-button--circle, button[aria-label*="send"], div.send-button';
-    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
+    await submitWithRecovery(browser, handle, composerSelector, sendBtnSelector, prompt);
 
     return fingerprint;
   }
@@ -96,54 +95,31 @@ export class DeepSeekDriver implements PlatformPort {
     timeoutMs: number,
     quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
-    const start = Date.now();
-    let lastActivity = Date.now();
-    let lastLength = 0;
-    const idleTimeoutMs = Math.max(timeoutMs, 60_000);
-    const maxHardCapMs = Math.max(timeoutMs * 2, 300_000);
-    const detector = new StreamSettlingDetector(quiescenceMs);
-    const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
-
-    while (Date.now() - lastActivity < idleTimeoutMs && Date.now() - start < maxHardCapMs) {
-      const status = await browser.evaluate<{
-        mdCount: number;
-        hasNewTurn?: boolean;
-        isGenerating: boolean;
-        isThinking?: boolean;
-        turnIndex: number;
-        text: string;
-        codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, buildSettleExpr(getDeepSeekAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
-
-      const text = status.text || (status as any).assistantText || "";
-      if (status.isGenerating || status.isThinking || text.length !== lastLength) {
-        lastActivity = Date.now();
-        lastLength = text.length;
-      }
-
-      const hasNewTurn = Boolean(status.hasNewTurn || (status.mdCount >= before.turnCount && text.length > 0 && text !== before.lastTurnHash));
-      const settled = hasNewTurn && detector.isSettled({
-        isGenerating: status.isGenerating,
-        isThinking: status.isThinking,
-        contentLength: text.length,
+    const { status, elapsedMs, timedOut } = await pollUntilSettled(
+      browser,
+      handle,
+      buildStatusProbeExpr(getDeepSeekAwaitCompletionExpr(before.turnCount)),
+      {
+        timeoutMs,
         quiescenceMs,
-      });
+        textOf: completionText,
+        isNew: (candidate) => hasNewCompletion(candidate, before),
+      },
+    );
+    if (timedOut) throw new TimeoutError("DeepSeek response timed out", timeoutMs);
 
-      if (settled) {
-        return {
-          status: "complete",
-          turn: {
-            turnIndex: status.turnIndex, role: "assistant", markdownContent: text,
-            codeBlocks: status.codeBlocks, contentHash: String(text.length),
-          },
-          elapsedMs: Date.now() - start,
-        };
-      }
-
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
-    }
-
-    throw new TimeoutError("DeepSeek response timed out", timeoutMs);
+    const text = completionText(status);
+    return {
+      status: "complete",
+      turn: {
+        turnIndex: status.turnIndex ?? 0,
+        role: "assistant",
+        markdownContent: text,
+        codeBlocks: status.codeBlocks ?? [],
+        contentHash: String(text.length),
+      },
+      elapsedMs,
+    };
   }
 
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {

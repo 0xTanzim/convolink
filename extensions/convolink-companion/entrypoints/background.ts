@@ -1,292 +1,384 @@
-const defineBackground = (fn: () => void) => fn();
+import { PLATFORM_SELECTORS, platformForUrl, type PlatformKey } from "./platforms.js";
+import { TabOwnership } from "../../../src/core/services/tab-ownership.js";
+import {
+  bodyIncludesOp,
+  clickOp,
+  focusOp,
+  reloadOp,
+  startNewChatOp,
+  fillTextOp,
+  getTextOp,
+  getUrlOp,
+  pressKeyOp,
+  probeComposerTextOp,
+  probeMountedOp,
+  probeQuietOp,
+  probeReadyOp,
+  probeSelectorsOp,
+  readThreadOp,
+  statusOp,
+} from "./operations.js";
 
-export default defineBackground(() => {
-  const BRIDGE_WS_URL = "ws://127.0.0.1:9224";
-  const AI_DOMAINS = [
-    "chatgpt.com",
-    "chat.deepseek.com",
-    "gemini.google.com",
-    "claude.ai",
-  ];
+type JsonRecord = Record<string, unknown>;
 
-  let ws: WebSocket | null = null;
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
-  let installationProfileId = "";
-  let clientId = "";
-  let browserFamily = "chrome";
-  let profileLabel = "Personal";
-  let bridgeToken = "";
+interface ExtensionTab {
+  id?: number;
+  url?: string;
+  title?: string;
+  windowId?: number;
+  active?: boolean;
+}
 
-  // Top-level listener registration for alarms recovery
-  chrome.alarms.onAlarm.addListener((alarm) => {
-    if (alarm.name === "convolink-reconnect") {
-      connectToBridge();
-    }
-  });
+interface ExtensionApi {
+  runtime: {
+    getManifest(): { version: string };
+    onStartup: { addListener(listener: () => void): void };
+    onInstalled: { addListener(listener: () => void): void };
+  };
+  storage: {
+    local: { get(keys?: string[]): Promise<JsonRecord>; set(values: JsonRecord): Promise<void> };
+    session?: { get(keys?: string[]): Promise<JsonRecord>; set(values: JsonRecord): Promise<void> };
+  };
+  alarms: {
+    create(name: string, info: { delayInMinutes?: number; periodInMinutes?: number }): void;
+    onAlarm: { addListener(listener: (alarm: { name: string }) => void): void };
+  };
+  tabs: {
+    query(query: JsonRecord): Promise<ExtensionTab[]>;
+    create(options: JsonRecord): Promise<ExtensionTab>;
+    remove(tabId: number): Promise<void>;
+    update(tabId: number, options: JsonRecord): Promise<ExtensionTab>;
+    onRemoved: { addListener(listener: (tabId: number) => void): void };
+  };
+  scripting: {
+    executeScript<T>(options: JsonRecord): Promise<Array<{ result?: T }>>;
+  };
+}
 
-  async function initIdentity(): Promise<void> {
-    const data = await chrome.storage.local.get(["installationProfileId", "profileLabel", "bridgeToken"]);
-    if (data.installationProfileId) {
-      installationProfileId = data.installationProfileId as string;
-    } else {
-      installationProfileId = `prof-${crypto.randomUUID()}`;
-      await chrome.storage.local.set({ installationProfileId });
-    }
-    clientId = installationProfileId;
-    profileLabel = (data.profileLabel as string) || "Personal";
-    bridgeToken = (data.bridgeToken as string) || "";
+const globalScope = globalThis as unknown as { browser?: ExtensionApi; chrome?: ExtensionApi };
+const api = (globalScope.browser ?? globalScope.chrome) as ExtensionApi;
 
-    const ua = navigator.userAgent.toLowerCase();
-    if (ua.includes("brave") || (navigator as any).brave) {
-      browserFamily = "brave";
-    } else if (ua.includes("edg/")) {
-      browserFamily = "edge";
-    } else if (ua.includes("firefox")) {
-      browserFamily = "firefox";
-    } else {
-      browserFamily = "chrome";
-    }
+const BRIDGE_URL = "ws://127.0.0.1:9224";
+const PROTOCOL_VERSION = 2;
+const HEARTBEAT_MS = 15_000;
+const MAX_MISSED_ACKS = 2;
+const MAX_BACKOFF_MS = 30_000;
+const COMMAND_TIMEOUT_MS = 12_000;
+const AI_DOMAINS = ["chatgpt.com", "chat.openai.com", "chat.deepseek.com", "gemini.google.com", "claude.ai"];
+const RECONNECT_ALARM = "convolink-reconnect";
+
+let socket: WebSocket | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+let backoffMs = 1_000;
+let missedAcks = 0;
+let clientId = "";
+let installationProfileId = "";
+let browserFamily = "chrome";
+let profileLabel = "Personal";
+let bridgeToken = "";
+let connected = false;
+let ownership = new TabOwnership();
+
+async function loadOwnedTabs(): Promise<void> {
+  const data = await api.storage.local.get(["ownedTabs"]);
+  ownership = TabOwnership.from(data.ownedTabs);
+}
+
+async function saveOwnedTabs(): Promise<void> {
+  await api.storage.local.set({ ownedTabs: ownership.ids() });
+}
+
+async function initIdentity(): Promise<void> {
+  const data = await api.storage.local.get(["installationProfileId", "profileLabel", "bridgeToken"]);
+  if (typeof data.installationProfileId === "string" && data.installationProfileId) {
+    installationProfileId = data.installationProfileId;
+  } else {
+    installationProfileId = `prof-${crypto.randomUUID()}`;
+    await api.storage.local.set({ installationProfileId });
   }
+  clientId = installationProfileId;
+  profileLabel = typeof data.profileLabel === "string" && data.profileLabel ? data.profileLabel : "Personal";
+  bridgeToken = typeof data.bridgeToken === "string" ? data.bridgeToken : "";
 
-  function connectToBridge(): void {
-    if (ws && (ws.readyState === WebSocket.OPEN || ws.readyState === WebSocket.CONNECTING)) {
-      return;
-    }
+  const ua = navigator.userAgent.toLowerCase();
+  const brave = (navigator as unknown as { brave?: unknown }).brave;
+  if (ua.includes("brave") || brave) browserFamily = "brave";
+  else if (ua.includes("edg/")) browserFamily = "edge";
+  else if (ua.includes("firefox")) browserFamily = "firefox";
+  else browserFamily = "chrome";
+}
 
-    try {
-      ws = new WebSocket(BRIDGE_WS_URL);
+function send(message: JsonRecord): void {
+  if (socket && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(message));
+}
 
-      ws.onopen = async () => {
-        if (!installationProfileId) await initIdentity();
-        const connectionId = `conn-${crypto.randomUUID()}`;
+function sendResult(id: number, result: unknown): void {
+  send({ v: PROTOCOL_VERSION, id, ok: true, result });
+}
 
-        ws?.send(
-          JSON.stringify({
-            type: "HANDSHAKE",
-            protocolVersion: 1,
-            clientId,
-            installationProfileId,
-            connectionId,
-            browserFamily,
-            profileLabel,
-            extensionVersion: "1.0.0",
-            token: bridgeToken,
-          }),
-        );
+function sendError(id: number, code: string, message: string, retryable = false): void {
+  send({ v: PROTOCOL_VERSION, id, ok: false, error: { code, message, retryable } });
+}
 
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        heartbeatTimer = setInterval(() => {
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(JSON.stringify({ type: "HEARTBEAT", timestamp: Date.now() }));
-          }
-        }, 20000);
-      };
-
-      ws.onmessage = async (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (msg.type === "HANDSHAKE_ACK") {
-            if (msg.success) {
-              await chrome.storage.local.set({ connectionStatus: "connected", lastError: null });
-            } else {
-              await chrome.storage.local.set({ connectionStatus: "unauthorized", lastError: msg.error });
-            }
-            return;
-          }
-          await handleMessage(msg);
-        } catch {}
-      };
-
-      ws.onclose = async () => {
-        ws = null;
-        if (heartbeatTimer) clearInterval(heartbeatTimer);
-        await chrome.storage.local.set({ connectionStatus: "disconnected" });
-        scheduleReconnect();
-      };
-
-      ws.onerror = async () => {
-        ws = null;
-        await chrome.storage.local.set({ connectionStatus: "disconnected" });
-      };
-    } catch {
-      scheduleReconnect();
-    }
+async function withTimeout<T>(work: Promise<T>, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<T>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${COMMAND_TIMEOUT_MS}ms`)), COMMAND_TIMEOUT_MS);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
   }
+}
 
-  function scheduleReconnect(): void {
-    chrome.alarms.create("convolink-reconnect", { delayInMinutes: 0.5 });
-  }
+async function runInTab<T>(tabId: number, func: (...args: never[]) => T, args: unknown[]): Promise<T> {
+  const results = await withTimeout(
+    api.scripting.executeScript<T>({ target: { tabId }, func, args }),
+    `executeScript(${func.name || "anonymous"})`,
+  );
+  return results[0]?.result as T;
+}
 
-  async function handleMessage(msg: { id: number; type: string; [key: string]: any }): Promise<void> {
-    const { id, type } = msg;
+async function handleCommand(message: JsonRecord & { id: number; type: string }): Promise<void> {
+  const { id, type } = message;
+  const targetId = Number(message.targetId);
+  const platform = typeof message.platform === "string" ? (message.platform as PlatformKey) : null;
+  const selectors = platform ? PLATFORM_SELECTORS[platform] : null;
 
-    if (type === "LIST_TABS") {
-      const tabs = await chrome.tabs.query({});
-      const aiTabs = tabs
-        .filter((t) => t.url && AI_DOMAINS.some((d) => t.url!.includes(d)))
-        .map((t) => ({
-          tabId: t.id,
-          title: t.title || "Untitled AI Tab",
-          url: t.url,
-        }));
-      sendResult(id, aiTabs);
-      return;
-    }
-
-    if (type === "BRING_TO_FRONT") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      await chrome.tabs.update(tabId, { active: true });
-      sendResult(id, { active: true });
-      return;
-    }
-
-    if (type === "ATTACH" || type === "DETACH") {
-      sendResult(id, { ok: true });
-      return;
-    }
-
-    if (type === "CREATE_TAB") {
-      const newTab = await chrome.tabs.create({ url: msg.url });
-      sendResult(id, { targetId: String(newTab.id), title: newTab.title || "", url: newTab.url || msg.url });
-      return;
-    }
-
-    if (type === "CLOSE_TAB") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      await chrome.tabs.remove(tabId);
-      sendResult(id, { ok: true });
-      return;
-    }
-
-    if (type === "NAVIGATE") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      await chrome.tabs.update(tabId, { url: msg.url });
-      sendResult(id, { ok: true });
-      return;
-    }
-
-    if (type === "EVALUATE") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      try {
-        const results = await chrome.scripting.executeScript({
-          target: { tabId },
-          func: (code: string) => {
-            try {
-              const res = (0, eval)(code);
-              return { ok: true, value: res };
-            } catch (err: any) {
-              return { ok: false, error: String(err?.message || err) };
-            }
-          },
-          args: [msg.expression],
-        });
-        const first = results?.[0]?.result as { ok: boolean; value?: any; error?: string } | undefined;
-        if (!first) {
-          sendError(id, "No execution result from tab");
-        } else if (first.ok) {
-          sendResult(id, { value: first.value });
-        } else {
-          sendError(id, first.error || "Evaluation failed in page");
+  try {
+    switch (type) {
+      case "PING": {
+        sendResult(id, { pong: true, version: api.runtime.getManifest().version, protocol: PROTOCOL_VERSION });
+        return;
+      }
+      case "LIST_TABS": {
+        const tabs = await api.tabs.query({});
+        await loadOwnedTabs();
+        const list = tabs
+          .filter((tab) => tab.id !== undefined && tab.url && AI_DOMAINS.some((domain) => tab.url!.includes(domain)))
+          .map((tab) => ({
+            tabId: tab.id,
+            title: tab.title || "Untitled AI Tab",
+            url: tab.url,
+            windowId: tab.windowId,
+            active: Boolean(tab.active),
+            owned: ownership.has(Number(tab.id)),
+            platform: platformForUrl(tab.url || ""),
+          }));
+        sendResult(id, list);
+        return;
+      }
+      case "GET_URL":
+        sendResult(id, await runInTab(targetId, getUrlOp, []));
+        return;
+      case "GET_TEXT":
+        sendResult(id, await runInTab(targetId, getTextOp, [String(message.selector)]));
+        return;
+      case "GET_BODY_INCLUDES":
+        sendResult(id, await runInTab(targetId, bodyIncludesOp, [String(message.text)]));
+        return;
+      case "PROBE_SELECTORS":
+        if (!selectors) throw new Error(`Unknown platform: ${String(platform)}`);
+        sendResult(id, await runInTab(targetId, probeSelectorsOp, [selectors]));
+        return;
+      case "PROBE_MOUNTED":
+        sendResult(id, await runInTab(targetId, probeMountedOp, [String(message.composer)]));
+        return;
+      case "PROBE_READY":
+        sendResult(id, await runInTab(targetId, probeReadyOp, [String(message.composer), String(message.send)]));
+        return;
+      case "PROBE_QUIET":
+        sendResult(id, await runInTab(targetId, probeQuietOp, []));
+        return;
+      case "PROBE_COMPOSER_TEXT":
+        sendResult(id, await runInTab(targetId, probeComposerTextOp, [String(message.selector)]));
+        return;
+      case "READ_THREAD": {
+        if (!selectors) throw new Error(`Unknown platform: ${String(platform)}`);
+        sendResult(id, await runInTab(targetId, readThreadOp, [selectors, Number(message.lastN) || 20]));
+        return;
+      }
+      case "PROBE_STATUS": {
+        if (!selectors) throw new Error(`Unknown platform: ${String(platform)}`);
+        sendResult(id, await runInTab(targetId, statusOp, [selectors, Number(message.beforeTurnCount) || 0]));
+        return;
+      }
+      case "FOCUS": {
+        const focused = await runInTab(targetId, focusOp, [String(message.selector)]);
+        sendResult(id, focused);
+        return;
+      }
+      case "RELOAD": {
+        await runInTab(targetId, reloadOp, []);
+        sendResult(id, { ok: true });
+        return;
+      }
+      case "PROBE_CONTINUATION":
+        sendResult(id, { hasContinuation: false, triggerSelector: null });
+        return;
+      case "PROBE_DOWNLOADS":
+        sendResult(id, []);
+        return;
+      case "INSPECT_CANVAS":
+        sendResult(id, null);
+        return;
+      case "START_NEW_CHAT": {
+        const result = await runInTab(targetId, startNewChatOp, [String(message.baseUrl || "")]);
+        sendResult(id, result);
+        return;
+      }
+      case "FILL_TEXT": {
+        const result = await runInTab(targetId, fillTextOp, [String(message.selector), String(message.text)]);
+        if (!result?.ok) sendError(id, "not-ready", result?.error || "Composer did not accept the text", true);
+        else sendResult(id, result);
+        return;
+      }
+      case "CLICK":
+        sendResult(id, await runInTab(targetId, clickOp, [String(message.selector)]));
+        return;
+      case "PRESS_KEY":
+        sendResult(id, await runInTab(targetId, pressKeyOp, [String(message.selector), String(message.key)]));
+        return;
+      case "CREATE_TAB": {
+        const tab = await api.tabs.create({ url: String(message.url), active: false });
+        if (tab.id !== undefined) {
+          ownership.add(tab.id);
+          await saveOwnedTabs();
         }
-      } catch (err: any) {
-        sendError(id, err.message || "Failed to executeScript on target tab");
+        sendResult(id, { tabId: tab.id, title: tab.title || "", url: tab.url || String(message.url), owned: true });
+        return;
       }
-      return;
-    }
-
-    if (type === "FILL_TEXT") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          func: (selector: string, text: string) => {
-            const el = document.querySelector(selector) as HTMLElement | null;
-            if (!el) throw new Error(`Element not found for selector: ${selector}`);
-            el.scrollIntoView({ block: "center", inline: "nearest" });
-            el.focus();
-            if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-              const proto = el instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
-              const setter = Object.getOwnPropertyDescriptor(proto, "value")?.set;
-              if (setter) setter.call(el, text);
-              else el.value = text;
-              el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
-              el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
-            } else if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
-              el.textContent = text;
-              el.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
-            } else {
-              (el as any).value = text;
-              el.dispatchEvent(new Event("input", { bubbles: true }));
-            }
-          },
-          args: [msg.selector, msg.text],
-        });
+      case "CLOSE_TAB": {
+        await loadOwnedTabs();
+        if (!ownership.canClose(targetId, message.force === true)) {
+          sendError(id, "not-owned", `Tab ${targetId} was not opened by ConvoLink`, false);
+          return;
+        }
+        await api.tabs.remove(targetId);
+        ownership.remove(targetId);
+        await saveOwnedTabs();
+        sendResult(id, { closed: true });
+        return;
+      }
+      case "BRING_TO_FRONT": {
+        await api.tabs.update(targetId, { active: true });
+        sendResult(id, { active: true });
+        return;
+      }
+      case "NAVIGATE":
+        await api.tabs.update(targetId, { url: String(message.url) });
         sendResult(id, { ok: true });
-      } catch (err: any) {
-        sendError(id, err.message || "FILL_TEXT failed");
-      }
-      return;
+        return;
+      default:
+        sendError(id, "unsupported", `Unknown command: ${type}`, false);
     }
+  } catch (error) {
+    const messageText = error instanceof Error ? error.message : String(error);
+    const code = messageText.includes("not found") ? "tab-not-found" : messageText.includes("timed out") ? "timeout" : "internal";
+    sendError(id, code, messageText, code === "timeout");
+  }
+}
 
-    if (type === "CLICK") {
-      const tabId = parseInt(String(msg.targetId), 10);
+function scheduleReconnect(): void {
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  reconnectTimer = setTimeout(() => {
+    reconnectTimer = null;
+    connect();
+  }, backoffMs);
+  backoffMs = Math.min(MAX_BACKOFF_MS, backoffMs * 2);
+}
+
+function stopHeartbeat(): void {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+function connect(): void {
+  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+
+  try {
+    socket = new WebSocket(BRIDGE_URL);
+
+    socket.onopen = async () => {
+      if (!installationProfileId) await initIdentity();
+      missedAcks = 0;
+      backoffMs = 1_000;
+      send({
+        type: "HANDSHAKE",
+        protocolVersion: PROTOCOL_VERSION,
+        clientId,
+        installationProfileId,
+        connectionId: `conn-${crypto.randomUUID()}`,
+        browserFamily,
+        profileLabel,
+        extensionVersion: api.runtime.getManifest().version,
+        token: bridgeToken,
+      });
+    };
+
+    socket.onmessage = async (event) => {
       try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          func: (selector: string) => {
-            const el = document.querySelector(selector) as HTMLElement | null;
-            if (!el) throw new Error(`Element not found for selector: ${selector}`);
-            el.scrollIntoView({ block: "center", inline: "nearest" });
-            const rect = el.getBoundingClientRect();
-            const opts = { bubbles: true, cancelable: true, view: window, clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2 };
-            el.dispatchEvent(new MouseEvent("mousedown", opts));
-            el.dispatchEvent(new MouseEvent("mouseup", opts));
-            el.dispatchEvent(new MouseEvent("click", opts));
-            if (typeof el.click === "function") el.click();
-          },
-          args: [msg.selector],
-        });
-        sendResult(id, { ok: true });
-      } catch (err: any) {
-        sendError(id, err.message || "CLICK failed");
+        const message = JSON.parse(String(event.data)) as JsonRecord;
+        if (message.type === "HANDSHAKE_ACK") {
+          if (message.success === true) {
+            connected = true;
+            await api.storage.local.set({ connectionStatus: "connected", lastError: null });
+            stopHeartbeat();
+            heartbeatTimer = setInterval(() => {
+              if (missedAcks >= MAX_MISSED_ACKS) {
+                socket?.close();
+                return;
+              }
+              missedAcks += 1;
+              send({ type: "HEARTBEAT", timestamp: Date.now() });
+            }, HEARTBEAT_MS);
+          } else {
+            connected = false;
+            await api.storage.local.set({ connectionStatus: "unauthorized", lastError: message.error ?? "Handshake rejected" });
+            socket?.close();
+          }
+          return;
+        }
+        if (message.type === "HEARTBEAT_ACK") {
+          missedAcks = 0;
+          return;
+        }
+        if (typeof message.id === "number" && typeof message.type === "string") {
+          await handleCommand(message as JsonRecord & { id: number; type: string });
+        }
+      } catch {
+        // A malformed frame must not tear down a healthy socket.
       }
-      return;
-    }
+    };
 
-    if (type === "PRESS_KEY") {
-      const tabId = parseInt(String(msg.targetId), 10);
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId },
-          func: (selector: string, key: string) => {
-            const el = (document.querySelector(selector) as HTMLElement | null) || document.activeElement || document.body;
-            const keyCode = key === "Enter" ? 13 : 0;
-            const opts = { key, code: key === "Enter" ? "Enter" : key, keyCode, which: keyCode, bubbles: true, cancelable: true, composed: true };
-            el.dispatchEvent(new KeyboardEvent("keydown", opts));
-            el.dispatchEvent(new KeyboardEvent("keypress", opts));
-            el.dispatchEvent(new KeyboardEvent("keyup", opts));
-          },
-          args: [msg.selector, msg.key],
-        });
-        sendResult(id, { ok: true });
-      } catch (err: any) {
-        sendError(id, err.message || "PRESS_KEY failed");
-      }
-      return;
-    }
+    socket.onclose = async () => {
+      socket = null;
+      connected = false;
+      stopHeartbeat();
+      await api.storage.local.set({ connectionStatus: "disconnected" });
+      scheduleReconnect();
+    };
+
+    socket.onerror = () => {
+      socket?.close();
+    };
+  } catch {
+    scheduleReconnect();
   }
+}
 
-  function sendResult(id: number, result: any): void {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ id, result }));
-    }
-  }
-
-  function sendError(id: number, error: string): void {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ id, error }));
-    }
-  }
-
-  initIdentity().then(() => connectToBridge());
+api.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === RECONNECT_ALARM) connect();
 });
+api.runtime.onStartup.addListener(() => connect());
+api.runtime.onInstalled.addListener(() => connect());
+api.tabs.onRemoved.addListener((tabId) => {
+  if (connected) send({ v: PROTOCOL_VERSION, event: "TAB_REMOVED", targetId: String(tabId) });
+});
+
+api.alarms.create(RECONNECT_ALARM, { periodInMinutes: 0.5 });
+initIdentity().then(() => connect());

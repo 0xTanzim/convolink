@@ -45,13 +45,25 @@ jobs:
       - name: Build extension packages for Chrome and Firefox
         run: bun run build:extension
 
+      - name: Verify generated manifest version matches package.json
+        run: |
+          node -e "
+            const fs = require('fs');
+            const pkg = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+            for (const target of ['chrome-mv3', 'firefox-mv3']) {
+              const manifest = JSON.parse(fs.readFileSync('extensions/convolink-companion/.output/' + target + '/manifest.json', 'utf8'));
+              if (manifest.version !== pkg.version) {
+                console.error(target + ' manifest ' + manifest.version + ' != package ' + pkg.version);
+                process.exit(1);
+              }
+            }
+          "
+
       - name: Upload Extension Build Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: convolink-companion-extensions
-          path: |
-            extensions/convolink-companion/dist/*.zip
-            extensions/convolink-companion/.output/*.zip
+          path: extensions/convolink-companion/.output/*.zip
           include-hidden-files: true
           retention-days: 14
 
@@ -63,5 +75,4 @@ jobs:
           draft: false
           prerelease: false
           generate_release_notes: true
-          files: |
-            extensions/convolink-companion/dist/*.zip
+          files: extensions/convolink-companion/.output/*.zip

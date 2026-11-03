@@ -19,16 +19,48 @@ export interface BuildResult {
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
 const EXT_ROOT = path.join(ROOT_DIR, "extensions/convolink-companion");
+const AI_HOSTS = [
+  "https://chatgpt.com/*",
+  "https://chat.deepseek.com/*",
+  "https://gemini.google.com/*",
+  "https://claude.ai/*",
+];
 
 export function getProjectVersion(): string {
   try {
-    const pkgPath = path.join(ROOT_DIR, "package.json");
-    if (fs.existsSync(pkgPath)) {
-      const data = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
-      if (data.version) return data.version;
-    }
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT_DIR, "package.json"), "utf-8")) as { version?: string };
+    if (pkg.version) return pkg.version;
   } catch {}
   return "1.0.0";
+}
+
+export function buildManifest(target: "chrome" | "firefox", version: string): Record<string, unknown> {
+  return {
+    manifest_version: 3,
+    name: "ConvoLink Companion",
+    version,
+    description: "Zero-flag intelligence & context bridge for ConvoLink and local AI agents.",
+    permissions: ["tabs", "storage", "alarms", "scripting"],
+    host_permissions: AI_HOSTS,
+    background:
+      target === "firefox"
+        ? { scripts: ["background.js"], type: "module" }
+        : { service_worker: "background.js", type: "module" },
+    action: {
+      default_popup: "popup.html",
+      default_title: "ConvoLink Companion",
+    },
+    ...(target === "firefox"
+      ? { browser_specific_settings: { gecko: { id: "companion@convolink.local", strict_min_version: "109.0" } } }
+      : {}),
+  };
+}
+
+async function bundle(entry: string, outDir: string, naming: string): Promise<void> {
+  const result = await Bun.build({ entrypoints: [entry], outdir: outDir, naming, target: "browser", minify: false });
+  if (!result.success) {
+    throw new Error(result.logs.map((log) => log.message).join("\n") || `Failed to build ${entry}`);
+  }
 }
 
 export async function buildExtension(options: BuildOptions): Promise<BuildResult> {
@@ -37,146 +69,56 @@ export async function buildExtension(options: BuildOptions): Promise<BuildResult
   const version = options.version || getProjectVersion();
 
   try {
-    if (!fs.existsSync(outDir)) {
-      fs.mkdirSync(outDir, { recursive: true });
-    }
+    fs.rmSync(outDir, { recursive: true, force: true });
+    fs.mkdirSync(outDir, { recursive: true });
 
-    // 1. Build background service worker / script
-    const bgEntry = path.join(EXT_ROOT, "entrypoints/background.ts");
-    const bgBuild = await Bun.build({
-      entrypoints: [bgEntry],
-      outdir: outDir,
-      naming: "background.js",
-      target: "browser",
-      minify: false,
-    });
+    await bundle(path.join(EXT_ROOT, "entrypoints/background.ts"), outDir, "background.js");
+    await bundle(path.join(EXT_ROOT, "entrypoints/popup/main.ts"), outDir, "popup.js");
 
-    if (!bgBuild.success) {
-      const err = bgBuild.logs.map((l) => l.message).join("\n");
-      return { success: false, outDir, error: `Background build failed: ${err}` };
-    }
+    const popupHtml = fs
+      .readFileSync(path.join(EXT_ROOT, "entrypoints/popup/index.html"), "utf-8")
+      .replace(/src=["']\.\/main\.ts["']/, 'src="./popup.js"');
+    fs.writeFileSync(path.join(outDir, "popup.html"), popupHtml, "utf-8");
+    fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(buildManifest(target, version), null, 2), "utf-8");
 
-    // 2. Build popup script
-    const popupEntry = path.join(EXT_ROOT, "entrypoints/popup/main.ts");
-    const popupBuild = await Bun.build({
-      entrypoints: [popupEntry],
-      outdir: outDir,
-      naming: "popup.js",
-      target: "browser",
-      minify: false,
-    });
-
-    if (!popupBuild.success) {
-      const err = popupBuild.logs.map((l) => l.message).join("\n");
-      return { success: false, outDir, error: `Popup build failed: ${err}` };
-    }
-
-    // 3. Process and write popup HTML
-    const popupHtmlSrc = path.join(EXT_ROOT, "entrypoints/popup/index.html");
-    let htmlContent = fs.readFileSync(popupHtmlSrc, "utf-8");
-    htmlContent = htmlContent.replace(/src=["']\.\/main\.ts["']/, 'src="./popup.js"');
-    fs.writeFileSync(path.join(outDir, "popup.html"), htmlContent, "utf-8");
-
-    // 4. Generate Target Manifest with dynamic versioning
-    const manifest = {
-      manifest_version: 3,
-      name: "ConvoLink Companion",
-      version,
-      description: "Zero-flag intelligence & context bridge for ConvoLink and local AI agents.",
-      permissions: ["tabs", "storage", "alarms", "scripting"],
-      host_permissions: [
-        "https://chatgpt.com/*",
-        "https://chat.deepseek.com/*",
-        "https://gemini.google.com/*",
-        "https://claude.ai/*",
-      ],
-      background:
-        target === "firefox"
-          ? { scripts: ["background.js"], type: "module" }
-          : { service_worker: "background.js", type: "module" },
-      action: {
-        default_popup: "popup.html",
-        default_title: "ConvoLink Companion",
-      },
-      browser_specific_settings:
-        target === "firefox"
-          ? { gecko: { id: "companion@convolink.local", strict_min_version: "109.0" } }
-          : undefined,
-    };
-
-    fs.writeFileSync(
-      path.join(outDir, "manifest.json"),
-      JSON.stringify(manifest, null, 2),
-      "utf-8",
-    );
-
-    // 5. Package zip if requested
     let zipPath: string | undefined;
     let versionedZipPath: string | undefined;
     if (options.zip) {
       const parentDir = path.dirname(outDir);
       zipPath = path.join(parentDir, `convolink-companion-${target}.zip`);
       versionedZipPath = path.join(parentDir, `convolink-companion-${target}-v${version}.zip`);
-
-      if (fs.existsSync(zipPath)) fs.unlinkSync(zipPath);
-      if (fs.existsSync(versionedZipPath)) fs.unlinkSync(versionedZipPath);
-
-      const zipProc = Bun.spawnSync(["zip", "-r", "-q", zipPath, "."], {
-        cwd: outDir,
-      });
-
+      for (const archive of [zipPath, versionedZipPath]) {
+        if (fs.existsSync(archive)) fs.unlinkSync(archive);
+      }
+      const zipProc = Bun.spawnSync(["zip", "-r", "-q", zipPath, "."], { cwd: outDir });
       if (zipProc.exitCode !== 0) {
-        return {
-          success: false,
-          outDir,
-          error: `Zip creation failed: ${zipProc.stderr.toString()}`,
-        };
+        return { success: false, outDir, error: `Zip creation failed: ${zipProc.stderr.toString()}` };
       }
-
       fs.copyFileSync(zipPath, versionedZipPath);
-
-      // Also copy to non-hidden dist directory when building inside EXT_ROOT
-      if (!options.outDir || options.outDir.startsWith(EXT_ROOT)) {
-        const distDir = path.join(EXT_ROOT, "dist");
-        if (!fs.existsSync(distDir)) fs.mkdirSync(distDir, { recursive: true });
-        fs.copyFileSync(zipPath, path.join(distDir, `convolink-companion-${target}.zip`));
-        fs.copyFileSync(zipPath, path.join(distDir, `convolink-companion-${target}-v${version}.zip`));
-      }
     }
 
     return { success: true, outDir, zipPath, versionedZipPath, version };
-  } catch (err: unknown) {
-    return { success: false, outDir, error: (err as Error).message };
+  } catch (error) {
+    return { success: false, outDir, error: (error as Error).message };
   }
 }
 
-// CLI Runner
 if (import.meta.main) {
-  const isZip = !process.argv.includes("--no-zip");
-  const targetArg = process.argv.find((a) => a.startsWith("--target="));
-  const target = targetArg ? targetArg.split("=")[1] : "all";
+  const zip = !process.argv.includes("--no-zip");
+  const targetArg = process.argv.find((arg) => arg.startsWith("--target="));
+  const target = (targetArg?.split("=")[1] ?? "all") as BuildOptions["target"];
   const version = getProjectVersion();
-
-  console.log(`📦 Building ConvoLink Companion Extensions (v${version})...`);
-
-  const targets: ("chrome" | "firefox")[] =
+  const targets: Array<"chrome" | "firefox"> =
     target === "firefox" ? ["firefox"] : target === "chrome" ? ["chrome"] : ["chrome", "firefox"];
 
-  for (const t of targets) {
-    const res = await buildExtension({ target: t, zip: isZip, version });
-    if (res.success) {
-      console.log(`✅ [${t.toUpperCase()}] Built -> ${res.outDir}`);
-      if (res.zipPath) console.log(`   📦 Generic Archive    -> ${res.zipPath}`);
-      if (res.versionedZipPath) console.log(`   📦 Versioned Archive  -> ${res.versionedZipPath}`);
-    } else {
-      console.error(`❌ [${t.toUpperCase()}] Failed:`, res.error);
+  console.log(`📦 Building ConvoLink Companion Extensions (v${version})...`);
+  for (const current of targets) {
+    const result = await buildExtension({ target: current, zip, version });
+    if (!result.success) {
+      console.error(`❌ [${current.toUpperCase()}] ${result.error}`);
       process.exit(1);
     }
-  }
-
-  // Also sync Chrome build into root unpacked extension directory for instant local loading
-  const rootRes = await buildExtension({ target: "chrome", outDir: EXT_ROOT, zip: false, version });
-  if (rootRes.success) {
-    console.log(`✅ [ROOT UNPACKED] Synced ${EXT_ROOT} for instant 'Load unpacked' usage.`);
+    console.log(`✅ [${current.toUpperCase()}] ${result.outDir}`);
+    if (result.zipPath) console.log(`   📦 ${result.zipPath}`);
   }
 }

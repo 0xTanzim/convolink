@@ -29,6 +29,9 @@ describe("tab creation readiness", () => {
           turnContainerSelector: ".turn",
         } as never;
       }
+      if (expression.includes("querySelectorAll")) {
+        return { readyState: "complete", nodes: 12, text: 40 } as never;
+      }
       return true as never;
     };
 
@@ -38,7 +41,7 @@ describe("tab creation readiness", () => {
     const tab = await manager.createTab("deepseek");
 
     expect(tab.targetId).toBe("tab-spawned-1");
-    expect(expressions.some((expr) => expr.includes("document.readyState"))).toBe(true);
+    expect(expressions.some((expr) => expr.includes("querySelectorAll"))).toBe(true);
   });
 
   it("does not wait for a send button that only appears after typing", async () => {
@@ -48,6 +51,9 @@ describe("tab creation readiness", () => {
       expressions.push(expression);
       if (expression.includes("resolveSelectors")) {
         return { ok: true, composerSelector: "rich-textarea .ql-editor", sendButtonSelector: null } as never;
+      }
+      if (expression.includes("querySelectorAll")) {
+        return { readyState: "complete", nodes: 12, text: 40 } as never;
       }
       return true as never;
     };
@@ -59,7 +65,7 @@ describe("tab creation readiness", () => {
     await manager.createTab("deepseek");
 
     expect(Date.now() - startedAt).toBeLessThan(2_000);
-    expect(expressions.some((expr) => expr.includes("document.readyState"))).toBe(true);
+    expect(expressions.some((expr) => expr.includes("querySelectorAll"))).toBe(true);
   });
 
   it("does not block forever when the layout never resolves", async () => {

@@ -16,6 +16,7 @@ export interface ParsedAskArgs {
   transport?: BrowserAdapterId;
   browser?: string;
   profile?: string;
+  threadRaw?: string;
   launch: boolean;
 }
 
@@ -25,12 +26,14 @@ export function parseAskArgs(args: string[]): ParsedAskArgs {
   let outDir: string | undefined, autoContinue: boolean | undefined;
   let newChat = false, openTab = false, launch = false;
   let transport: BrowserAdapterId | undefined, profile: string | undefined, browser: string | undefined;
+  let threadRaw: string | undefined;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
     if ((a === "--platform" || a === "-p") && i + 1 < args.length) platform = args[++i] as PlatformId;
     else if ((a === "--target" || a === "-t" || a === "--targetId") && i + 1 < args.length) targetId = args[++i];
     else if (a === "--profile" && i + 1 < args.length) profile = args[++i];
+    else if (a === "--thread" && i + 1 < args.length) threadRaw = args[++i];
     else if ((a === "--browser" || a === "-b") && i + 1 < args.length) browser = args[++i];
     else if (a === "--launch") launch = true;
     else if (a === "--timeout" && i + 1 < args.length) timeoutMs = Number(args[++i]);
@@ -48,7 +51,7 @@ export function parseAskArgs(args: string[]): ParsedAskArgs {
   }
 
   const toggles: ToggleOptions = { ...(think !== undefined ? { think } : {}), ...(search !== undefined ? { search } : {}) };
-  return { prompt, platform, targetId, timeoutMs, toggles, writeFiles, outDir, autoContinue, newChat, openTab, transport, profile, browser, launch };
+  return { prompt, platform, targetId, timeoutMs, toggles, writeFiles, outDir, autoContinue, newChat, openTab, transport, profile, browser, threadRaw, launch };
 }
 
 export interface ParsedCompareArgs {
@@ -62,6 +65,8 @@ export interface ParsedCompareArgs {
   arbiter?: PlatformId;
   profile?: string;
   browser?: string;
+  threadsRaw?: string;
+  continueThreads: boolean;
   launch: boolean;
 }
 
@@ -75,6 +80,8 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
   let profile: string | undefined;
   let browser: string | undefined;
   let launch = false;
+  let threadsRaw: string | undefined;
+  let continueThreads = false;
 
   for (let i = 0; i < args.length; i++) {
     const a = args[i]!;
@@ -84,6 +91,10 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
       profile = args[++i];
     } else if ((a === "--browser" || a === "-b") && i + 1 < args.length) {
       browser = args[++i];
+    } else if (a === "--threads" && i + 1 < args.length) {
+      threadsRaw = args[++i];
+    } else if (a === "--continue") {
+      continueThreads = true;
     } else if (a === "--launch") {
       launch = true;
     } else if (a === "--timeout" && i + 1 < args.length) {
@@ -104,7 +115,7 @@ export function parseCompareArgs(args: string[]): ParsedCompareArgs {
     }
   }
 
-  return { prompt, platforms, timeoutMs, mode, outDir, transport, arbitrate, arbiter, profile, browser, launch };
+  return { prompt, platforms, timeoutMs, mode, outDir, transport, arbitrate, arbiter, profile, browser, threadsRaw, continueThreads, launch };
 }
 
 export async function readStdin(): Promise<string> {

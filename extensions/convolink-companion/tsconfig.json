@@ -1,14 +1,13 @@
 {
   "compilerOptions": {
-    "target": "ESNext",
+    "target": "ES2022",
     "module": "ESNext",
     "moduleResolution": "bundler",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
     "strict": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true
+    "noUncheckedIndexedAccess": true,
+    "skipLibCheck": true,
+    "noEmit": true
   },
-  "include": [
-    "entrypoints/**/*",
-    "wxt.config.ts"
-  ]
+  "include": ["entrypoints/**/*"]
 }

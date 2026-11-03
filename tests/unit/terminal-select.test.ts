@@ -79,6 +79,41 @@ describe("terminal selector", () => {
     expect(selectFromList("Pick", items, { input, output, probeMs: 0 })).rejects.toBeInstanceOf(SelectUnavailableError);
   });
 
+  it("falls back to a numbered prompt when raw mode is unavailable", async () => {
+    const input = new EventEmitter() as KeySource;
+    Object.defineProperty(input, "isTTY", { value: true });
+    const output = new FakeOutput();
+    const prompts: string[] = [];
+
+    const chosen = await selectFromList("Pick", items, {
+      input,
+      output,
+      probeMs: 0,
+      ask: async (prompt) => {
+        prompts.push(prompt);
+        return "2";
+      },
+    });
+
+    expect(chosen?.id).toBe("brave");
+    expect(prompts[0]).toContain("Select 1-3");
+    expect(output.buffer).toContain("2) Brave");
+  });
+
+  it("numbered fallback cancels on q", async () => {
+    const input = new EventEmitter() as KeySource;
+    Object.defineProperty(input, "isTTY", { value: true });
+
+    const chosen = await selectFromList("Pick", items, {
+      input,
+      output: new FakeOutput(),
+      probeMs: 0,
+      ask: async () => "q",
+    });
+
+    expect(chosen).toBeNull();
+  });
+
   it("keeps mouse mode off when the terminal does not answer the probe", async () => {
     const input = new FakeInput();
     const output = new FakeOutput();

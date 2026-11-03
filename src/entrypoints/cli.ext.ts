@@ -1,5 +1,6 @@
 import { BridgeTokenService } from "../core/services/bridge-token.service.js";
 import { HostEnv } from "../core/env/host-env.js";
+import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
 
 export async function handleExt(args: string[], tokenService?: BridgeTokenService): Promise<number> {
   const subCommand = args[0] || "pair";
@@ -23,6 +24,31 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
     return 0;
   }
 
-  console.error(`Unknown ext command: ${subCommand}. Available: convo ext pair [--rotate]`);
+  if (subCommand === "status") {
+    const json = args.includes("--json");
+    const status = await fetchExtensionBridgeStatus();
+    if (json) {
+      console.log(JSON.stringify({ ok: status.running, command: "ext", data: status, error: null }, null, 2));
+      return status.running ? 0 : 3;
+    }
+    if (!status.running) {
+      console.log(`\n🛑 Companion bridge is not running at ${status.endpoint}`);
+      console.log("   Start a ConvoLink command or the daemon, then reload the extension.\n");
+      return 3;
+    }
+    console.log(`\n🌉 Companion bridge: ${status.endpoint}`);
+    if (status.clients.length === 0) {
+      console.log("   No extension connected. Run `convo ext pair`, paste the token in the popup, and reload.\n");
+      return 0;
+    }
+    console.log(`   Connected clients: ${status.clients.length}\n`);
+    for (const client of status.clients) {
+      console.log(`   • ${client.browserFamily} [${client.profileLabel}] v${client.extensionVersion} · ${client.tabCount} tab(s)`);
+    }
+    console.log("");
+    return 0;
+  }
+
+  console.error(`Unknown ext command: ${subCommand}. Available: convo ext pair [--rotate] | convo ext status [--json]`);
   return 1;
 }

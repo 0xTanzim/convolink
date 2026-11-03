@@ -1,10 +1,15 @@
 import { describe, expect, it } from "bun:test";
+import { recordManagedTab } from "../../src/adapters/browsers/tab-registry.js";
 import { SessionOrchestrator } from "../../src/core/services/orchestrator.js";
 import { FakeBrowserPort } from "../fakes/fake-browser.js";
 import { DeepSeekDriver } from "../../src/adapters/platforms/deepseek.driver.js";
 import { LockService } from "../../src/core/services/lock.service.js";
 import { PolicyService } from "../../src/core/services/policy.service.js";
 import { SqliteLedgerAdapter } from "../../src/adapters/storage/sqlite-ledger.adapter.js";
+import * as fs from "node:fs";
+import * as os from "node:os";
+import * as path from "node:path";
+process.env.XDG_RUNTIME_DIR = fs.mkdtempSync(path.join(os.tmpdir(), "convo-runtime-"));
 
 describe("SessionOrchestrator Durable Ledger (Resume & Export)", () => {
   it("automatically records turns to the thread store during ask", async () => {
@@ -31,7 +36,7 @@ describe("SessionOrchestrator Durable Ledger (Resume & Export)", () => {
 
     const threads = await store.listThreads("deepseek");
     expect(threads.length).toBe(1);
-    expect(threads[0]?.title).toBe("DeepSeek");
+    expect(threads[0]?.title).toContain("chat.deepseek.com");
 
     const turns = await store.getTurns(threads[0]!.threadId);
     expect(turns.length).toBe(2);

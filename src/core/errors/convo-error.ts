@@ -7,7 +7,11 @@ export type ConvoErrorCode =
   | "profile-locked"
   | "default-profile-blocked"
   | "transport-mismatch"
+  | "transport-timeout"
+  | "transport-disconnected"
+  | "extension-unsupported"
   | "session-busy"
+  | "thread-not-found"
   | "not-ready"
   | "submission-failed"
   | "internal";
@@ -25,7 +29,11 @@ export const EXIT_CODES: Readonly<Record<ConvoErrorCode, number>> = {
   "profile-locked": 3,
   "default-profile-blocked": 3,
   "transport-mismatch": 3,
+  "transport-timeout": 3,
+  "transport-disconnected": 3,
+  "extension-unsupported": 3,
   "session-busy": 4,
+  "thread-not-found": 2,
   "not-ready": 5,
   "submission-failed": 5,
   internal: 6,

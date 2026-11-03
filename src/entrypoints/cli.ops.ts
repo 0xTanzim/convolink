@@ -5,6 +5,7 @@ import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js
 import { PlatformEnv } from "../core/env/platform-env.js";
 import { BrowserLocator } from "../core/env/browser-locator.js";
 import { DaemonClient } from "../adapters/daemon/daemon-client.js";
+import { isManagedTabRef } from "../adapters/browsers/tab-registry.js";
 import type { DiscoveredTab, DoctorReport } from "../core/services/orchestrator.types.js";
 import { loadResolution } from "./config-context.js";
 import { buildCapabilities } from "./cli.doctor.js";
@@ -121,6 +122,8 @@ export async function handleList(
         platform: tab.platformId,
         title: tab.title,
         url: tab.url,
+        threadId: tab.threadId,
+        managed: isManagedTabRef(tab),
       })),
     }));
     return 0;

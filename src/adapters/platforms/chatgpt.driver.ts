@@ -4,11 +4,10 @@ import type {
   PlatformId, PlatformPort, SelectorResolution, ToggleOptions, TurnFingerprint,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
-import { StreamSettlingDetector } from "./settling-detector.js";
-import { buildSettleExpr } from "./page-events.js";
-import { waitForAndClickSendButton, IS_VISIBLE_JS } from "./driver-helpers.js";
+import { buildStatusProbeExpr } from "./page-events.js";
+import { submitWithRecovery, pollUntilSettled, completionText, hasNewCompletion, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
-import { CHATGPT_RESOLVE_SELECTORS_EXPR, getChatGPTReadThreadExpr, getChatGPTSubmitPromptExpr, getChatGPTFingerprintExpr, getChatGPTAwaitCompletionExpr } from "./chatgpt.scripts.js";
+import { CHATGPT_RESOLVE_SELECTORS_EXPR, getChatGPTReadThreadExpr, getChatGPTFingerprintExpr, getChatGPTAwaitCompletionExpr } from "./chatgpt.scripts.js";
 
 export class ChatGPTDriver implements PlatformPort {
   public readonly id: PlatformId = "chatgpt";
@@ -80,7 +79,7 @@ export class ChatGPTDriver implements PlatformPort {
     await browser.fillText(handle, composerSelector, prompt);
 
     const sendBtnSelector = 'button[data-testid="send-button"], button[aria-label="Send prompt"], button[aria-label="Send"]';
-    await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector);
+    await submitWithRecovery(browser, handle, composerSelector, sendBtnSelector, prompt);
 
     return fingerprint;
   }
@@ -92,56 +91,31 @@ export class ChatGPTDriver implements PlatformPort {
     timeoutMs: number,
     quiescenceMs: number = 400,
   ): Promise<CompletionResult> {
-    const start = Date.now();
-    let lastActivity = Date.now();
-    let lastLength = 0;
-    const idleTimeoutMs = Math.max(timeoutMs, 60_000);
-    const maxHardCapMs = Math.max(timeoutMs * 2, 300_000);
-    const detector = new StreamSettlingDetector(quiescenceMs);
-    const pollIntervalMs = Math.min(100, Math.max(20, Math.floor(quiescenceMs / 4)));
-
-    while (Date.now() - lastActivity < idleTimeoutMs && Date.now() - start < maxHardCapMs) {
-      const status = await browser.evaluate<{
-        turnsCount: number;
-        hasNewTurn: boolean;
-        isGenerating: boolean;
-        isThinking?: boolean;
-        assistantText: string;
-        codeBlocks: Array<{ language: string; code: string }>;
-      }>(handle, buildSettleExpr(getChatGPTAwaitCompletionExpr(before.turnCount), { quiescenceMs, maxWaitMs: Math.max(15000, Math.min(timeoutMs, 120000)) }));
-
-      const text = status.assistantText || (status as any).text || "";
-      if (status.isGenerating || status.isThinking || text.length !== lastLength) {
-        lastActivity = Date.now();
-        lastLength = text.length;
-      }
-
-      const hasNewTurn = Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
-      const settled = hasNewTurn && detector.isSettled({
-        isGenerating: status.isGenerating,
-        isThinking: status.isThinking,
-        contentLength: text.length,
+    const { status, elapsedMs, timedOut } = await pollUntilSettled(
+      browser,
+      handle,
+      buildStatusProbeExpr(getChatGPTAwaitCompletionExpr(before.turnCount)),
+      {
+        timeoutMs,
         quiescenceMs,
-      });
+        textOf: completionText,
+        isNew: (candidate) => hasNewCompletion(candidate, before),
+      },
+    );
+    if (timedOut) throw new TimeoutError("ChatGPT response timed out", timeoutMs);
 
-      if (settled) {
-        return {
-          status: "complete",
-          turn: {
-            turnIndex: status.turnsCount !== undefined ? status.turnsCount - 1 : (status as any).turnIndex ?? 0,
-            role: "assistant",
-            markdownContent: text,
-            codeBlocks: status.codeBlocks ?? [],
-            contentHash: String(text.length),
-          },
-          elapsedMs: Date.now() - start,
-        };
-      }
-
-      await new Promise((r) => setTimeout(r, pollIntervalMs));
-    }
-
-    throw new TimeoutError("ChatGPT response timed out", timeoutMs);
+    const text = completionText(status);
+    return {
+      status: "complete",
+      turn: {
+        turnIndex: status.turnsCount !== undefined ? status.turnsCount - 1 : (status.turnIndex ?? 0),
+        role: "assistant",
+        markdownContent: text,
+        codeBlocks: status.codeBlocks ?? [],
+        contentHash: String(text.length),
+      },
+      elapsedMs,
+    };
   }
 
   public async inspectCanvas(handle: SessionHandle, browser: BrowserPort): Promise<CanvasDocument | null> {

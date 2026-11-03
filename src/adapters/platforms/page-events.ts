@@ -135,3 +135,84 @@ export function buildMountedExpr(composerSelector: string, options: MountOptions
     }, 120);
   }))()`;
 }
+
+/**
+ * Mounted is not hydrated. Typing between "composer exists" and "framework
+ * attached its handlers" leaves text the app never sees, so submission never
+ * enables. Wait for the composer plus a quiet DOM window.
+ */
+export function buildHydratedExpr(
+  composerSelector: string,
+  options: { readonly quietMs?: number; readonly maxWaitMs?: number } = {},
+): string {
+  const quietMs = options.quietMs ?? 400;
+  const maxWaitMs = options.maxWaitMs ?? 20_000;
+
+  return `(() => new Promise((resolve) => {
+    const composerSelector = ${JSON.stringify(composerSelector)};
+    const startedAt = Date.now();
+    let mountedAt = 0;
+    let lastMutation = Date.now();
+
+    const observer = new MutationObserver(() => {
+      if (mountedAt > 0) lastMutation = Date.now();
+    });
+    observer.observe(document.documentElement, {
+      subtree: true, childList: true, characterData: true, attributes: true,
+    });
+
+    const timer = setInterval(() => {
+      if (mountedAt === 0 && document.querySelector(composerSelector)) {
+        mountedAt = Date.now();
+        lastMutation = Date.now();
+      }
+      if (mountedAt > 0 && Date.now() - lastMutation >= ${quietMs}) {
+        clearInterval(timer); observer.disconnect(); resolve(true); return;
+      }
+      if (Date.now() - startedAt >= ${maxWaitMs}) {
+        clearInterval(timer); observer.disconnect(); resolve(false);
+      }
+    }, 100);
+  }))()`;
+}
+
+/** Immediate boolean probe. Never returns a promise, so it cannot block the socket. */
+export function buildMountedProbeExpr(composerSelector: string): string {
+  return `(() => document.readyState === "complete" && Boolean(document.querySelector(${JSON.stringify(composerSelector)})))()`;
+}
+
+/**
+ * Immediate readiness probe. Polled from the host because a background tab
+ * throttles `setInterval`, which makes any in-page wait unreliable and keeps
+ * the single BiDi socket busy until it eventually resolves.
+ */
+export function buildReadyProbeExpr(composerSelector: string, sendSelector: string): string {
+  return `(() => {
+    if (document.readyState !== "complete") return false;
+    if (!document.querySelector(${JSON.stringify(composerSelector)})) return false;
+    const send = document.querySelector(${JSON.stringify(sendSelector)});
+    if (!send) return false;
+    return !(send.disabled || send.getAttribute("aria-disabled") === "true" || send.classList.contains("ds-button--disabled"));
+  })()`;
+}
+
+/**
+ * Cheap structural fingerprint. Two identical samples a few hundred
+ * milliseconds apart are the host-side equivalent of "the SPA stopped
+ * re-rendering", without depending on page timers.
+ */
+export function buildQuietProbeExpr(): string {
+  return `(() => {
+    if (document.readyState !== "complete") return { readyState: document.readyState, nodes: -1, text: -1 };
+    return {
+      readyState: document.readyState,
+      nodes: document.querySelectorAll("*").length,
+      text: (document.body && document.body.innerText ? document.body.innerText.length : 0),
+    };
+  })()`;
+}
+
+/** Turns a status expression into an immediate probe instead of a page promise. */
+export function buildStatusProbeExpr(statusExpr: string): string {
+  return `(() => (${statusExpr})())`;
+}
