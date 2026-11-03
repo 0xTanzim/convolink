@@ -92,6 +92,19 @@ export async function handleSkill(args: string[], deps: SkillInstallDeps = {}): 
   fs.mkdirSync(path.dirname(destination), { recursive: true });
   fs.writeFileSync(destination, source, "utf-8");
 
+  if (destination.endsWith("SKILL.md")) {
+    try {
+      const skillPath = resolveSkillSourcePath();
+      const srcRefDir = path.join(path.dirname(skillPath), "references");
+      const destRefDir = path.join(path.dirname(destination), "references");
+      if (fs.existsSync(srcRefDir)) {
+        fs.cpSync(srcRefDir, destRefDir, { recursive: true, force: true });
+      }
+    } catch {
+      // Non-fatal if references are omitted in custom test doubles
+    }
+  }
+
   console.log(`✅ Installed the ConvoLink skill for ${harnessName}: ${destination}`);
   return 0;
 }

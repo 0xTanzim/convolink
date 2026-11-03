@@ -100,7 +100,7 @@ describe("Reports Issues (improves.md / agentic-improvement-roadmap.md)", () => 
   });
 
   it("Issue 3: forward transparently recovers and falls back when daemon socket is unreachable (ENOENT)", async () => {
-    const { forward } = await import("../../src/entrypoints/mcp.orchestrator.js");
+    const { forward, setFallbackOrchestrator } = await import("../../src/entrypoints/mcp.orchestrator.js");
     const fakeDeadClient = {
       sendRequest: async () => {
         const err = new Error("connect ENOENT /run/user/1000/convolink/bridge.sock");
@@ -109,9 +109,19 @@ describe("Reports Issues (improves.md / agentic-improvement-roadmap.md)", () => 
       },
     } as any;
 
-    const caller = forward(fakeDeadClient, "list");
-    // Should self-heal by calling in-process fallback without throwing ENOENT
-    const result = await caller();
-    expect(Array.isArray(result)).toBe(true);
+    const fakeOrch = {
+      listTabs: async () => [{ id: "tab-1", title: "Test Tab" }],
+    } as any;
+    setFallbackOrchestrator(fakeOrch);
+
+    try {
+      const caller = forward(fakeDeadClient, "list");
+      // Should self-heal by calling in-process fallback without throwing ENOENT
+      const result = await caller();
+      expect(Array.isArray(result)).toBe(true);
+      expect(result).toHaveLength(1);
+    } finally {
+      setFallbackOrchestrator(null);
+    }
   });
 });

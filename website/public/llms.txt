@@ -11,6 +11,8 @@ ConvoLink enables local IDE coding agents (Cursor, Claude Code, Antigravity, Win
 - [Model Context Protocol (MCP) Integration](https://0xtanzim.github.io/convolink/integrations/mcp): 11 JSON-RPC stdio tools, structured error envelopes, and session pinning contracts.
 - [The Setup Contract & Agent Rules](https://0xtanzim.github.io/convolink/agents/setup-contract): Machine-actionable exit codes, nextAction semantics, and offline `--save-only` setup.
 - [Agent Skills & Prompts](https://0xtanzim.github.io/convolink/agents/skills): Agent system prompt and skill specifications for optimal tool invocation.
+- [ConvoLink Agent Skill (SKILL.md)](https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md): Standard Agent Skill specification for autonomous agents.
+- [Browser Guide: Firefox, Zen, Chrome, Brave, Edge](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/browsers.md): Profiles, ports, and extension instructions for Gecko and Chromium browsers.
 
 ## Architecture & System Design
 

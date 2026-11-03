@@ -27,6 +27,12 @@ describe("convo skill install", () => {
       const text = fs.readFileSync(file, "utf-8");
       expect(text).toContain("name: convolink");
       expect(text).toContain("convo onboard");
+
+      // Verify references are copied alongside SKILL.md
+      const refDir = path.join(path.dirname(file), "references");
+      expect(fs.existsSync(refDir)).toBe(true);
+      expect(fs.existsSync(path.join(refDir, "browsers.md"))).toBe(true);
+      expect(fs.existsSync(path.join(refDir, "cli.md"))).toBe(true);
     } finally {
       fs.rmSync(dir, { recursive: true, force: true });
     }

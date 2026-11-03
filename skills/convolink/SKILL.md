@@ -1,206 +1,139 @@
 ---
 name: convolink
-description: Drive the browser the user is already logged into (ChatGPT, Claude, DeepSeek, Gemini) from an agent. Use when a task needs a web model's answer, a second opinion from a frontier model, a comparison of several models, or when the project has no API key but the user is signed in in Chrome. Also use when ConvoLink is not set up yet and you need to know the exact next step.
+description: Drive real, logged-in browsers (Mozilla Firefox, Zen Browser, Google Chrome, Brave, Edge) from an agent to query frontier web models (ChatGPT, Claude, DeepSeek, Gemini). Use when a coding task needs frontier web AI reasoning, deep thinking (--think), multi-model consensus comparison (--arbitrate), or live web search grounding without API keys. Covers MCP tools (convo_ask, convo_compare, convo_setup, convo_doctor) and CLI commands (convo ask, compare, onboard, doctor, setup, export).
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
-  version: 1.3.0
+  version: 1.3.1
   package: convolink
   homepage: https://0xtanzim.github.io/convolink/
   repository: https://github.com/0xTanzim/convolink
   runtime: bun
-  transport: extension-bridge
-  bridge-port: 9224
-  cdp-port: 9222
+  transports: extension-bridge (port 9224), firefox-bidi (port 9223), raw-cdp (port 9222)
+  browsers: chrome, firefox, zen, brave, edge, chromium
   platforms: chatgpt, claude, deepseek, gemini
 ---
 
 ## ⚡ Quick-Reference Card
 
-| What you want | Tool | Key params |
-|---|---|---|
-| First use / any doubt | `convo_onboard` | — |
-| Check status | `convo_status` | — |
-| Send prompt (continuing) | `convo_ask` | `prompt`, `targetId` ← **pin from last response** |
-| Resume a URL directly | `convo_ask` | `prompt`, `threadUrl` — skips all tab setup |
-| Compare models | `convo_compare` | `prompt`, `platforms`, `continue:true` |
-| Find open tabs (last resort) | `convo_list_tabs` | only when `targetId` is lost |
-| Health check | `convo_doctor` | `fix:false` diagnose / `fix:true` ONLY on user request |
-| Search conversation history | `convo_search` | `query` |
+| Goal | MCP Tool | CLI Alternative | Critical Parameters |
+|---|---|---|---|
+| First use / check readiness | `convo_onboard` | `convo onboard --json` | Obey `nextAction` / exit code contract |
+| Check active state & config | `convo_status` | `convo doctor` | Safe, read-only diagnostic |
+| Ask prompt (new or continue) | `convo_ask` | `convo ask "..." -p <platform>` | `prompt`, `targetId` (pin this), `think`, `search` |
+| Direct thread URL resume | `convo_ask` | `convo ask "..." --thread-url <url>` | `prompt`, `threadUrl` (skips tab discovery) |
+| Multi-model comparison | `convo_compare` | `convo compare "..." --arbitrate` | `prompt`, `platforms`, `arbitrate:true` |
+| Configure browser/profile | `convo_setup` | `convo setup --browser <id>` | `browser`, `transport`, `saveOnly:true` |
+| Tab management | `convo_tab` | `convo tab new\|close\|back` | `action`, `target`, `targetId` |
+| Search conversation history | `convo_search` | `convo search "..."` | `query`, `limit` |
 
-**Config lives in `.convo/config.json`** (dot-convo, NOT `convo/`). Never touch it — use `convo_status` to read it.
+> **Config Rule:** Workspace configuration lives strictly in `.convo/config.json`. Never edit this file directly; use `convo_setup` or `convo setup --save-only`.
 
-# ConvoLink
+---
 
-ConvoLink connects an agent to the **user's real, logged-in browser**. No API keys, no
-second profile, no relaunch.
+# ConvoLink Core Instructions
 
-> This file is the single ConvoLink skill. Install it with
-> `convo skill install --harness <name>`, or read it directly from
-> `https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md`.
+ConvoLink bridges your autonomous agent to the user's **real, authenticated browser profile**. No API keys, no duplicate sandbox profiles, and no session loss.
 
-Two transports exist and they are not interchangeable:
+### Supported Browsers & Transports
+- **Gecko Family (Mozilla Firefox, Zen Browser):** Supported via `extension-bridge` (Port 9224, recommended) or direct `firefox-bidi` (Port 9223).
+- **Chromium Family (Chrome, Brave, Edge):** Supported via `extension-bridge` (Port 9224, recommended) or direct `raw-cdp` (Port 9222).
 
-| | Companion extension | Direct CDP |
-|---|---|---|
-| User's everyday profile | **Works** | **Blocked** on Chrome 136+ |
-| Port | `9224` | `9222` |
-| Setup | load unpacked + paste token | `--remote-debugging-port` + `--user-data-dir` |
+See [references/browsers.md](references/browsers.md) for detailed browser-specific configuration.
 
-Default to the extension. Only reach for CDP when the user explicitly runs a dedicated
-automation profile.
+---
 
-## Step 0 — never guess the state: run `convo onboard --json`
+## Step 0 — Determine State with `convo onboard --json`
 
-This single command replaces every "is it installed / paired / configured" question.
-It returns `steps[]`, `nextAction`, and `requiresUserSelection`. **Obey `nextAction`.**
+Never guess whether ConvoLink is running, paired, or configured. Run:
 
 ```bash
 convo onboard --json
-# Not on PATH (fresh machine, npx/bunx-only harness)? Same binary:
+# Or via bunx/npx if not installed globally:
 bunx convolink@latest onboard --json
 ```
 
-Exit codes are the contract:
+**Branch on the exit code contract:**
+- `0`: **Ready.** Proceed to browser tools.
+- `2`: **Configuration required.** Browser or profile unselected. Call `convo_setup` or `convo setup --browser <id> --save-only`.
+- `3`: **Transport offline.** Daemon not running. Execute `convo daemon start`.
+- `4`: **Human action required.** Relay `nextAction.instruction` to the user (e.g. extension token pairing or CAPTCHA). Stop until completed.
+- `5`: Browser reached but unresponsive. Check `error.remediation`.
+- `6`: Internal error. Report failure; do not loop retries.
 
-| Exit | Meaning | What you do |
-|---|---|---|
-| `0` | Ready | Use the browser tools |
-| `2` | Configuration problem | Ask the user, or pass the documented argument |
-| `3` | Transport down | Run the command in `nextAction` (usually `convo daemon start`) |
-| `4` | **A human must act** | Show `nextAction.instruction` and stop |
-| `5` | Reached, but not usable | Read `error.remediation` |
-| `6` | Internal | Report it, do not retry in a loop |
+---
 
-`nextAction.kind` tells you who acts: `command` (you run it), `user` (the human acts),
-`tool` (call that MCP tool with `nextAction.args`).
+## Step 1 — Browser Selection & Setup
 
-**Never edit `.convo/config.json` by hand.** If it is missing, `onboard` returns the
-profile choice; that choice belongs to the user.
+### For Mozilla Firefox & Zen Browser
+1. Ensure the daemon is running: `convo daemon start`.
+2. Save workspace browser preference:
+   ```bash
+   convo setup --browser zen --transport extension-bridge --save-only
+   # Or for Firefox:
+   convo setup --browser firefox --transport extension-bridge --save-only
+   ```
+3. Load the temporary extension:
+   - In Firefox/Zen, navigate to `about:debugging#/runtime/this-firefox`.
+   - Click **"Load Temporary Add-on..."** and select `extensions/convolink-companion/.output/firefox-mv3/manifest.json`.
+   - Click the toolbar puzzle icon and connect with the token from `convo ext pair`.
 
-## Step 1 — setup, in the order the report gives
+### For Google Chrome, Brave & Edge
+1. Save workspace preference:
+   ```bash
+   convo setup --browser chrome --transport extension-bridge --save-only
+   ```
+2. In Chrome/Brave/Edge, navigate to `chrome://extensions` (Developer Mode ON).
+3. Click **Load unpacked** and select `extensions/convolink-companion/.output/chrome-mv3`.
+4. Connect using the token from `convo ext pair`.
 
-1. `convo daemon start` — the daemon owns port 9224. Nothing works without it.
-2. Extension pairing is a **human** step; give the user the token and folder from
-   `nextAction.instruction` verbatim. Do not invent paths.
-3. Profile choice: ask the user, then `convo profile select <index|email>`.
-4. Re-run `convo onboard --json` until exit `0`.
-5. **Declarative/offline setup:** If you already know the browser and profile, pass `--save-only` (`convo setup --browser <name> --profile <path> --save-only` or MCP `convo_setup({ browser, profile, saveOnly: true })`) to persist `.convo/config.json` without requiring the browser socket to be active first.
+---
 
-If your harness supports MCP elicitation, `convo_setup` with no arguments renders the
-choice as a native question and writes the config itself. Otherwise it returns the same
-options as text — relay them to the user.
+## Step 2 — Execution & Workflow Rules
 
-## Step 2 — verify before you use it
+### 1. Timing & Blocking Semantics
+`convo_ask` and `convo_compare` are **synchronous-blocking operations**.
+- Standard prompts: 10–60 s.
+- Extended reasoning (`think:true`): 30–180 s.
+- Multi-model comparison (`convo_compare` with 3 models): 60–300 s.
+- **Rule:** Never spawn parallel calls to the same tab. Wait for the active turn to finish.
 
+### 2. Tab Pinning & Conversational Continuity
+To hold a continuous conversation without context drift:
+1. On the first turn, execute `convo_ask(prompt, platform: "deepseek")`.
+2. Inspect the result: read `result.tabId` and `result.threadUrl`.
+3. On every subsequent turn, pass `targetId: <tabId>` to maintain the chat thread.
+4. If reconnecting across days or workspaces, pass `threadUrl: "<url>"` directly to `convo_ask`.
+
+### 3. Multi-Model Consensus & Arbitration
+When comparing competing architectural directions:
 ```bash
-convo doctor                 # transport, tabs, selector health
-convo list --json            # target ids of every supported tab
+convo compare "Evaluate ClickHouse vs PostgreSQL for timeseries analytics" \
+  --platforms chatgpt,claude,deepseek \
+  --arbitrate \
+  --arbiter claude \
+  --json
 ```
 
-`convo doctor` names the exact fault. If it says the endpoint is the browser's default
-profile, the fix is **not** a flag — switch to the extension.
+### 4. Code & Artifact Extraction
+When you request code implementations, models can output multiple files in one turn. Instruct the model:
+`"Output all code files with standard '// filepath: path/to/file.ext' annotations."`
+Then run `convo ask "..." --workspace` or pass `writeFiles: true` in `convo_ask` to automatically write the files to disk.
 
-## ⏱ Timing Contract
+---
 
-`convo_ask` and `convo_compare` are **synchronous-blocking calls**. They do NOT return until the browser AI finishes generating. Do NOT call any other tool while waiting.
+## Step 3 — Safety Guardrails & Anti-Patterns to Avoid
 
-| Tool | Typical wait |
-|---|---|
-| `convo_ask` — standard | 10–60 s |
-| `convo_ask` — `think:true` | 30–180 s |
-| `convo_compare` — 3 platforms | 60–300 s |
-| `convo_onboard` / `convo_doctor` | 2–10 s |
+- ❌ **Anti-Pattern 1: Spawning ghost browsers.** Never execute `google-chrome` or `firefox` directly from shell to solve connection errors. This launches an unauthenticated ghost process.
+- ❌ **Anti-Pattern 2: Killing live sessions.** Never run `convo doctor --fix` or `convo_doctor({ fix: true })` while a turn is active. `--fix` forcibly clears PID locks and terminates active streams.
+- ❌ **Anti-Pattern 3: Editing config by hand.** Never write raw JSON directly to `.convo/config.json`. Use `convo_setup` or `convo setup --save-only`.
+- ❌ **Anti-Pattern 4: Closing foreign tabs.** ConvoLink tabs enforce ownership checks (`not-owned`). Never attempt to close user tabs that ConvoLink did not open.
 
-**Stream-timeout edge case:** If `convo_ask` returns `error.code: "transport-timeout"` but the answer was visible on screen, do NOT resubmit. Call `convo_list_tabs` to inspect tab state.
+---
 
-## 🔖 Session Memory — Pin the Tab
+## Detailed References
 
-After any successful `convo_ask`:
-1. Read `structured.tabId` → store it as `targetId` for this conversation.
-2. Read `structured.threadUrl` → keep for cross-session resume.
-3. Pass `targetId` on **every subsequent** `convo_ask` to the same platform.
-4. Do NOT call `convo_list_tabs` every turn — only when `targetId` is lost.
-5. Do NOT call `convo_tab new` if a `managed:true` tab already exists for the platform.
-6. Do NOT call `convo_onboard` again mid-session unless you see `error.code: "transport-down"`.
-
-## 📁 Configuration Layout
-
-The config directory is `.convo/` (dot-convo). Never search for `convo/` without the dot.
-
-```
-<project-root>/
-└── .convo/               ← dot-convo, NOT convo/
-    └── config.json       ← written ONLY by convo_setup or convo_profile select
-```
-
-- To read config → `convo_status`. Never read `.convo/config.json` directly.
-- To change profile or browser → `convo_setup` or `convo_profile`.
-- If `.convo/` is absent → call `convo_onboard` (setup has not run yet).
-
-## 🔄 Cross-Session Reconnect
-
-When the user gives you a `targetId`, `threadId`, or URL from a previous session:
-
-1. `convo_list_tabs` → if `managed:true` tab exists → use `targetId` directly in `convo_ask`.
-2. If tab not found → `convo_thread(action:"resume", threadId=<id>)` → get new `targetId`.
-3. **Never call `convo_doctor(fix:true)` to reconnect.** `fix:true` kills live session locks and destroys active conversations.
-
-## Step 3 — do the work
-
-```bash
-convo ask "question" -p chatgpt --transport extension-bridge --json
-convo ask "question" -p deepseek --think --search --json
-convo compare "trade-off" --platforms chatgpt,claude,deepseek --arbitrate
-convo tab new deepseek
-convo tab close <targetId>
-```
-
-`--json` always emits one envelope: `{ ok, command, data, error }`. Branch on `ok` and
-`error.code`, never on prose.
-
-Useful codes: `not-owned` (refused to close a tab ConvoLink did not open, exit 4),
-`session-busy` (another run holds the tab, retry later), `login-required` /
-`challenge-detected` (send the user to the browser), `extension-unsupported` (that
-operation has no extension equivalent).
-
-## MCP tools
-
-Registered as `convolink` over stdio (`convo mcp`). Preferred over the CLI when your
-harness supports MCP — it keeps the daemon and the state consistent.
-
-| Tool | Use |
-|---|---|
-| `convo_status` | transport + project config |
-| `convo_onboard` | the same report as `convo onboard --json` |
-| `convo_setup` | pick browser/profile (asks the user when it can) |
-| `convo_profile` | list/select the project profile |
-| `convo_doctor` | health + remediation |
-| `convo_list_tabs` | discover target ids |
-| `convo_tab` | new/focus/close |
-| `convo_ask` | one prompt, one answer |
-| `convo_compare` | fan out + arbiter |
-| `convo_search` / `convo_thread` | ledger history |
-
-## 🔀 Decision Rules (follow in order, skip steps you already have)
-
-1. **New session?** → `convo_onboard`. Stop until `ok:true`.
-2. **Have `threadUrl`?** → `convo_ask(prompt, threadUrl)`. No tab setup needed.
-3. **Have `targetId` from this session?** → `convo_ask(prompt, targetId)`. Skip steps 4–5.
-4. **No `targetId`?** → `convo_list_tabs`. Find `managed:true` tab. Use its `targetId`.
-5. **No managed tab?** → `convo_tab(action:"new", target:"<platform>")`, then `convo_ask`.
-6. **Got an error?** → Read `error.code`. Follow `error.nextTool` hint. Retry **once** max.
-7. **Need to reset?** → `convo_doctor(fix:false)` to diagnose. `fix:true` ONLY on explicit user instruction.
-
-Original safety rules (still apply):
-- **Never spawn a browser** to "fix" a connection. That creates an unauthenticated ghost.
-- **Never close a tab you did not open.** The extension enforces this with `not-owned`.
-- **One tab per concurrent run.** The lock is PID-aware; `session-busy` means wait.
-- A timeout with the answer visible on screen is not a reason to resubmit — check the tab first.
-- The extension cannot `eval` arbitrary JavaScript. Unsupported operations fail loudly.
-
-## References
-
-- `references/mcp.md` — full tool schemas and error envelopes
-- `references/directives.md` — `// filepath:` artifact extraction
-- Repository: `docs/AI_HARNESSES.md`, `docs/EXTENSION_CONTROL.md`
+- [references/browsers.md](references/browsers.md) — Comprehensive guide for Firefox, Zen Browser, Chrome, Brave, and Edge setup & ports.
+- [references/cli.md](references/cli.md) — Exhaustive CLI manual covering all 12 `convo` subcommands and flags.
+- [references/mcp.md](references/mcp.md) — Complete Model Context Protocol (MCP) tool catalog, JSON-RPC schemas, and error codes.
+- [references/directives.md](references/directives.md) — Code artifact extraction syntax and patterns.

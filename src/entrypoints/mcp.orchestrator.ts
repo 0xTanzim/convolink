@@ -10,6 +10,11 @@ interface DaemonReply<T> {
 
 let fallbackOrchestrator: SessionOrchestrator | null = null;
 
+/** Test seam allowing injection or reset of the in-process fallback orchestrator. */
+export function setFallbackOrchestrator(orch: SessionOrchestrator | null): void {
+  fallbackOrchestrator = orch;
+}
+
 async function getFallbackOrchestrator(): Promise<SessionOrchestrator> {
   if (!fallbackOrchestrator) {
     const [{ loadResolution }, { createContainer }] = await Promise.all([

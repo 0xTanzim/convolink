@@ -7,8 +7,8 @@
 [![npm downloads](https://img.shields.io/npm/dm/convolink.svg)](https://www.npmjs.com/package/convolink)
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
-[![Tests](https://img.shields.io/badge/Tests-309%20passing%20(bun:test)-success)](https://bun.sh)
-[![Release](https://img.shields.io/badge/Release-v1.2.1-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
+[![Tests](https://img.shields.io/badge/Tests-648%20passing%20(bun:test)-success)](https://bun.sh)
+[![Release](https://img.shields.io/badge/Release-v1.3.1-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
 [![Documentation](https://img.shields.io/badge/Documentation-Live%20Site-blue)](https://0xtanzim.github.io/convolink/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -123,10 +123,12 @@ ConvoLink adheres to the **Zero Ghost Browser Law**: it never spawns unauthentic
 Drives the browser you are already signed into, with **no startup flags** and **no browser
 restarts**. Your ChatGPT Plus, Claude Pro and DeepSeek sessions stay exactly where they are.
 
-1. Download the extension ZIP from [GitHub Releases v1.2.1](https://github.com/0xTanzim/convolink/releases/tag/v1.2.1):
-   - **Chrome / Brave / Edge:** `convolink-companion-chrome.zip`
-   - **Firefox:** `convolink-companion-firefox.zip`
-2. Open `chrome://extensions/` (or `about:debugging` in Firefox), enable **Developer mode**, and click **Load unpacked**.
+1. Download the extension ZIP from [GitHub Releases v1.3.1](https://github.com/0xTanzim/convolink/releases/tag/v1.3.1):
+   - **Chrome / Brave / Edge:** `convolink-companion-chrome-v1.3.1.zip`
+   - **Firefox / Zen Browser:** `convolink-companion-firefox-v1.3.1.zip`
+2. Open `chrome://extensions/` (Chrome/Brave/Edge) or `about:debugging#/runtime/this-firefox` (Firefox/Zen Browser), enable Developer mode, and load the extension:
+   - **Chrome / Brave / Edge:** Click **Load unpacked** and select `extensions/convolink-companion/.output/chrome-mv3`.
+   - **Firefox / Zen Browser:** Click **Load Temporary Add-on...** and select `extensions/convolink-companion/.output/firefox-mv3/manifest.json` (or the zip file).
 3. Pair the extension with your local runtime:
    ```bash
    convo ext pair          # prints the token and the exact folder Chrome must load
@@ -473,23 +475,36 @@ the choice, and `convo profile select` writes it.
 Exit codes are the contract: `0` ok, `2` configuration, `3` transport down, `4` **a human
 must act in the browser**, `5` reached but not ready, `6` internal.
 
-### 2. Install the skill so the next session already knows this
+### 2. Install the Agent Skill so your AI Assistant knows ConvoLink
+
+Install the standard `SKILL.md` directly into your coding agent's skill environment:
 
 ```bash
+# Universal Agent Skills standard (installs into active agent's skill directory):
+npx skills add 0xTanzim/convolink
+# or via bunx:
+bunx skills add 0xTanzim/convolink
+
+# Or install natively via ConvoLink CLI:
 convo skill install --harness opencode    # or claude, cursor, codex, antigravity
 convo skill list
 ```
 
-| Harness | Destination |
-|---|---|
-| OpenCode | `.opencode/skills/convolink/SKILL.md` |
-| Claude Code | `.claude/skills/convolink/SKILL.md` |
-| Cursor | `.cursor/rules/convolink.mdc` |
-| Codex | `.codex/skills/convolink/SKILL.md` |
-| Antigravity | `.agents/skills/convolink/SKILL.md` |
+| Harness / Agent | Target Skill Path | Format |
+|---|---|---|
+| **Antigravity** | `.agents/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Claude Code** | `.claude/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **OpenCode** | `.opencode/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Codex** | `.codex/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Cursor** | `.cursor/rules/convolink.mdc` | MDC Rule format |
+| **Windsurf** | `.windsurfrules` | Context Rules format |
 
-The installer refuses to overwrite an edited skill without `--force` (exit `4`). Commit the
-installed file with the project.
+- **Direct Raw Skill URL:** [`https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md`](https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md)
+- **Full Skill Package & References:** [GitHub `skills/convolink/`](https://github.com/0xTanzim/convolink/tree/main/skills/convolink)
+  - [Browser Guide (Firefox, Zen, Chrome, Brave, Edge)](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/browsers.md)
+  - [Complete CLI Manual](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/cli.md)
+  - [MCP Tools & Error Codes Schema](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/mcp.md)
+  - [Artifact Directives Guide](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/directives.md)
 
 ### 3. Clients that support MCP elicitation get a real question
 
