@@ -56,6 +56,7 @@ export class ClaudeDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const isLoginWall = await browser.evaluate<boolean>(handle, `(() => {
       /* authCheck */
+      /* convolink:selectors {"composer": "div.ProseMirror[contenteditable='true'], div[contenteditable='true'], #prompt-textarea"} */
       const login = document.querySelector('a[href*="/login"], button[data-testid*="login"], input[type="email"]');
       const composer = document.querySelector('div.ProseMirror[contenteditable="true"], div[contenteditable="true"], #prompt-textarea');
       return Boolean(login && !composer);
@@ -111,6 +112,7 @@ export class ClaudeDriver implements PlatformPort {
 
   public async findContinuationTrigger(handle: SessionHandle, browser: BrowserPort): Promise<ContinuationTrigger> {
     const expr = `(() => {
+      /* findContinuationTrigger */
       ${IS_VISIBLE_JS}
       const btn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText || '').includes('Continue'));
       const hasContinuation = isVisible(btn);
@@ -121,6 +123,7 @@ export class ClaudeDriver implements PlatformPort {
 
   public async triggerContinuation(handle: SessionHandle, browser: BrowserPort): Promise<void> {
     await browser.evaluate(handle, `(() => {
+      /* triggerContinuation */
       const btn = Array.from(document.querySelectorAll('button')).find(b => (b.innerText || '').includes('Continue'));
       if (btn) btn.click();
     })()`);

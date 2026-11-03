@@ -72,6 +72,7 @@ export class DeepSeekDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const isLoginWall = await browser.evaluate<boolean>(handle, `(() => {
       /* authCheck */
+      /* convolink:selectors {"composer": "textarea#chat-input, textarea[placeholder*='DeepSeek'], div[contenteditable='true']"} */
       const login = document.querySelector('div[class*="login"], button[class*="login"], a[href*="login"]');
       const composer = document.querySelector('textarea#chat-input, textarea[placeholder*="DeepSeek"], div[contenteditable="true"]');
       return Boolean(login && !composer);

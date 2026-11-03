@@ -25,7 +25,10 @@ describe("statusOp turn rules", () => {
     expect(source).toContain("lastRole ? lastRole === \"assistant\" : !roleAttr");
   });
 
-  it("removes screen-reader labels from the answer text", () => {
-    expect(statusOp.toString()).toContain("sr-only");
+  it("removes screen-reader labels and icon-font glyphs from the answer text", () => {
+    const source = statusOp.toString();
+    expect(source).toContain("sr-only");
+    expect(source).toContain("\\uE000-\\uF8FF");
+    expect(source).toContain("standard-markdown");
   });
 });

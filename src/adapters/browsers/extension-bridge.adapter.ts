@@ -191,6 +191,7 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
     const operation = this.translateExpression(handle.targetId, expression);
     const result = await this.sendRequest<unknown>(operation.type, operation.payload, handle.targetId);
+    if (expression.includes("/* authCheck */")) return Boolean(!result) as T;
     return result as T;
   }
 
@@ -373,6 +374,26 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     if (expression.includes("document.body.innerText")) {
       return { type: "GET_BODY_INCLUDES", payload: { text: allQuoted(expression).filter(Boolean).pop() ?? "" } };
     }
+    if (expression.includes("/* triggerContinuation */")) return { type: "TRIGGER_CONTINUATION", payload: {} };
+    if (expression.includes("/* findContinuationTrigger */")) return { type: "PROBE_CONTINUATION", payload: {} };
+
+    // The driver reports a login wall as `login && !composer`; the composer's
+    // absence is the part the extension can observe, and it is inverted back
+    // to the driver's convention in evaluate().
+    if (expression.includes("/* authCheck */")) {
+      // Quote parsing cannot be used here: the composer selector itself
+      // contains quoted literals, so the contract is the only safe source.
+      const composer = selectorContract(expression)?.composer;
+      if (!composer) {
+        throw new ConvoError(
+          "extension-unsupported",
+          "The auth check probe carries no composer selector",
+          "Add the composer selector to the probe or use a transport that evaluates it directly.",
+        );
+      }
+      return { type: "PROBE_MOUNTED", payload: { composer } };
+    }
+
     const toggles = toggleContract(expression);
     if (toggles) return { type: "APPLY_TOGGLES", payload: { ...toggles } };
 
@@ -407,6 +428,7 @@ export class ExtensionBridgeAdapter implements BrowserPort {
       const selected = requireContract("Mounted");
       return { type: "PROBE_MOUNTED", payload: { composer: selected.composer } };
     }
+    if (process.env.CONVOLINK_DEBUG === "1") process.stderr.write(`[unmapped] ${expression.slice(0, 400)}\n`);
     throw new ConvoError(
       "extension-unsupported",
       `The extension transport cannot evaluate arbitrary JavaScript (MV3 CSP): ${expression.slice(0, 80)}`,

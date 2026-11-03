@@ -23,6 +23,7 @@ import {
 import {
   applyTogglesOp,
   diagnoseOp,
+  triggerContinuationOp,
   getHtmlOp,
   hoverOp,
   scrollOp,
@@ -241,6 +242,10 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
         ctx.sendResult(id, result);
         return;
       }
+
+      case "TRIGGER_CONTINUATION":
+        ctx.sendResult(id, objectResult("TRIGGER_CONTINUATION", await ctx.runInTab(targetId, triggerContinuationOp, [])));
+        return;
 
       case "APPLY_TOGGLES": {
         const selector = String(message.selector ?? "");

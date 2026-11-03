@@ -165,6 +165,22 @@ export function applyTogglesOp(
   }
 }
 
+/**
+ * A truncated answer offers a Continue control. The extension cannot evaluate
+ * the driver's exploration script, so this is the transport-safe equivalent.
+ */
+export function triggerContinuationOp(): ActionResult {
+  try {
+    const buttons = Array.from(document.querySelectorAll("button")) as HTMLElement[];
+    const target = buttons.find((button) => (button.innerText || "").trim().includes("Continue"));
+    if (!target) return { ok: false, found: false };
+    target.click();
+    return { ok: true, found: true };
+  } catch (error) {
+    return { ok: false, error: String((error as Error)?.message ?? error) };
+  }
+}
+
 export async function waitForSelectorOp(selector: string, timeoutMs: number): Promise<ActionResult> {
   try {
     const deadline = Date.now() + Math.max(0, timeoutMs);

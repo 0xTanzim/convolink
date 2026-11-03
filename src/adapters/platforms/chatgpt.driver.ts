@@ -60,6 +60,7 @@ export class ChatGPTDriver implements PlatformPort {
   ): Promise<TurnFingerprint> {
     const isLoginWall = await browser.evaluate<boolean>(handle, `(() => {
       /* authCheck */
+      /* convolink:selectors {"composer": "#prompt-textarea, [contenteditable='true']"} */
       const login = document.querySelector('[data-testid="login-button"], a[href*="/auth/login"], button[data-testid*="login"]');
       const composer = document.querySelector('#prompt-textarea, [contenteditable="true"]');
       return Boolean(login && !composer);

@@ -256,9 +256,17 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
       ? ((last.querySelector(selectors.assistant) ?? last) as HTMLElement)
       : null;
   const answerTextOf = (node: HTMLElement): string => {
-    const clone = node.cloneNode(true) as HTMLElement;
+    // Icon fonts and screen-reader labels are part of innerText; neither is
+    // part of the answer. Prefer the markdown body when the platform has one.
+    const body = node.querySelector(".standard-markdown, .ds-markdown, .markdown, [class*='markdown']") as HTMLElement | null;
+    const source = body ?? node;
+    const clone = source.cloneNode(true) as HTMLElement;
     clone.querySelectorAll(".sr-only").forEach((el) => el.remove());
-    return stripLabel((clone.innerText || "").trim());
+    const text = (clone.innerText || "")
+      .replace(/[\uE000-\uF8FF]/g, "")
+      .replace(/\bjust now\b\s*$/i, "")
+      .trim();
+    return stripLabel(text);
   };
   const assistantText = assistantNode ? answerTextOf(assistantNode) : "";
   return {
