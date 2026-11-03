@@ -212,7 +212,11 @@ export function buildQuietProbeExpr(): string {
   })()`;
 }
 
-/** Turns a status expression into an immediate probe instead of a page promise. */
+/**
+ * Status expressions from the drivers are already self-invoking IIFEs.
+ * Wrapping and invoking them again called the returned object as a function,
+ * which is why every completion probe looked empty.
+ */
 export function buildStatusProbeExpr(statusExpr: string): string {
-  return `(() => (${statusExpr})())`;
+  return statusExpr;
 }

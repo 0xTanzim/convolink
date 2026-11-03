@@ -146,8 +146,14 @@ export class SessionOrchestrator {
         debug("attached");
         // A retry must not submit the same prompt twice. If the last user turn
         // already equals this prompt and an answer exists, return that answer.
-        const duplicate = await this.findDuplicateTurn(sessionHandle, driver, sanitized.cleanText);
+        // A tab created by this run is empty, so the read is pointless there and
+        // a hung DOM read would block the single BiDi socket.
+        debug("duplicate-check");
+        const duplicate = targetTab.isNewlyCreated
+          ? null
+          : await this.findDuplicateTurn(sessionHandle, driver, sanitized.cleanText);
         if (duplicate) {
+          debug("duplicate-found");
           report("done");
           // A retry must not append the same turn twice; only repair a ledger
           // that has no record of this conversation at all.
@@ -196,6 +202,7 @@ export class SessionOrchestrator {
           };
         }
 
+        debug("duplicate-none");
         if (options.toggles) {
           await driver.applyToggles(sessionHandle, this.browser, options.toggles);
         }
@@ -208,6 +215,7 @@ export class SessionOrchestrator {
           timeoutMs,
           "Prompt submission did not complete.",
         );
+        debug("submit-returned");
         options.onSubmitted?.();
         report("submitted");
         report("generating");

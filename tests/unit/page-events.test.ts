@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { buildReadyExpr, buildSettleExpr } from "../../src/adapters/platforms/page-events.js";
+import { buildReadyExpr, buildSettleExpr, buildStatusProbeExpr } from "../../src/adapters/platforms/page-events.js";
 
 describe("buildReadyExpr", () => {
   it("waits for a complete document, a mounted composer and an enabled send", () => {
@@ -45,5 +45,16 @@ describe("buildSettleExpr", () => {
     const expr = buildSettleExpr("({})");
     expect(expr).toContain("120000");
     expect(expr).toContain("400");
+  });
+});
+
+
+describe("buildStatusProbeExpr", () => {
+  it("does not invoke an already self-invoking status expression twice", () => {
+    const status = "(() => ({ turnsCount: 2, hasNewTurn: true, text: 'hello' }))()";
+    const probe = buildStatusProbeExpr(status);
+
+    expect(probe).toBe(status);
+    expect(new Function(`return ${probe}`)()).toEqual({ turnsCount: 2, hasNewTurn: true, text: "hello" });
   });
 });

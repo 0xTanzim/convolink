@@ -31,6 +31,10 @@ const DEFAULT_SUBMIT_BUDGET_MS = 30_000;
 
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
+function debug(message: string): void {
+  if (process.env.CONVOLINK_DEBUG === "1") process.stderr.write(`[submit] ${message}\n`);
+}
+
 /** Resolves `undefined` instead of rejecting so a throttled tab cannot hang a caller. */
 export async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
   return Promise.race([
@@ -164,6 +168,7 @@ export async function waitForAndClickSendButton(
   timeoutMs = 20_000,
 ): Promise<void> {
   const deadline = Date.now() + timeoutMs;
+  debug("waiting for ready");
   if (!(await waitForComposerReady(browser, handle, composerSelector, sendBtnSelector, remaining(deadline)))) {
     throw new ConvoError(
       "not-ready",
@@ -186,7 +191,11 @@ export async function waitForAndClickSendButton(
   );
 
   const clickWindow = Math.min(1500, Math.max(200, Math.floor(remaining(deadline) / 2)));
-  if (await waitForComposerEmpty(browser, handle, composerSelector, clickWindow)) return;
+  debug("clicked; checking composer");
+  if (await waitForComposerEmpty(browser, handle, composerSelector, clickWindow)) {
+    debug("submitted after click");
+    return;
+  }
 
   // BiDi sends keys to the focused element, so focus the composer first.
   await probe<boolean>(
@@ -200,9 +209,13 @@ export async function waitForAndClickSendButton(
     })()`,
   );
 
+  debug("enter fallback");
   await browser.pressKey(handle, composerSelector, "Enter").catch(() => {});
 
-  if (await waitForComposerEmpty(browser, handle, composerSelector, Math.min(2500, remaining(deadline)))) return;
+  if (await waitForComposerEmpty(browser, handle, composerSelector, Math.min(2500, remaining(deadline)))) {
+    debug("submitted after enter");
+    return;
+  }
 
   throw new ConvoError(
     "submission-failed",
@@ -257,9 +270,11 @@ export async function submitWithRecovery(
     if (!isRecoverable(error)) throw error;
   }
 
+  debug("recovery: checking whether prompt already landed");
   const marker = JSON.stringify(prompt.trim().slice(0, 80));
   if (await promptVisible(browser, handle, marker)) return;
 
+  debug("recovery: nudge");
   await probe<boolean>(browser, handle, NUDGE_EXPR(composerSelector));
   try {
     await waitForAndClickSendButton(
@@ -298,6 +313,7 @@ export async function submitWithRecovery(
     );
   }
 
+  debug("recovery: reload");
   await probe<boolean>(browser, handle, RELOAD_EXPR);
   if (!(await waitForMounted(browser, handle, composerSelector, Math.max(1000, remaining(deadline) - 5_000)))) {
     throw new ConvoError(
@@ -308,7 +324,9 @@ export async function submitWithRecovery(
     );
   }
 
+  debug("recovery: refilling");
   await browser.fillText(handle, composerSelector, prompt);
+  debug("recovery: resubmitting");
   await waitForAndClickSendButton(browser, handle, sendBtnSelector, composerSelector, remaining(deadline));
 }
 
@@ -360,6 +378,7 @@ export async function pollUntilSettled(
   let lastStatus: CompletionProbeStatus | undefined;
   let lastText = "";
   let lastChange = start;
+  let lastDebug = 0;
 
   while (Date.now() < deadline) {
     const status = await probe<CompletionProbeStatus>(browser, handle, probeExpr);
@@ -369,6 +388,12 @@ export async function pollUntilSettled(
       if (status.isGenerating || status.isThinking || text.length !== lastText.length) {
         lastChange = Date.now();
         lastText = text;
+      }
+      if (process.env.CONVOLINK_DEBUG === "1" && Date.now() - lastDebug > 3000) {
+        lastDebug = Date.now();
+        process.stderr.write(
+          `[settle] turns=${status.turnsCount ?? status.turnIndex ?? status.mdCount ?? "?"} new=${Boolean(status.hasNewTurn)} generating=${Boolean(status.isGenerating)} thinking=${Boolean(status.isThinking)} text=${options.textOf(status).length}\n`,
+        );
       }
       if (options.isNew(status) && !status.isGenerating && !status.isThinking && Date.now() - lastChange >= options.quiescenceMs) {
         return { status, elapsedMs: Date.now() - start, timedOut: false };
