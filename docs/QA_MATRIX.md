@@ -6,13 +6,13 @@ Every row is a scenario that must be executed before the extension is treated as
 
 | # | Scenario | Expected | Observed |
 |---|---|---|---|
-| B1 | `convo ask -p chatgpt` over the extension | Answer text, no stray tabs | `qa62`, 2.8s |
+| B1 | `convo ask -p chatgpt` over the extension | Answer text, no stray tabs | `gptfinal`, 4.6s |
 | B2 | Two sequential ChatGPT asks | Two different correct answers | `qa62` then `qa63`, same thread |
-| B3 | `convo ask -p deepseek` over the extension | Answer text, reasoning excluded | `newone` 1.4s, `newtwo` 1.8s |
+| B3 | `convo ask -p deepseek` over the extension | Answer text, reasoning excluded | `afterfix` 1.8s (reasoning excluded) |
 | B4 | DeepSeek ask using reasoning mode | Completes while the reasoning panel stays mounted | `thinklive` 1.1s, `thinktwo2` 1.6s |
-| B5 | `convo ask -p gemini` over the extension | Answer text | `geminilive`, 51s |
-| B6 | `convo ask -p claude` over the extension | Answer text | `claude5`, 1.6s |
-| B7 | `convo compare` on two platforms | Both report success | chatgpt 6.4s + deepseek 1.6s |
+| B5 | `convo ask -p gemini` over the extension | Answer text | `gemtwo`, 3.6s (51s and one 100s timeout also observed) |
+| B6 | `convo ask -p claude` over the extension | Answer text | `clfinal`, 1.6s |
+| B7 | `convo compare` on two platforms | Both report success | `cmpfin`: chatgpt 4.1s + deepseek 1.1s |
 | B8 | `convo compare` on a freshly created tab | New tab returns an answer | `freshtab` on a new DeepSeek tab |
 | B9 | `convo tab new` / `list` / `focus` / `close` | Tab created, listed, focused, closed | all four |
 | B10 | `convo ext status` | Client, profile, version, build id, tab count | matches `build-meta.json` |
@@ -49,6 +49,7 @@ Every row is a scenario that must be executed before the extension is treated as
 - **Ownership identity matched on URL and on the `default` thread placeholder.** Any tab at `https://chatgpt.com/` was reported as managed, because an old record shared that root URL. Fixed: only the target id or a real thread id identifies a tab.
 - **DeepSeek can submit a prompt but never render the transcript.** A freshly created tab reached the conversation URL with `turns: 0` and only sidebar/composer in `body` (`windowState: normal`, `visible`, `hasFocus: true`). A reload of the same tab rendered it (`turns: 2`) and the answer appeared. Without that recovery the run times out even though the prompt was delivered.
 - **DeepSeek reasoning leaked as the answer.** `assistantText` returned `The user wants a single word reply: ...` because `.ds-markdown` matched the reasoning block first. The extraction now prefers `.ds-assistant-message-main-content`.
+- **Driving a foreign tab claims it.** Running `convo ask` against a tab the user opened records it in the managed registry, so a later `tab close` closes it. The refusal is only guaranteed until ConvoLink first drives that tab.
 - **Stale lock files accumulate.** An aborted run (timeout, daemon restart) leaves `tab-<id>.lock` in `$XDG_RUNTIME_DIR/convolink`. They are reclaimed on the next acquire because the holder PID is dead, so they are harmless, but 13 had accumulated during one QA session.
 - **Extension-unsupported probes were silently swallowed.** The driver wraps the auth check and the turn fingerprint in `.catch()`, so a missing mapping surfaced later as a misleading timeout instead of naming the unmapped script.
 
