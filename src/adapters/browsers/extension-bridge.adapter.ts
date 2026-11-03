@@ -519,7 +519,7 @@ const CONVO_CODES = new Set<string>([
   "configuration-required", "configuration-invalid", "no-browser-found", "selection-unavailable",
   "browser-unreachable", "profile-locked", "default-profile-blocked", "transport-mismatch",
   "transport-timeout", "transport-disconnected", "extension-unsupported", "session-busy",
-  "thread-not-found", "not-ready", "submission-failed", "internal",
+  "thread-not-found", "not-ready", "submission-failed", "not-owned", "internal",
 ]);
 
 function asConvoCode(code: string | undefined): ConvoErrorCode {

@@ -11,6 +11,7 @@ export type ConvoErrorCode =
   | "transport-disconnected"
   | "extension-unsupported"
   | "session-busy"
+  | "not-owned"
   | "thread-not-found"
   | "login-required"
   | "challenge-detected"
@@ -35,6 +36,8 @@ export const EXIT_CODES: Readonly<Record<ConvoErrorCode, number>> = {
   "transport-disconnected": 3,
   "extension-unsupported": 3,
   "session-busy": 4,
+  // Refusing to close a tab ConvoLink did not open is a policy outcome.
+  "not-owned": 4,
   "thread-not-found": 2,
   // Both need a human in the browser, which is a different failure class from
   // a transport problem: retrying the same command cannot succeed.
@@ -100,6 +103,7 @@ const BRIDGE_ERROR_CODES: Readonly<Record<string, ConvoErrorCode>> = {
 const REMEDIATION: Partial<Record<ConvoErrorCode, string>> = {
   "transport-disconnected": "Start the bridge with `convo daemon start` (or `convo setup`), then retry.",
   "session-busy": "Another command holds this tab. Wait for it to finish, then retry.",
+  "not-owned": "ConvoLink only closes tabs it opened. Close this one yourself, or pass force explicitly.",
   "login-required": "Sign in to the platform in that browser tab, then retry.",
   "challenge-detected": "Complete the verification challenge in the browser tab, then retry.",
   "extension-unsupported": "Reload the Companion extension so the running build matches the installed one, then retry.",

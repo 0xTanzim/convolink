@@ -55,16 +55,29 @@ export interface TabRef {
 }
 
 /**
- * Target ids are not stable across browser restarts, so ownership also matches
- * the conversation it was opened for.
+ * A tab is ConvoLink's only when its id is recorded or it carries the same
+ * conversation. URL equality is deliberately excluded: platform roots such as
+ * https://chatgpt.com/ repeat across unrelated user tabs, and matching on the
+ * URL reported a hand-opened tab as managed.
  */
+/** Root URLs have no conversation, and the placeholder they share is not an identity. */
+const PLACEHOLDER_THREADS = new Set(["default", "unknown", "none", "null", ""]);
+
+function realThreadId(threadId: string | null | undefined): string | null {
+  if (!threadId) return null;
+  const normalized = threadId.trim().toLowerCase();
+  return PLACEHOLDER_THREADS.has(normalized) ? null : threadId;
+}
+
+export function matchesManagedRecord(record: ManagedTabRecord, ref: TabRef): boolean {
+  if (record.targetId === ref.targetId) return true;
+  const wanted = realThreadId(ref.threadId);
+  if (!wanted) return false;
+  return realThreadId(record.threadId) === wanted;
+}
+
 export function isManagedTabRef(ref: TabRef): boolean {
-  return readAll().some(
-    (record) =>
-      record.targetId === ref.targetId ||
-      (ref.threadId !== null && record.threadId === ref.threadId) ||
-      (ref.url.length > 0 && record.url === ref.url),
-  );
+  return readAll().some((record) => matchesManagedRecord(record, ref));
 }
 
 export function managedTabIds(): Set<string> {

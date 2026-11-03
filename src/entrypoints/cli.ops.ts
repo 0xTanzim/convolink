@@ -10,6 +10,7 @@ import type { DiscoveredTab, DoctorReport } from "../core/services/orchestrator.
 import { loadResolution } from "./config-context.js";
 import { buildCapabilities } from "./cli.doctor.js";
 import { failureEnvelope, printError, printJson, successEnvelope } from "./cli.output.js";
+import { fromIpcFailure } from "../core/errors/convo-error.js";
 import type { OutputFlags } from "./cli.query.js";
 export { handleHistory, handleResume, handleExport, handleSearch } from "./cli.storage.js";
 export { handleProfile } from "./cli.profile.js";
@@ -179,8 +180,12 @@ export async function handleTab(
 
   if (sub === "close") {
     if (!args[1]) return printError(new Error("Target ID is required to close a tab."));
-    if (useDaemon) await daemon.sendRequest("tab_close", { targetId: args[1] });
-    else await orchestrator.closeTab(args[1]);
+    if (useDaemon) {
+      const res = await daemon.sendRequest("tab_close", { targetId: args[1] });
+      if (!res.ok) throw fromIpcFailure(res.code, res.error);
+    } else {
+      await orchestrator.closeTab(args[1]);
+    }
 
     if (flags.json) printJson(successEnvelope("tab", { closed: args[1] }));
     else console.log(`🗑️ Closed tab [${args[1]}]`);
