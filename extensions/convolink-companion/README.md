@@ -50,13 +50,19 @@ The builder is the single source of truth: it reads the version from the root `p
 
 To protect against local unauthorized processes, the extension uses a cryptographic pairing token:
 
-1. In your terminal, run:
+1. Keep the bridge running in the background:
    ```bash
-   bun run convo ext pair
+   convo daemon start
    ```
-2. Click the **ConvoLink Companion** icon in your browser extensions toolbar.
-3. Paste the pairing token into the **Pairing Token** field.
-4. Click **Save Settings & Connect**. The indicator turns green (**Bridge Connected**).
+2. In your terminal, run:
+   ```bash
+   convo ext pair
+   ```
+3. Click the **ConvoLink Companion** icon in your browser extensions toolbar.
+4. Paste the pairing token into the **Pairing Token** field.
+5. Click **Save Settings & Connect**. The indicator turns green (**Bridge Connected**) and reconnects immediately.
+
+Load unpacked from `extensions/convolink-companion/.output/chrome-mv3` (or the extracted zip), never from `extensions/convolink-companion` itself — the source folder has no manifest by design.
 
 ---
 

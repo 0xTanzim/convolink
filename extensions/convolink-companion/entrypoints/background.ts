@@ -34,6 +34,7 @@ interface ExtensionApi {
     getManifest(): { version: string };
     onStartup: { addListener(listener: () => void): void };
     onInstalled: { addListener(listener: () => void): void };
+    onMessage: { addListener(listener: (message: JsonRecord, sender: unknown, respond: (value: unknown) => void) => boolean | void): void };
   };
   storage: {
     local: { get(keys?: string[]): Promise<JsonRecord>; set(values: JsonRecord): Promise<void> };
@@ -376,6 +377,17 @@ api.alarms.onAlarm.addListener((alarm) => {
 });
 api.runtime.onStartup.addListener(() => connect());
 api.runtime.onInstalled.addListener(() => connect());
+api.runtime.onMessage.addListener((message, _sender, respond) => {
+  if (message?.type === "RECONNECT") {
+    try { socket?.close(); } catch {}
+    socket = null;
+    backoffMs = 1_000;
+    void initIdentity().then(() => connect());
+    respond({ ok: true });
+    return true;
+  }
+  return false;
+});
 api.tabs.onRemoved.addListener((tabId) => {
   if (connected) send({ v: PROTOCOL_VERSION, event: "TAB_REMOVED", targetId: String(tabId) });
 });

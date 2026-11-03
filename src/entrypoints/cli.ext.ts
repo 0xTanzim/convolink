@@ -1,6 +1,7 @@
 import { BridgeTokenService } from "../core/services/bridge-token.service.js";
 import { HostEnv } from "../core/env/host-env.js";
 import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
+import * as path from "node:path";
 
 export async function handleExt(args: string[], tokenService?: BridgeTokenService): Promise<number> {
   const subCommand = args[0] || "pair";
@@ -17,10 +18,13 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
     console.log("\n🔐 ConvoLink Extension Pairing Token:");
     console.log(`\n  Token:  ${token}`);
     console.log(`  Path:   ${HostEnv.getBridgeTokenPath()}\n`);
+    const unpacked = path.resolve(import.meta.dir, "../../extensions/convolink-companion/.output/chrome-mv3");
     console.log("To pair your browser extension:");
-    console.log("  1. Open the ConvoLink Companion extension popup in your browser.");
-    console.log("  2. Paste this token into the 'Pairing Token' field.");
-    console.log("  3. Click 'Save Settings & Connect'.\n");
+    console.log(`  1. chrome://extensions -> Developer mode -> Load unpacked -> ${unpacked}`);
+    console.log("     (Load the .output/chrome-mv3 folder, not extensions/convolink-companion itself.)");
+    console.log("  2. Start the bridge and keep it running: convo daemon start");
+    console.log("  3. Open the extension popup and paste this token into 'Pairing Token'.");
+    console.log("  4. Click 'Save Settings & Connect', then run: convo ext status\n");
     return 0;
   }
 

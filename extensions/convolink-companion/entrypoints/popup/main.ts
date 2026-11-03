@@ -1,3 +1,5 @@
+const api = ((globalThis as unknown as { browser?: typeof chrome }).browser ?? chrome) as typeof chrome;
+
 document.addEventListener("DOMContentLoaded", async () => {
   const profileInput = document.getElementById("profileInput") as HTMLInputElement;
   const tokenInput = document.getElementById("tokenInput") as HTMLInputElement;
@@ -6,7 +8,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   const statusDot = document.getElementById("statusDot") as HTMLElement;
   const statusText = document.getElementById("statusText") as HTMLElement;
 
-  const data = await chrome.storage.local.get(["profileLabel", "bridgeToken", "connectionStatus", "lastError"]);
+  const data = await api.storage.local.get(["profileLabel", "bridgeToken", "connectionStatus", "lastError"]);
   if (data.profileLabel) {
     profileInput.value = data.profileLabel as string;
   }
@@ -14,15 +16,21 @@ document.addEventListener("DOMContentLoaded", async () => {
     tokenInput.value = data.bridgeToken as string;
   }
 
-  const status = (data.connectionStatus as string) || "disconnected";
-  statusDot.className = `dot ${status}`;
-  if (status === "connected") {
-    statusText.textContent = "Bridge Connected";
-  } else if (status === "unauthorized") {
-    statusText.textContent = "Invalid Token (Check convo ext pair)";
-  } else {
-    statusText.textContent = "Bridge Offline (Start convo)";
+  async function refreshStatus() {
+    const latest = await api.storage.local.get(["connectionStatus", "lastError"]);
+    const state = (latest.connectionStatus as string) || "disconnected";
+    statusDot.className = `dot ${state}`;
+    if (state === "connected") {
+      statusText.textContent = "Bridge Connected";
+    } else if (state === "unauthorized") {
+      statusText.textContent = `Invalid token (${String(latest.lastError || "run convo ext pair")})`;
+    } else {
+      statusText.textContent = "Bridge Offline (start ConvoLink first)";
+    }
+    return state;
   }
+
+  await refreshStatus();
 
   const ua = navigator.userAgent.toLowerCase();
   if (ua.includes("brave") || (navigator as any).brave) {
@@ -38,12 +46,13 @@ document.addEventListener("DOMContentLoaded", async () => {
   saveBtn.addEventListener("click", async () => {
     const profileVal = profileInput.value.trim() || "Personal";
     const tokenVal = tokenInput.value.trim();
-    await chrome.storage.local.set({ profileLabel: profileVal, bridgeToken: tokenVal });
+    await api.storage.local.set({ profileLabel: profileVal, bridgeToken: tokenVal });
     saveBtn.textContent = "Saved! Reconnecting...";
-    // Trigger alarm to reconnect immediately
-    chrome.alarms.create("convolink-reconnect", { delayInMinutes: 0.01 });
+    statusText.textContent = "Connecting...";
+    await api.runtime.sendMessage({ type: "RECONNECT" }).catch(() => undefined);
     setTimeout(() => {
       saveBtn.textContent = "Save Settings & Connect";
-    }, 1500);
+      void refreshStatus();
+    }, 1200);
   });
 });
