@@ -5,6 +5,7 @@ import { HostEnv } from "../../core/env/host-env.js";
 import type { SessionOrchestrator } from "../../core/services/orchestrator.js";
 import type { IpcCommand, IpcRequest } from "./daemon-ipc.types.js";
 import { ExtensionBridgeAdapter } from "../browsers/extension-bridge.adapter.js";
+import { BridgeTokenService } from "../../core/services/bridge-token.service.js";
 
 export interface BridgeDaemonOptions {
   readonly orchestrator: SessionOrchestrator;
@@ -35,9 +36,13 @@ export class BridgeDaemonService {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
 
     await this.cleanupStaleSocket();
-    if (this.extensionPort && this.extensionPort > 0) {
+    // When the container already owns the extension transport, it owns port
+    // 9224 too. Binding a second adapter here silently failed and left the
+    // daemon talking to an adapter that was never listening.
+    const containerTransport = this.orchestrator.getBrowser().id;
+    if (containerTransport !== "extension-bridge" && this.extensionPort && this.extensionPort > 0) {
       try {
-        this.extAdapter = new ExtensionBridgeAdapter(this.extensionPort);
+        this.extAdapter = new ExtensionBridgeAdapter(this.extensionPort, new BridgeTokenService());
         await this.extAdapter.start();
       } catch {}
     }

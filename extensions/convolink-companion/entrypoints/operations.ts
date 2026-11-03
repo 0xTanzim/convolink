@@ -157,6 +157,14 @@ export function readThreadOp(selectors: PlatformSelectors, lastN: number) {
   return { layoutVariant: "companion-v2", turns };
 }
 
+const visibleInPage = (el: Element | null): boolean => {
+  if (!el) return false;
+  const rect = el.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  const style = getComputedStyle(el);
+  return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+};
+
 export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) {
   const nodes = Array.from(document.querySelectorAll(selectors.turns));
   const last = nodes[nodes.length - 1] as HTMLElement | undefined;
@@ -166,8 +174,10 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
     turnsCount: nodes.length,
     turnIndex: Math.max(0, nodes.length - 1),
     hasNewTurn: nodes.length > beforeTurnCount,
-    isGenerating: Boolean(document.querySelector(selectors.stop)),
-    isThinking: Boolean(document.querySelector(selectors.thinking)),
+    // ChatGPT keeps the stop control in the DOM after a response; only a
+    // visible stop control means generation is still running.
+    isGenerating: visibleInPage(document.querySelector(selectors.stop)),
+    isThinking: visibleInPage(document.querySelector(selectors.thinking)),
     assistantText,
     text: assistantText,
     codeBlocks: assistantText ? codeBlocksOf(assistantText) : [],

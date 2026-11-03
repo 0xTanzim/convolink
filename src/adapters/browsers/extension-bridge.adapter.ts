@@ -144,6 +144,7 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   }
 
   public async listTabs(): Promise<TabDescriptor[]> {
+    await this.start();
     const clients = this.registry.getAll();
     const aggregated: TabDescriptor[] = [];
     for (const client of clients) {
@@ -231,6 +232,7 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   }
 
   private async sendRequest<T>(type: string, payload: Record<string, unknown>, targetId?: string): Promise<T> {
+    await this.start();
     const route = targetId ? this.registry.findClientForTarget(targetId) : null;
     // A named target that no longer resolves must never fall back to another
     // browser just because it is the only one connected.
