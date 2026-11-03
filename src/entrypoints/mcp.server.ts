@@ -1,5 +1,8 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import { MCP_TOOLS, type McpToolDefinition } from "./mcp.schema.js";
+import { createElicitationBridge } from "./mcp.elicitation.js";
+import type { ApplySetupFn } from "./mcp.tools.js";
+import { resolveCliVersion } from "./cli.version.js";
 
 export interface McpServerInfo { readonly name: string; readonly version: string; }
 export interface McpCapabilities { readonly tools?: Record<string, unknown>; readonly [key: string]: unknown; }
@@ -44,6 +47,12 @@ export interface McpServerOptions {
   readonly notify?: (message: unknown) => void;
   /** Profile discovery seam; production reads the filesystem. */
   readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
+  /** How long to wait for the human to answer an elicitation request. */
+  readonly elicitationTimeoutMs?: number;
+  /** Seam: setup verification launches a browser, so callers may substitute it. */
+  readonly applySetupFn?: ApplySetupFn;
+  /** Seam: onboarding state collection, substituted by tests. */
+  readonly collectOnboardFacts?: () => Promise<import("../core/services/onboarding.service.js").OnboardFacts>;
 }
 
 export class McpServer {
@@ -52,6 +61,9 @@ export class McpServer {
   private readonly workDir?: string;
   private readonly notify?: (message: unknown) => void;
   private readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
+  private readonly elicitation?: ReturnType<typeof createElicitationBridge>;
+  private readonly applySetupFn?: ApplySetupFn;
+  private readonly collectOnboardFacts?: () => Promise<import("../core/services/onboarding.service.js").OnboardFacts>;
   private resolvedOrchestrator: SessionOrchestrator | null = null;
 
   public constructor(providerOrOptions?: OrchestratorProvider | McpServerOptions) {
@@ -63,6 +75,14 @@ export class McpServer {
       this.workDir = providerOrOptions.workDir;
       this.notify = providerOrOptions.notify;
       this.discoverProfiles = providerOrOptions.discoverProfiles;
+      this.applySetupFn = providerOrOptions.applySetupFn;
+      this.collectOnboardFacts = providerOrOptions.collectOnboardFacts;
+      if (providerOrOptions.notify) {
+        this.elicitation = createElicitationBridge({
+          write: providerOrOptions.notify,
+          ...(providerOrOptions.elicitationTimeoutMs !== undefined ? { timeoutMs: providerOrOptions.elicitationTimeoutMs } : {}),
+        });
+      }
     }
   }
 
@@ -75,19 +95,27 @@ export class McpServer {
 
   public async handleMessage(req: JsonRpcRequest): Promise<JsonRpcResponse | null> {
     this.onActivity?.();
+    // A message without a method is the client answering a server request.
+    if (!("method" in req) || typeof req.method !== "string") {
+      this.elicitation?.handleResponse(req as unknown as { id?: unknown; result?: unknown; error?: unknown });
+      return null;
+    }
     if (req.id === undefined || req.id === null) return null;
 
     switch (req.method) {
-      case "initialize":
+      case "initialize": {
+        const capabilities = (req.params as { capabilities?: { elicitation?: unknown } } | undefined)?.capabilities;
+        this.elicitation?.setSupported(Boolean(capabilities?.elicitation));
         return {
           jsonrpc: "2.0",
           id: req.id,
           result: {
             protocolVersion: "2024-11-05",
-            serverInfo: { name: "convolink", version: "1.0.0" },
+            serverInfo: { name: "convolink", version: resolveCliVersion() },
             capabilities: { tools: {} },
           },
         };
+      }
 
       case "tools/list":
         return { jsonrpc: "2.0", id: req.id, result: { tools: MCP_TOOLS } };
@@ -107,6 +135,9 @@ export class McpServer {
             ? { onProgress: this.progressPort(progressToken) }
             : {}),
           ...(this.discoverProfiles ? { discoverProfiles: this.discoverProfiles } : {}),
+          ...(this.elicitation ? { elicitation: this.elicitation.port } : {}),
+          ...(this.applySetupFn ? { applySetupFn: this.applySetupFn } : {}),
+          ...(this.collectOnboardFacts ? { collectOnboardFacts: this.collectOnboardFacts } : {}),
         });
         return {
           jsonrpc: "2.0",
