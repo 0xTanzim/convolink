@@ -67,3 +67,33 @@ describe("convo skill install", () => {
     }
   });
 });
+
+describe("skill source resolution", () => {
+  it("finds the skill from the repository layout and from the packaged layout", () => {
+    // src/entrypoints (development) and dist (npm tarball with files:[skills])
+    const { resolveSkillSourcePath } = require("../../src/entrypoints/cli.skill.js") as typeof import("../../src/entrypoints/cli.skill.js");
+
+    const fromSource = resolveSkillSourcePath([path.resolve(import.meta.dir, "../../src/entrypoints")]);
+    expect(fs.existsSync(fromSource)).toBe(true);
+
+    const packaged = fs.mkdtempSync(path.join(os.tmpdir(), "convo-pkg-"));
+    try {
+      fs.mkdirSync(path.join(packaged, "dist"), { recursive: true });
+      fs.mkdirSync(path.join(packaged, "skills", "convolink"), { recursive: true });
+      fs.writeFileSync(path.join(packaged, "skills", "convolink", "SKILL.md"), "---\nname: convolink\n---\n");
+      expect(resolveSkillSourcePath([path.join(packaged, "dist")])).toBe(path.join(packaged, "skills", "convolink", "SKILL.md"));
+    } finally {
+      fs.rmSync(packaged, { recursive: true, force: true });
+    }
+  });
+
+  it("names the expected path when the skill is missing", () => {
+    const { resolveSkillSourcePath } = require("../../src/entrypoints/cli.skill.js") as typeof import("../../src/entrypoints/cli.skill.js");
+    const empty = fs.mkdtempSync(path.join(os.tmpdir(), "convo-empty-"));
+    try {
+      expect(() => resolveSkillSourcePath([empty])).toThrow(/skills\/convolink\/SKILL\.md/);
+    } finally {
+      fs.rmSync(empty, { recursive: true, force: true });
+    }
+  });
+});

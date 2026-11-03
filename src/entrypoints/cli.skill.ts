@@ -24,8 +24,25 @@ const SKILL_RELATIVE_PATH = path.join("skills", "convolink", "SKILL.md");
 const EXIT_CONFIG = 2;
 const EXIT_NEEDS_FORCE = 4;
 
+/**
+ * The same file resolves from two depths: `src/entrypoints` while developing, and
+ * the package root next to `dist/cli.js` once installed from npm.
+ */
+export function resolveSkillSourcePath(bases: readonly string[] = [import.meta.dir]): string {
+  for (const base of bases) {
+    for (const candidate of [
+      path.resolve(base, SKILL_RELATIVE_PATH),              // dist/ itself
+      path.resolve(base, "..", SKILL_RELATIVE_PATH),        // dist/ -> package root
+      path.resolve(base, "..", "..", SKILL_RELATIVE_PATH),  // src/entrypoints -> repo root
+    ]) {
+      if (fs.existsSync(candidate)) return candidate;
+    }
+  }
+  throw new Error(`Bundled skill not found. Expected ${SKILL_RELATIVE_PATH} next to dist/ or two levels above src/.`);
+}
+
 function readBundledSkill(): string {
-  return fs.readFileSync(path.resolve(import.meta.dir, "..", "..", SKILL_RELATIVE_PATH), "utf-8");
+  return fs.readFileSync(resolveSkillSourcePath(), "utf-8");
 }
 
 function valueOf(args: readonly string[], flag: string): string | undefined {

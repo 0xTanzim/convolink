@@ -4,6 +4,10 @@ description: Drive the browser the user is already logged into (ChatGPT, Claude,
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
+  version: 1.1.0
+  package: convolink
+  homepage: https://0xtanzim.github.io/convolink/
+  repository: https://github.com/0xTanzim/convolink
   runtime: bun
   transport: extension-bridge
   bridge-port: 9224
@@ -15,6 +19,10 @@ metadata:
 
 ConvoLink connects an agent to the **user's real, logged-in browser**. No API keys, no
 second profile, no relaunch.
+
+> This file is the single ConvoLink skill. Install it with
+> `convo skill install --harness <name>`, or read it directly from
+> `https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md`.
 
 Two transports exist and they are not interchangeable:
 
