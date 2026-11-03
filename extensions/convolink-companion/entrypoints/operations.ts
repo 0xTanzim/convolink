@@ -274,9 +274,15 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
     turnIndex: Math.max(0, nodes.length - 1),
     // A trailing user message means the assistant turn has not arrived yet.
     hasNewTurn: nodes.length > beforeTurnCount && (lastRole ? lastRole === "assistant" : !roleAttr),
-    // ChatGPT keeps the stop control in the DOM after a response; only a
-    // visible stop control means generation is still running.
-    isGenerating: visibleInPage(document.querySelector(selectors.stop)),
+    // ChatGPT keeps the stop control in the DOM after a response, and Claude
+    // leaves it mounted but disabled. Only a visible, enabled stop control
+    // means generation is still running.
+    isGenerating: (() => {
+      const stop = document.querySelector(selectors.stop) as (HTMLElement & { disabled?: boolean }) | null;
+      if (!visibleInPage(stop)) return false;
+      if (stop?.disabled === true) return false;
+      return stop?.getAttribute("aria-disabled") !== "true";
+    })(),
     // A reasoning panel stays mounted after it finishes; only an animated
     // indicator inside it means the model is still thinking.
     isThinking: Boolean(

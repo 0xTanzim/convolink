@@ -25,6 +25,14 @@ describe("statusOp turn rules", () => {
     expect(source).toContain("lastRole ? lastRole === \"assistant\" : !roleAttr");
   });
 
+  it("does not treat a mounted but disabled stop control as generating", () => {
+    const source = statusOp.toString();
+    // Bun transpiles the function, so assert on stable fragments only.
+    expect(source).toContain("visibleInPage(stop)");
+    expect(source).toContain(".disabled ===");
+    expect(source).toContain("aria-disabled");
+  });
+
   it("removes screen-reader labels and icon-font glyphs from the answer text", () => {
     const source = statusOp.toString();
     expect(source).toContain("sr-only");
