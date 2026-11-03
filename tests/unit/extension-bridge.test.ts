@@ -306,6 +306,18 @@ describe("ExtensionBridgeAdapter", () => {
     const url = await adapter.evaluate<string>(session, "location.href");
     expect(url).toContain("chatgpt.com");
     await expect(adapter.evaluate(session, "1 + 41")).rejects.toMatchObject({ code: "extension-unsupported" });
+    // A readiness probe without the machine-readable selector contract must
+    // fail loudly instead of sending an empty selector to the extension.
+    await expect(
+      adapter.evaluate(
+        session,
+        `(() => {
+          const send = document.querySelector("#x");
+          if (!send) return false;
+          return !(send.disabled || send.getAttribute('aria-disabled') === 'true');
+        })()`,
+      ),
+    ).rejects.toMatchObject({ code: "extension-unsupported" });
 
     await adapter.fillText(session, "textarea#prompt", "Hello AI");
     await adapter.click(session, "button#send");

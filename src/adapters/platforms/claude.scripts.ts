@@ -6,7 +6,7 @@ export function getClaudeResolveSelectorsExpr(): string {
     const composer = document.querySelector('div.ProseMirror[contenteditable="true"], div[contenteditable="true"], div[data-placeholder]');
     const sendBtn = document.querySelector('button[aria-label="Send Message"], button[aria-label*="Send"]');
     const stopBtn = document.querySelector('button[aria-label="Stop Response"], button[aria-label*="Stop"]');
-    const turns = document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]');
+    const turns = document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming], [data-testid="user-message"], [data-testid="assistant-message"]');
 
     const isLogin = document.querySelector('input[type="email"], a[href*="login"], button[data-testid*="login"]');
     const isCloudflare = document.title.includes("Just a moment") || document.querySelector('#challenge-running, #cf-wrapper');
@@ -30,7 +30,7 @@ export function getClaudeResolveSelectorsExpr(): string {
 export function getClaudeReadThreadExpr(lastN: number): string {
   return `(() => {
     /* readThread */
-    const turnEls = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]'));
+    const turnEls = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming], [data-testid="user-message"], [data-testid="assistant-message"]'));
     const slice = turnEls.slice(-${lastN});
     const turns = slice.map((el, i) => {
       const isUser = el.querySelector('div[data-testid="user-message"]') || el.className.includes("user");
@@ -49,7 +49,7 @@ export function getClaudeReadThreadExpr(lastN: number): string {
 export function getClaudeFingerprintExpr(promptLength: number): string {
   return `(() => {
     /* submitPrompt */
-    const turns = document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]');
+    const turns = document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming], [data-testid="user-message"], [data-testid="assistant-message"]');
     const beforeTurns = turns.length;
     const last = turns.length > 0 ? turns[turns.length - 1] : null;
     const lastText = last ? (last.innerText || '').trim() : '';
@@ -74,7 +74,7 @@ export function getClaudeAwaitCompletionExpr(beforeTurnCount: number): string {
       )
     );
 
-    const turns = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming]'));
+    const turns = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming], [data-testid="user-message"], [data-testid="assistant-message"]'));
     const last = turns.length > 0 ? turns[turns.length - 1] : null;
     let assistantText = '';
     const codeBlocks = [];

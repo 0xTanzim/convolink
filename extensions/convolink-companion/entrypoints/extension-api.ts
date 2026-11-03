@@ -45,6 +45,7 @@ export interface ExtensionApi {
     onRemoved: { addListener(listener: (tabId: number) => void): void };
   };
   windows: {
+    get(windowId: number, info?: JsonRecord): Promise<{ id?: number; state?: string; focused?: boolean }>;
     update(windowId: number, options: JsonRecord): Promise<unknown>;
   };
   scripting: {

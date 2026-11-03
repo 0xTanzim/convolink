@@ -43,7 +43,16 @@ export class DeepSeekDriver implements PlatformPort {
 
   public async applyToggles(handle: SessionHandle, browser: BrowserPort, toggles: ToggleOptions): Promise<void> {
     if (toggles.search === undefined && toggles.think === undefined) return;
+    const contract = JSON.stringify({
+      selector: ".ds-toggle-button",
+      selectedClass: "ds-toggle-button--selected",
+      toggles: {
+        ...(toggles.search !== undefined ? { search: { label: "Search", selected: Boolean(toggles.search) } } : {}),
+        ...(toggles.think !== undefined ? { think: { label: "DeepThink", selected: Boolean(toggles.think) } } : {}),
+      },
+    });
     const expression = `(() => {
+      /* convolink:toggles ${contract} */
       const toggleButtons = Array.from(document.querySelectorAll('.ds-toggle-button'));
       for (const btn of toggleButtons) {
         const text = (btn.innerText || '').trim();

@@ -35,9 +35,11 @@ export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
     turnRoleAttr: "data-conversation-role",
   },
   claude: {
-    turns: "[data-testid='chat-message']",
-    user: ".font-user-message, [data-testid='user-message']",
-    assistant: ".font-claude-message, [data-testid='assistant-message']",
+    // 2026 build: one container per role, plus the streaming flag on the
+    // assistant container. `chat-message` no longer exists.
+    turns: "[data-testid='user-message'], [data-testid='assistant-message'], div[data-is-streaming]",
+    user: "[data-testid='user-message'], .font-user-message",
+    assistant: "[data-testid='assistant-message'], .font-claude-message, div[data-is-streaming]",
     stop: "button[aria-label*='Stop'], button[aria-label*='stop']",
     thinking: "[data-testid='thinking'], .thinking-block",
     composer: "div[contenteditable='true'].ProseMirror, div[contenteditable='true']",

@@ -35,6 +35,35 @@ export function scrollToElementOp(selector: string): ActionResult {
   }
 }
 
+/**
+ * Browser-level text injection inserts at the caret, so the editor has to own
+ * the selection first. Ends the caret after the last character to append.
+ */
+export function focusEndOp(selector: string): ActionResult {
+  try {
+    const el = document.querySelector(selector) as HTMLElement | null;
+    if (!el) return { ok: false, error: `Element not found: ${selector}` };
+    el.scrollIntoView({ block: "center", inline: "nearest" });
+    if (typeof el.focus === "function") el.focus();
+
+    if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
+      const range = document.createRange();
+      range.selectNodeContents(el);
+      range.collapse(false);
+      const selection = window.getSelection();
+      selection?.removeAllRanges();
+      selection?.addRange(range);
+    } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+      const end = el.value.length;
+      el.setSelectionRange(end, end);
+    }
+
+    return { ok: document.activeElement === el };
+  } catch (error) {
+    return { ok: false, error: String((error as Error)?.message ?? error) };
+  }
+}
+
 export function hoverOp(selector: string): ActionResult {
   try {
     const el = document.querySelector(selector) as HTMLElement | null;
@@ -97,6 +126,40 @@ export function typeTextOp(selector: string, text: string, submit: boolean): Act
 
     const value = (el.innerText || (el as unknown as { value?: string }).value || "").trim();
     return { ok: value.length > 0, valueLength: value.length };
+  } catch (error) {
+    return { ok: false, error: String((error as Error)?.message ?? error) };
+  }
+}
+
+/**
+ * Platform toggles (DeepThink, Search) are plain buttons whose selected state
+ * lives in a class. Clicking only when the state differs keeps repeat asks
+ * idempotent instead of flipping the toggle back off.
+ */
+export function applyTogglesOp(
+  selector: string,
+  selectedClass: string,
+  toggles: Record<string, { label: string; selected: boolean }>,
+): ActionResult {
+  try {
+    const buttons = Array.from(document.querySelectorAll(selector)) as HTMLElement[];
+    if (buttons.length === 0) return { ok: false, error: `No toggle buttons matched: ${selector}` };
+    const applied: string[] = [];
+    const missing: string[] = [];
+
+    for (const [key, wanted] of Object.entries(toggles)) {
+      const button = buttons.find((candidate) => (candidate.innerText || "").trim().includes(wanted.label));
+      if (!button) {
+        missing.push(key);
+        continue;
+      }
+      const isSelected = (button.className || "").includes(selectedClass);
+      if (isSelected === wanted.selected) continue;
+      button.click();
+      applied.push(key);
+    }
+
+    return { ok: missing.length === 0, applied, missing };
   } catch (error) {
     return { ok: false, error: String((error as Error)?.message ?? error) };
   }
@@ -167,6 +230,9 @@ export function diagnoseOp(selectors: { composer: string; send: string; turns: s
       stopVisible: visible(document.querySelector(selectors.stop)),
       thinkingVisible: visible(document.querySelector(selectors.thinking)),
       bodyLength: (document.body?.innerText || "").length,
+      visibilityState: document.visibilityState,
+      documentHidden: Boolean(document.hidden),
+      hasFocus: typeof document.hasFocus === "function" ? document.hasFocus() : null,
     };
   } catch (error) {
     return { ok: false, error: String((error as Error)?.message ?? error) };

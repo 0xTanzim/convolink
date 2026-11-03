@@ -91,3 +91,26 @@ The companion speaks protocol v2. The bridge rejects older builds with `protocol
 - Created tabs are tracked as ConvoLink-owned. The bridge will not close a tab the user opened.
 - The extension executes a fixed operation set (probe, read, fill, click, key, navigate). It cannot run arbitrary JavaScript: MV3 content-script CSP blocks `eval()`, and MAIN-world injection inherits the page CSP. Unsupported probes fail loudly as `extension-unsupported`.
 - If a platform changes its DOM, update `entrypoints/platforms.ts`; do not reintroduce eval.
+
+### Which build is running?
+
+Every build writes `build-meta.json` next to `background.js`. The service worker reads it at start, sends the identifier during the handshake, and the CLI prints it:
+
+```bash
+bun run convo ext status
+#   • chrome [Personal] v1.0.1 · build mw05ehhv · 2 tab(s)
+```
+
+**Chrome caches an unpacked extension's bundle in memory.** Restarting the service worker does not re-read `background.js`, so a rebuild only takes effect after:
+
+1. `chrome://extensions`
+2. **Reload** on the ConvoLink Companion card
+3. `bun run convo ext status` shows the new identifier from `build-meta.json`
+
+If the identifier differs from `.output/chrome-mv3/build-meta.json`, you are running an old bundle — unrelated behaviour differences are explained by that, not by the platform.
+
+### Capability notes
+
+- Typed input uses the browser input pipeline (`chrome.debugger`), because a DOM-only fill leaves the platform editor state empty and its send control ignores the click. If another debugger session is attached, the extension falls back to DOM injection and the fill is reported as not accepted.
+- Screenshots need `<all_urls>` or a user gesture for `captureVisibleTab`. Without it the command returns `unsupported` with the reason; every other command keeps working.
+- A tab created in a minimized or hidden window may never mount its conversation view (DeepSeek defers it). The extension restores the window and activates the tab for the duration of a wait.

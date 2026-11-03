@@ -1,4 +1,5 @@
 import * as net from "node:net";
+import { toConvoError } from "../../core/errors/convo-error.js";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
@@ -95,8 +96,8 @@ export class BridgeDaemonService {
         setTimeout(() => this.stop(), 50);
       }
     } catch (err: unknown) {
-      const error = err instanceof Error ? err.message : String(err);
-      socket.write(JSON.stringify({ id: req.id, ok: false, error }) + "\n");
+      const failure = toConvoError(err);
+      socket.write(JSON.stringify({ id: req.id, ok: false, error: failure.message, code: failure.code }) + "\n");
     }
   }
 
@@ -145,6 +146,31 @@ export class BridgeDaemonService {
         } finally {
           await browser.detach(handle);
         }
+      }
+      case "tab_back": {
+        const p = (payload ?? {}) as Record<string, any>;
+        await this.orchestrator.goBack(p.targetId ? String(p.targetId) : undefined);
+        return { ok: true };
+      }
+      case "tab_undo": {
+        const p = (payload ?? {}) as Record<string, any>;
+        return this.orchestrator.undo(p.targetId ? String(p.targetId) : undefined);
+      }
+      case "thread_resume": {
+        const p = (payload ?? {}) as Record<string, any>;
+        return this.orchestrator.resumeThread(String(p.threadId));
+      }
+      case "thread_export": {
+        const p = (payload ?? {}) as Record<string, any>;
+        return this.orchestrator.exportThread(String(p.threadId), p.format === "json" ? "json" : "markdown");
+      }
+      case "thread_history": {
+        const p = (payload ?? {}) as Record<string, any>;
+        return this.orchestrator.getHistory(p.targetId ? String(p.targetId) : undefined);
+      }
+      case "ledger_search": {
+        const p = (payload ?? {}) as Record<string, any>;
+        return this.orchestrator.searchLedger(String(p.query), p.limit ? Number(p.limit) : undefined);
       }
       case "ext_exec": {
         const p = (payload ?? {}) as Record<string, any>;

@@ -259,7 +259,7 @@ export async function executeMcpTool(
         }
         if (action === "history") {
           const targetId = typeof args.targetId === "string" ? args.targetId.trim() : undefined;
-          const history = orchestrator.getHistory(targetId);
+          const history = await orchestrator.getHistory(targetId);
           if (!history || history.length === 0) return { text: "No session history recorded for this tab yet." };
           const lines = history.map((h, i) => `  ${i + 1}. [${h.timestamp}] ${h.url}`);
           return { text: `Session Checkpoints:\n${lines.join("\n")}` };

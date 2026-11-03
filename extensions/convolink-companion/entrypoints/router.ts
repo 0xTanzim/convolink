@@ -1,6 +1,6 @@
 import { PLATFORM_SELECTORS, type PlatformKey } from "./platforms.js";
 import type { ExtensionApi, JsonRecord, OwnershipPort } from "./extension-api.js";
-import { handleTabCommand, isTabCommand } from "./tab-commands.js";
+import { focusTab, handleTabCommand, isTabCommand } from "./tab-commands.js";
 import {
   bodyIncludesOp,
   clickOp,
@@ -21,11 +21,13 @@ import {
   statusOp,
 } from "./operations.js";
 import {
+  applyTogglesOp,
   diagnoseOp,
   getHtmlOp,
   hoverOp,
   scrollOp,
   scrollToElementOp,
+  focusEndOp,
   selectOptionOp,
   typeTextOp,
   waitForSelectorOp,
@@ -114,7 +116,17 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
       case "DIAGNOSE": {
         if (!selectors) throw new Error(`Unknown platform: ${String(platform)}`);
         const result = objectResult("DIAGNOSE", await ctx.runInTab(targetId, diagnoseOp, [selectors]));
-        ctx.sendResult(id, { ...result, buildId: ctx.buildId });
+        let windowState: string | null = null;
+        try {
+          const tab = await api.tabs.get(targetId);
+          if (tab.windowId !== undefined) {
+            const window = await api.windows.get(tab.windowId, { populate: false });
+            windowState = window.state ?? null;
+          }
+        } catch {
+          windowState = null;
+        }
+        ctx.sendResult(id, { ...result, windowState, buildId: ctx.buildId });
         return;
       }
 
@@ -230,6 +242,18 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
         return;
       }
 
+      case "APPLY_TOGGLES": {
+        const selector = String(message.selector ?? "");
+        const selectedClass = String(message.selectedClass ?? "");
+        const toggles = (message.toggles ?? {}) as Record<string, { label: string; selected: boolean }>;
+        const result = objectResult(
+          "APPLY_TOGGLES",
+          await ctx.runInTab(targetId, applyTogglesOp, [selector, selectedClass, toggles]),
+        );
+        ctx.sendResult(id, result);
+        return;
+      }
+
       case "PRESS_KEY":
         ctx.sendResult(id, await ctx.runInTab(targetId, pressKeyOp, [String(message.selector), String(message.key)]));
         return;
@@ -237,13 +261,36 @@ export async function handleCommand(message: JsonRecord & { id: number; type: st
       case "TRUSTED_FILL": {
         // Rich-text editors ignore DOM-only text injection for submit gating:
         // the visible text changes but the editor state stays empty. Clear via
-        // the DOM, then type through the browser input pipeline.
+        // the DOM, place the caret, then type through the browser input pipeline.
         const selector = String(message.selector);
         const text = String(message.text ?? "");
+
+        const inject = async (): Promise<boolean> => {
+          await sendTrustedText(api, targetId, text);
+          return Boolean(await ctx.runInTab(targetId, probeComposerTextOp, [selector]));
+        };
+
         await ctx.runInTab(targetId, fillTextOp, [selector, ""]);
-        await sendTrustedText(api, targetId, text);
-        const filled = await ctx.runInTab(targetId, probeComposerTextOp, [selector]);
-        ctx.sendResult(id, { ok: Boolean(filled), trusted: true });
+        await ctx.runInTab(targetId, focusEndOp, [selector]);
+        let injected = await inject();
+
+        if (!injected && text.length > 0) {
+          // A background tab can refuse browser-level injection. Activating is
+          // the only way to prove the composer accepts trusted input, so it is
+          // a retry rather than the default path.
+          await focusTab(api, targetId);
+          await ctx.runInTab(targetId, fillTextOp, [selector, ""]);
+          await ctx.runInTab(targetId, focusEndOp, [selector]);
+          injected = await inject();
+        }
+
+        if (!injected && text.length > 0) {
+          const fallback = objectResult("TRUSTED_FILL", await ctx.runInTab(targetId, typeTextOp, [selector, text, false]));
+          ctx.sendResult(id, { ok: fallback.ok !== false, trusted: false, fellBack: true });
+          return;
+        }
+
+        ctx.sendResult(id, { ok: true, trusted: true });
         return;
       }
 

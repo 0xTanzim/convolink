@@ -50,7 +50,19 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
 
   items.push(
     input.transportOk
-      ? { id: "debug-endpoint", state: "ok", detail: resolution?.endpoint ?? "connected" }
+      ? {
+          id: "debug-endpoint",
+          state: "ok",
+          // Show the endpoint actually used: an explicit host override must not
+          // be reported as loopback.
+          detail: (() => {
+            const host = process.env.CONVOLINK_HOST;
+            const endpoint = resolution?.endpoint ?? "connected";
+            if (!host || !endpoint.startsWith("http")) return endpoint;
+            const port = endpoint.match(/:(\d+)$/)?.[1];
+            return port ? `http://${host}:${port}` : endpoint;
+          })(),
+        }
       : {
           id: "debug-endpoint",
           state: "fail",

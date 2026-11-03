@@ -54,12 +54,10 @@ export async function runMcpServer(
 
   mcpServer = server ?? new McpServer({
     orchestrator: async () => {
-      const [{ loadResolution }, { createContainer }] = await Promise.all([
-        import("./config-context.js"),
-        import("../container.js"),
-      ]);
-      const resolution = await loadResolution();
-      return createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
+      // Delegate to the daemon when it is running: it owns the extension
+      // bridge port, so a second adapter here would fail to bind.
+      const { createMcpOrchestrator } = await import("./mcp.orchestrator.js");
+      return createMcpOrchestrator();
     },
     onActivity: () => idleController.recordActivity(),
     notify: (message) => output.write(JSON.stringify(message) + "\n"),

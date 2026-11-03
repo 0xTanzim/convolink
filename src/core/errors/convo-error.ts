@@ -12,6 +12,8 @@ export type ConvoErrorCode =
   | "extension-unsupported"
   | "session-busy"
   | "thread-not-found"
+  | "login-required"
+  | "challenge-detected"
   | "not-ready"
   | "submission-failed"
   | "internal";
@@ -34,6 +36,10 @@ export const EXIT_CODES: Readonly<Record<ConvoErrorCode, number>> = {
   "extension-unsupported": 3,
   "session-busy": 4,
   "thread-not-found": 2,
+  // Both need a human in the browser, which is a different failure class from
+  // a transport problem: retrying the same command cannot succeed.
+  "login-required": 4,
+  "challenge-detected": 4,
   "not-ready": 5,
   "submission-failed": 5,
   internal: 6,
@@ -80,8 +86,49 @@ export function isConvoError(error: unknown): error is ConvoError {
   return error instanceof ConvoError;
 }
 
-export function toConvoError(error: unknown, code: ConvoErrorCode = "internal"): ConvoError {
+const BRIDGE_ERROR_CODES: Readonly<Record<string, ConvoErrorCode>> = {
+  ERR_BROWSER_CONNECTION: "transport-disconnected",
+  ERR_LOCK_ACQUISITION: "session-busy",
+  ERR_TIMEOUT: "transport-timeout",
+  ERR_PLATFORM_NOT_FOUND: "selection-unavailable",
+  ERR_AUTH_CHALLENGE: "challenge-detected",
+  ERR_AMBIGUOUS_TAB: "selection-unavailable",
+};
+
+/** Rebuilds a classified error from an IPC failure envelope. */
+/** Remediation is part of the contract: a caller should not have to decode prose. */
+const REMEDIATION: Partial<Record<ConvoErrorCode, string>> = {
+  "transport-disconnected": "Start the bridge with `convo daemon start` (or `convo setup`), then retry.",
+  "session-busy": "Another command holds this tab. Wait for it to finish, then retry.",
+  "login-required": "Sign in to the platform in that browser tab, then retry.",
+  "challenge-detected": "Complete the verification challenge in the browser tab, then retry.",
+  "extension-unsupported": "Reload the Companion extension so the running build matches the installed one, then retry.",
+};
+
+export function isRetryableCode(code: ConvoErrorCode): boolean {
+  return code === "session-busy" || code === "transport-timeout" || code === "transport-disconnected" || code === "not-ready";
+}
+
+export function fromIpcFailure(code?: string, message?: string): ConvoError {
+  const known = code && code in EXIT_CODES ? (code as ConvoErrorCode) : undefined;
+  const resolved = known ?? "internal";
+  return new ConvoError(
+    resolved,
+    message || "The daemon reported a failure.",
+    REMEDIATION[resolved] ?? "Re-run with CONVOLINK_DEBUG=1 for details.",
+    { retryable: isRetryableCode(resolved) },
+  );
+}
+
+export function toConvoError(error: unknown, code?: ConvoErrorCode): ConvoError {
   if (isConvoError(error)) return error;
   const message = error instanceof Error ? error.message : String(error);
-  return new ConvoError(code, message, "Re-run with CONVOLINK_DEBUG=1 for details.", { cause: error });
+  const bridgeCode = (error as { code?: string } | null)?.code;
+  const mapped = code ?? (bridgeCode ? BRIDGE_ERROR_CODES[bridgeCode] : undefined) ?? "internal";
+  const challengeType = (error as { challengeType?: string } | null)?.challengeType;
+  const resolved = challengeType === "login_required" ? "login-required" : mapped;
+  return new ConvoError(resolved, message, REMEDIATION[resolved] ?? "Re-run with CONVOLINK_DEBUG=1 for details.", {
+    cause: error,
+    retryable: isRetryableCode(resolved),
+  });
 }

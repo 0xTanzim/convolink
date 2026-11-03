@@ -8,6 +8,12 @@ export type IpcCommand =
   | "tab_new"
   | "tab_close"
   | "tab_focus"
+  | "tab_back"
+  | "tab_undo"
+  | "thread_resume"
+  | "thread_export"
+  | "thread_history"
+  | "ledger_search"
   | "ext_exec"
   | "eval";
 
@@ -22,4 +28,6 @@ export interface IpcResponse {
   readonly ok: boolean;
   readonly result?: unknown;
   readonly error?: string;
+  /** Structured classification, so a client never has to parse the message. */
+  readonly code?: string;
 }

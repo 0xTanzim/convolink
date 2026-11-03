@@ -26,9 +26,13 @@ export function isTabCommand(type: string): boolean {
   return TAB_COMMANDS.has(type);
 }
 
-async function focusTab(api: ExtensionApi, tabId: number): Promise<number | undefined> {
+export async function focusTab(api: ExtensionApi, tabId: number): Promise<number | undefined> {
   const tab = await api.tabs.update(tabId, { active: true });
-  if (tab.windowId !== undefined) await api.windows.update(tab.windowId, { focused: true }).catch(() => undefined);
+  if (tab.windowId !== undefined) {
+    // Activating a tab inside a minimized window does not render it: Chrome
+    // keeps the window hidden, so SPAs never mount the conversation view.
+    await api.windows.update(tab.windowId, { focused: true, state: "normal" }).catch(() => undefined);
+  }
   return tab.windowId;
 }
 
@@ -112,8 +116,15 @@ export async function handleTabCommand(
     }
     case "SCREENSHOT": {
       const windowId = await focusTab(api, targetId);
-      const dataUrl = await api.tabs.captureVisibleTab(windowId ?? 0, { format: "png" });
-      ctx.sendResult(id, { ok: true, mimeType: "image/png", dataUrl });
+      try {
+        const dataUrl = await api.tabs.captureVisibleTab(windowId ?? 0, { format: "png" });
+        ctx.sendResult(id, { ok: true, mimeType: "image/png", dataUrl });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        // captureVisibleTab needs <all_urls> or a user gesture; report it as a
+        // capability gap so callers can degrade instead of guessing.
+        ctx.sendError(id, "unsupported", `Screenshot unavailable: ${message}`, false);
+      }
       return;
     }
     case "NAVIGATE":

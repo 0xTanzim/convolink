@@ -191,7 +191,7 @@ export function readThreadOp(selectors: PlatformSelectors, lastN: number) {
   const nodes = roleAttr
     ? Array.from(document.querySelectorAll("[" + roleAttr + "]")).slice(-Math.max(1, lastN)).map((m) => m.parentElement).filter((n): n is HTMLElement => Boolean(n))
     : Array.from(document.querySelectorAll(selectors.turns)).slice(-Math.max(1, lastN));
-  const roleOf = (node: HTMLElement, marker?: Element | null): "user" | "assistant" => {
+  const roleOf = (node: Element, marker?: Element | null): "user" | "assistant" => {
     if (roleAttr) {
       const attr = (marker ?? node.querySelector("[" + roleAttr + "]"))?.getAttribute(roleAttr);
       if (attr) return attr === "user" ? "user" : "assistant";
@@ -238,7 +238,7 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
   const nodes = roleAttr
     ? Array.from(document.querySelectorAll("[" + roleAttr + "]")).map((m) => m.parentElement).filter((n): n is HTMLElement => Boolean(n))
     : Array.from(document.querySelectorAll(selectors.turns));
-  const roleOf = (node: HTMLElement): "user" | "assistant" | null => {
+  const roleOf = (node: Element): "user" | "assistant" | null => {
     if (roleAttr) {
       const attr = node.querySelector("[" + roleAttr + "]")?.getAttribute(roleAttr);
       if (attr) return attr === "user" ? "user" : "assistant";
@@ -251,16 +251,21 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
   const last = nodes[nodes.length - 1] as HTMLElement | undefined;
   const lastRole = last ? roleOf(last) : null;
   const assistantNode = roleAttr
-    ? ([...nodes].reverse().find((n) => roleOf(n) === "assistant") as HTMLElement | undefined) ?? null
+    ? (([...nodes].reverse().find((n) => roleOf(n) === "assistant") as unknown) as HTMLElement | undefined) ?? null
     : last
       ? ((last.querySelector(selectors.assistant) ?? last) as HTMLElement)
       : null;
-  const assistantText = assistantNode ? stripLabel((assistantNode.innerText || "").trim()) : "";
+  const answerTextOf = (node: HTMLElement): string => {
+    const clone = node.cloneNode(true) as HTMLElement;
+    clone.querySelectorAll(".sr-only").forEach((el) => el.remove());
+    return stripLabel((clone.innerText || "").trim());
+  };
+  const assistantText = assistantNode ? answerTextOf(assistantNode) : "";
   return {
     turnsCount: nodes.length,
     turnIndex: Math.max(0, nodes.length - 1),
     // A trailing user message means the assistant turn has not arrived yet.
-    hasNewTurn: nodes.length > beforeTurnCount && (!roleAttr || lastRole === "assistant"),
+    hasNewTurn: nodes.length > beforeTurnCount && (lastRole ? lastRole === "assistant" : !roleAttr),
     // ChatGPT keeps the stop control in the DOM after a response; only a
     // visible stop control means generation is still running.
     isGenerating: visibleInPage(document.querySelector(selectors.stop)),

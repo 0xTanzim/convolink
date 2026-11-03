@@ -30,6 +30,7 @@ export type ExtensionCommand =
   | "PROBE_SELECTORS"
   | "PROBE_MOUNTED"
   | "PROBE_READY"
+  | "APPLY_TOGGLES"
   | "PROBE_QUIET"
   | "PROBE_COMPOSER_TEXT"
   | "READ_THREAD"

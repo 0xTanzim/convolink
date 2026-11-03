@@ -80,7 +80,27 @@ export class RawCdpAdapter implements BrowserPort {
     }
   }
 
+  /**
+   * A default-profile browser answers `/json/version` with 404 while still
+   * accepting TCP, and its WebSocket attempts stall instead of failing. Probe
+   * cheaply so the caller gets the block message instead of a hang.
+   */
+  private async probeHttpEndpoint(): Promise<{ status: number | null }> {
+    try {
+      const response = await fetch(`http://${this.host}:${this.port}/json/version`, {
+        signal: AbortSignal.timeout(1_500),
+      });
+      return { status: response.status };
+    } catch {
+      return { status: null };
+    }
+  }
+
   private async ensureBrowserWs(): Promise<BrowserWsClient | null> {
+    const probe = await this.probeHttpEndpoint();
+    if (probe.status === 404) {
+      throw new BrowserConnectionError(`${this.host}:${this.port}`, DEFAULT_PROFILE_BLOCK_MESSAGE);
+    }
     if (this.browserWsClient?.isOpen()) return this.browserWsClient;
     const wsUrl = this.browserWsUrl ?? findBrowserWsUrl(this.host, this.port, this.userDataDir);
     if (!wsUrl) return null;

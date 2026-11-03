@@ -5,7 +5,7 @@ import { DaemonClient } from "../adapters/daemon/daemon-client.js";
 import type { AskResult } from "../core/services/orchestrator.types.js";
 import type { ComparisonReport } from "../core/services/comparison.types.js";
 import { printJson, printError, successEnvelope, failureEnvelope } from "./cli.output.js";
-import { ConvoError } from "../core/errors/convo-error.js";
+import { ConvoError, fromIpcFailure } from "../core/errors/convo-error.js";
 import { parseThreadList, parseThreadUrl, type ThreadTarget } from "../core/services/setup/thread-target.js";
 import type { PlatformId } from "../core/ports/platform.port.js";
 
@@ -42,7 +42,7 @@ export async function handleAsk(
         writeFiles: parsed.writeFiles, outDir: parsed.outDir,
         autoContinue: parsed.autoContinue, newChat: parsed.newChat, openTab: parsed.openTab,
       }, Math.max((parsed.timeoutMs ?? 180_000) + 60_000, 300_000));
-      if (!res.ok) throw new Error(res.error || "Daemon request failed");
+      if (!res.ok) throw fromIpcFailure(res.code, res.error);
       return emitAsk(res.result!, flags);
     } catch (error) {
       return fail(flags, "ask", error);
@@ -122,7 +122,7 @@ export async function handleCompare(
         timeoutMs: parsed.timeoutMs, outDir: parsed.outDir,
         arbitrate: parsed.arbitrate, arbiter: parsed.arbiter,
       }, Math.max((parsed.timeoutMs ?? 180_000) * 3, 600_000));
-      if (!res.ok) throw new Error(res.error || "Daemon comparison failed");
+      if (!res.ok) throw fromIpcFailure(res.code, res.error);
       report = res.result!;
     } else {
       report = await orchestrator.compare({

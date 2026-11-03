@@ -302,7 +302,9 @@ export class ExtensionBridgeAdapter implements BrowserPort {
         const platform = platformForUrl(info?.url ?? "");
         if (platform) return this.sendRequestToClient<T>(client.ws, type, { ...body, platform });
       } catch {
-        // Fall through and let the extension report the real failure.
+        // The tab is gone: sending with a null platform would surface as
+        // "Unknown platform: null", which hides the real cause.
+        throw new TabNotFoundError(undefined, targetId);
       }
     }
     return this.sendRequestToClient<T>(client.ws, type, body);
@@ -371,18 +373,39 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     if (expression.includes("document.body.innerText")) {
       return { type: "GET_BODY_INCLUDES", payload: { text: allQuoted(expression).filter(Boolean).pop() ?? "" } };
     }
+    const toggles = toggleContract(expression);
+    if (toggles) return { type: "APPLY_TOGGLES", payload: { ...toggles } };
+
     const contract = selectorContract(expression);
+    const requireContract = (label: string): SelectorContract => {
+      if (!contract || !contract.composer) {
+        throw new ConvoError(
+          "extension-unsupported",
+          `${label} probe is missing its convolink:selectors contract`,
+          "Rebuild the host or use a transport that evaluates the probe directly.",
+        );
+      }
+      return contract;
+    };
+
     if (expression.includes("c.value || c.innerText")) {
-      return { type: "PROBE_COMPOSER_TEXT", payload: { selector: contract?.composer ?? lastQuoted(expression) ?? "" } };
+      const selected = requireContract("Composer-text");
+      return { type: "PROBE_COMPOSER_TEXT", payload: { selector: selected.composer } };
     }
     if (expression.includes("aria-disabled")) {
-      return {
-        type: "PROBE_READY",
-        payload: { composer: contract?.composer ?? "", send: contract?.send ?? "" },
-      };
+      const selected = requireContract("Ready");
+      if (!selected.send) {
+        throw new ConvoError(
+          "extension-unsupported",
+          "Ready probe is missing its send selector contract",
+          "Rebuild the host or use a transport that evaluates the probe directly.",
+        );
+      }
+      return { type: "PROBE_READY", payload: { composer: selected.composer, send: selected.send } };
     }
     if (expression.includes("document.readyState") && expression.includes("querySelector")) {
-      return { type: "PROBE_MOUNTED", payload: { composer: contract?.composer ?? lastQuoted(expression) ?? "" } };
+      const selected = requireContract("Mounted");
+      return { type: "PROBE_MOUNTED", payload: { composer: selected.composer } };
     }
     throw new ConvoError(
       "extension-unsupported",
@@ -504,6 +527,23 @@ function allQuoted(expression: string): string[] {
 interface SelectorContract {
   readonly composer?: string;
   readonly send?: string;
+}
+
+interface ToggleContract extends Record<string, unknown> {
+  readonly selector: string;
+  readonly selectedClass: string;
+  readonly toggles: Record<string, { label: string; selected: boolean }>;
+}
+
+function toggleContract(expression: string): ToggleContract | null {
+  const match = expression.match(/\/\*\s*convolink:toggles\s+(\{[\s\S]*?\})\s*\*\//);
+  if (!match || !match[1]) return null;
+  try {
+    const parsed = JSON.parse(match[1]) as ToggleContract;
+    return parsed.selector && parsed.selectedClass && parsed.toggles ? parsed : null;
+  } catch {
+    return null;
+  }
 }
 
 function selectorContract(expression: string): SelectorContract | null {

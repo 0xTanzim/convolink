@@ -468,7 +468,10 @@ export async function pollUntilSettled(
       // Reasoning panels often stay mounted after the answer finishes, so
       // "thinking" only blocks completion while the output is still moving.
       const thinkingActive = Boolean(status.isThinking) && stableFor < Math.max(options.quiescenceMs, 1_200);
-      if (options.isNew(status) && !status.isGenerating && !thinkingActive && stableFor >= options.quiescenceMs) {
+      // An assistant turn can mount before any text streams; an empty answer is
+      // not a completion.
+      const hasText = text.trim().length > 0;
+      if (hasText && options.isNew(status) && !status.isGenerating && !thinkingActive && stableFor >= options.quiescenceMs) {
         return { status, elapsedMs: Date.now() - start, timedOut: false };
       }
     }
