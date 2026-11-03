@@ -34,7 +34,16 @@ Add to your project or user MCP settings (`mcp.json`):
 
 ---
 
-## 2. Available Cognitive Tools
+## 2. First call: `convo_onboard`
+
+Returns `steps[]`, `nextAction` and `requiresUserSelection`. Obey `nextAction`; repeat until
+`ok: true`. Never hand-edit `.convo/config.json`.
+
+## 3. Available Cognitive Tools
+
+### `convo_onboard`
+Readiness report plus the single next step. `nextAction.kind` is `command` (run it), `user`
+(show the instruction, stop) or `tool` (call it with `nextAction.args`).
 
 ### `convo_ask`
 Submit a prompt to an active or background AI browser tab (`chatgpt`, `claude`, `deepseek`, `gemini`) and await the complete response with extracted code blocks.
