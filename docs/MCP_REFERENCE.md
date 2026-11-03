@@ -24,7 +24,9 @@ Submit a prompt to an AI browser tab (ChatGPT, Claude, DeepSeek, Gemini). Automa
       "outDir": { "type": "string", "description": "Destination directory for extracted code blocks" },
       "newChat": { "type": "boolean", "description": "Whether to reset conversation to a fresh chat first" },
       "openTab": { "type": "boolean", "description": "Whether to spawn a new background tab" },
-      "think": { "type": "boolean", "description": "Toggle deep thinking/reasoning mode (DeepSeek R1, Claude Thinking, ChatGPT o-series)" },
+      "threadUrl": { "type": "string", "description": "Direct conversation URL to resume (skips convo_tab and convo_list_tabs)" },
+      "workspaceRoot": { "type": "string", "description": "Project workspace root path (prevents process.cwd() $HOME leakage)" },
+      "think": { "type": "boolean", "description": "Toggle deep thinking/reasoning mode (DeepSeek v4.1 Flash, Claude Thinking, GPT-6 Asta)" },
       "search": { "type": "boolean", "description": "Toggle live web search/DeepSearch grounding" }
     },
     "required": ["prompt"]

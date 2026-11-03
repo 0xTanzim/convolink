@@ -117,7 +117,7 @@ export class DeepSeekDriver implements PlatformPort {
         isNew: (candidate) => hasNewCompletion(candidate, before),
       },
     );
-    if (timedOut) throw new TimeoutError("DeepSeek response timed out", timeoutMs);
+    if (timedOut) throw new TimeoutError("DeepSeek response timed out", timeoutMs, completionText(status) || undefined);
 
     // `completionText` includes the mounted reasoning panel; the answer itself
     // is rendered in the markdown block.

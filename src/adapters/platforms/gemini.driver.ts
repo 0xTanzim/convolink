@@ -90,7 +90,7 @@ export class GeminiDriver implements PlatformPort {
         isNew: (candidate) => hasNewCompletion(candidate, before),
       },
     );
-    if (timedOut) throw new TimeoutError("Gemini response timed out", timeoutMs);
+    if (timedOut) throw new TimeoutError("Gemini response timed out", timeoutMs, completionText(status) || undefined);
 
     const text = completionText(status);
     return {

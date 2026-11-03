@@ -110,7 +110,7 @@ export class ChatGPTDriver implements PlatformPort {
         isNew: (candidate) => hasNewCompletion(candidate, before),
       },
     );
-    if (timedOut) throw new TimeoutError("ChatGPT response timed out", timeoutMs);
+    if (timedOut) throw new TimeoutError("ChatGPT response timed out", timeoutMs, completionText(status) || undefined);
 
     const text = completionText(status);
     return {

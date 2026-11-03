@@ -7,8 +7,12 @@ export async function loadResolution(
   overrides: SetupOverrides = {},
   workDir?: string,
 ): Promise<SetupResolution> {
+  const effectiveWorkDir =
+    workDir ??
+    process.env.CONVOLINK_WORKSPACE ??
+    (process.env.PWD && process.env.PWD !== process.env.HOME ? process.env.PWD : undefined);
   const store = new ProjectConfigAdapter();
-  const [project, user] = await Promise.all([store.load(workDir), store.loadUser()]);
+  const [project, user] = await Promise.all([store.load(effectiveWorkDir), store.loadUser()]);
   const invalid = [project, user].find((result) => result.status === "invalid");
   if (invalid) {
     return {

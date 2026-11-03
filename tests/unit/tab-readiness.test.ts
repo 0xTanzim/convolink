@@ -3,6 +3,7 @@ import { TabManagerService } from "../../src/core/services/tab-manager.service.j
 import { LockService } from "../../src/core/services/lock.service.js";
 import { FakeBrowserPort } from "../fakes/fake-browser.js";
 import { DeepSeekDriver } from "../../src/adapters/platforms/deepseek.driver.js";
+import { defaultTabReadiness } from "../../src/adapters/platforms/tab-readiness.adapter.js";
 
 describe("tab creation readiness", () => {
   it("returns only after the new tab reported a ready composer", async () => {
@@ -37,6 +38,7 @@ describe("tab creation readiness", () => {
 
     const manager = new TabManagerService(browser, [new DeepSeekDriver()], new LockService(), undefined, {
       readinessTimeoutMs: 20_000,
+      tabReadiness: defaultTabReadiness,
     });
     const tab = await manager.createTab("deepseek");
 
@@ -60,6 +62,7 @@ describe("tab creation readiness", () => {
 
     const manager = new TabManagerService(browser, [new DeepSeekDriver()], new LockService(), undefined, {
       readinessTimeoutMs: 5_000,
+      tabReadiness: defaultTabReadiness,
     });
     const startedAt = Date.now();
     await manager.createTab("deepseek");
@@ -74,6 +77,7 @@ describe("tab creation readiness", () => {
 
     const manager = new TabManagerService(browser, [new DeepSeekDriver()], new LockService(), undefined, {
       readinessTimeoutMs: 300,
+      tabReadiness: defaultTabReadiness,
     });
 
     const startedAt = Date.now();

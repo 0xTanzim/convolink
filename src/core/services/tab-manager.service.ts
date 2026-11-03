@@ -4,29 +4,46 @@ import type { LockService } from "./lock.service.js";
 import type { StateJournalService } from "./journal.service.js";
 import type { DiscoveredTab } from "./orchestrator.types.js";
 import { TabResolver } from "./tab-resolver.js";
-import { PlatformDriverNotFoundError, TabNotFoundError } from "../errors/bridge-errors.js";
-import { waitForDomQuiet, waitForMounted, withDeadline } from "../../adapters/platforms/driver-helpers.js";
-import { forgetManagedTab, isManagedTabRef, recordManagedTab } from "../../adapters/browsers/tab-registry.js";
 import { findThreadTab, latestManagedTab } from "./tab-plan.js";
 import { ConvoError } from "../errors/convo-error.js";
 import type { ThreadTarget } from "./setup/thread-target.js";
+import type { TabRegistryPort } from "../ports/tab-registry.port.js";
+import type { TabReadinessPort } from "../ports/tab-readiness.port.js";
 
 export interface TabManagerOptions {
   /** How long a newly created tab may take to become usable. */
   readonly readinessTimeoutMs?: number;
+  readonly tabRegistry?: TabRegistryPort;
+  readonly tabReadiness?: TabReadinessPort;
 }
 
-// Page readiness is a real-world wait; unit tests construct this service
-// directly and must not block for it.
 const DEFAULT_READINESS_TIMEOUT_MS = process.env.NODE_ENV === "test" ? 0 : 20_000;
-const LAYOUT_POLL_MS = 250;
+
+const noOpTabRegistry: TabRegistryPort = {
+  recordManagedTab: () => {}, forgetManagedTab: () => {}, isManagedTab: () => false, isManagedTabRef: () => false,
+};
+
+async function withDeadline<T>(promise: Promise<T>, ms: number): Promise<T | undefined> {
+  return Promise.race([
+    promise.catch(() => undefined),
+    new Promise<undefined>((resolve) => setTimeout(() => resolve(undefined), ms)),
+  ]);
+}
 
 export class TabManagerService {
+  private static defaultRegistry: TabRegistryPort = noOpTabRegistry;
+
+  public static setDefaultRegistry(registry: TabRegistryPort): void {
+    this.defaultRegistry = registry;
+  }
+
   private readonly browser: BrowserPort;
   private readonly drivers: readonly PlatformPort[];
   private readonly lockService: LockService;
   private readonly journalService?: StateJournalService;
   private readonly readinessTimeoutMs: number;
+  private readonly tabRegistry: TabRegistryPort;
+  private readonly tabReadiness?: TabReadinessPort;
 
   public constructor(
     browser: BrowserPort,
@@ -40,39 +57,16 @@ export class TabManagerService {
     this.lockService = lockService;
     this.journalService = journalService;
     this.readinessTimeoutMs = options.readinessTimeoutMs ?? DEFAULT_READINESS_TIMEOUT_MS;
+    this.tabRegistry = options.tabRegistry ?? TabManagerService.defaultRegistry;
+    this.tabReadiness = options.tabReadiness;
   }
 
-  /**
-   * A tab is reported as created long before its framework has hydrated. Waiting
-   * here means `convo tab new` returns a tab that can actually accept a prompt.
-   */
   private async waitUntilUsable(targetId: string, driver: PlatformPort): Promise<void> {
-    if (this.readinessTimeoutMs <= 0) return;
+    if (this.readinessTimeoutMs <= 0 || !this.tabReadiness) return;
     const handle: SessionHandle = { sessionId: `ready-${targetId}`, targetId, adapterId: this.browser.id };
-    const deadline = Date.now() + this.readinessTimeoutMs;
-
-    let composerSelector: string | null = null;
-    while (Date.now() < deadline) {
-      const resolved = await withDeadline(driver.resolveSelectors(handle, this.browser), 3000);
-      if (resolved?.composerSelector) {
-        composerSelector = resolved.composerSelector;
-        break;
-      }
-      await new Promise((resolve) => setTimeout(resolve, LAYOUT_POLL_MS));
-    }
-    if (!composerSelector) return;
-
-    // Everything below polls from the host: a background tab throttles page
-    // timers, and a long-lived in-page promise keeps the only BiDi socket busy.
-    await waitForMounted(this.browser, handle, composerSelector, Math.max(1000, deadline - Date.now()));
-    await waitForDomQuiet(this.browser, handle, Math.min(2000, Math.max(0, deadline - Date.now())));
+    await this.tabReadiness.waitUntilUsable(this.browser, handle, driver, this.readinessTimeoutMs);
   }
 
-  /**
-   * The tab descriptor is captured when the tab opens, before the platform has
-   * created a conversation. Reading the live URL afterwards is what makes the
-   * returned thread URL usable for continuation.
-   */
   public async captureConversation(
     tab: DiscoveredTab,
     driver: PlatformPort,
@@ -82,12 +76,8 @@ export class TabManagerService {
     if (typeof href !== "string" || !href.startsWith("http")) return tab;
 
     const threadId = driver.extractThreadId(href);
-    recordManagedTab({
-      targetId: tab.targetId,
-      platform: tab.platformId ?? "other",
-      url: href,
-      threadId,
-      createdAt: new Date().toISOString(),
+    this.tabRegistry.recordManagedTab({
+      targetId: tab.targetId, platform: tab.platformId ?? "other", url: href, threadId, createdAt: new Date().toISOString(),
     });
     return { ...tab, url: href, threadId };
   }
@@ -101,37 +91,19 @@ export class TabManagerService {
     const driver = this.drivers.find((d) => d.id === platformOrUrl || d.matchesUrl(platformOrUrl));
     const url = isUrl ? platformOrUrl : (driver ? driver.getBaseUrl() : platformOrUrl);
     const tabDesc = await this.browser.createTab(url);
-
-    if (driver) {
-      await this.waitUntilUsable(tabDesc.targetId, driver);
-    }
+    if (driver) await this.waitUntilUsable(tabDesc.targetId, driver);
 
     const platform = driver?.id ?? null;
     const threadId = driver ? driver.extractThreadId(tabDesc.url) : null;
-
     this.journalService?.record({
-      targetId: tabDesc.targetId,
-      platformId: platform,
-      url: tabDesc.url,
-      threadId,
-      action: "open_tab",
+      targetId: tabDesc.targetId, platformId: platform, url: tabDesc.url, threadId, action: "open_tab",
     });
-
-    recordManagedTab({
-      targetId: tabDesc.targetId,
-      platform: platform ?? "other",
-      url: tabDesc.url,
-      threadId,
-      createdAt: new Date().toISOString(),
+    this.tabRegistry.recordManagedTab({
+      targetId: tabDesc.targetId, platform: platform ?? "other", url: tabDesc.url, threadId, createdAt: new Date().toISOString(),
     });
 
     return {
-      targetId: tabDesc.targetId,
-      title: tabDesc.title,
-      url: tabDesc.url,
-      platformId: platform,
-      threadId,
-      isNewlyCreated: true,
+      targetId: tabDesc.targetId, title: tabDesc.title, url: tabDesc.url, platformId: platform, threadId, isNewlyCreated: true,
     };
   }
 
@@ -140,34 +112,27 @@ export class TabManagerService {
       throw new Error(`Transport ${this.browser.id} does not support closeTab`);
     }
     await this.browser.closeTab(targetId);
-    forgetManagedTab(targetId);
+    this.tabRegistry.forgetManagedTab(targetId);
   }
 
   public async startNewChat(tab: DiscoveredTab, driver: PlatformPort): Promise<void> {
-    const lockHandle = await this.lockService.acquireLock(tab.targetId);
-    let sessionHandle: SessionHandle | null = null;
-    try {
+    await this.lockService.withLock(tab.targetId, async () => {
       this.journalService?.record({
-        targetId: tab.targetId,
-        platformId: tab.platformId,
-        url: tab.url,
-        threadId: tab.threadId,
-        action: "new_chat",
+        targetId: tab.targetId, platformId: tab.platformId,
+        url: tab.url, threadId: tab.threadId, action: "new_chat",
       });
-
-      sessionHandle = await this.browser.attach(tab.targetId);
-      if (driver.startNewChat) {
-        await driver.startNewChat(sessionHandle, this.browser);
-      } else {
-        await this.browser.navigate?.(sessionHandle, driver.getBaseUrl());
+      const sessionHandle = await this.browser.attach(tab.targetId);
+      try {
+        if (driver.startNewChat) {
+          await driver.startNewChat(sessionHandle, this.browser);
+        } else {
+          await this.browser.navigate?.(sessionHandle, driver.getBaseUrl());
+        }
+        await this.waitUntilUsable(tab.targetId, driver);
+      } finally {
+        await this.browser.detach(sessionHandle);
       }
-      // A reset reloads the SPA; typing before it re-hydrates leaves text the
-      // framework does not see, so the send control never enables.
-      await this.waitUntilUsable(tab.targetId, driver);
-    } finally {
-      if (sessionHandle) await this.browser.detach(sessionHandle);
-      await this.lockService.releaseLock(lockHandle);
-    }
+    });
   }
 
   public async resolveOrAutoOpenTab(
@@ -176,14 +141,13 @@ export class TabManagerService {
   ): Promise<DiscoveredTab> {
     if (options.targetId) return TabResolver.resolveTargetTab(options, tabs);
     if (options.openTab) return this.createTab(options.platform ?? "chatgpt");
-
     if (options.thread) return this.resolveThread(options.thread, tabs);
 
     const hasDriver = options.platform
       ? this.drivers.some((driver) => driver.id === options.platform)
       : false;
     if (options.platform && hasDriver && this.browser.createTab) {
-      const managed = latestManagedTab(tabs, options.platform, (tab) => isManagedTabRef(tab));
+      const managed = latestManagedTab(tabs, options.platform, (tab) => this.tabRegistry.isManagedTabRef(tab));
       if (managed) return managed;
       return this.createTab(options.platform);
     }
@@ -191,11 +155,6 @@ export class TabManagerService {
     return TabResolver.resolveTargetTab(options, tabs);
   }
 
-  /**
-   * A named thread is explicit consent. Reuse the tab already showing it, or
-   * open the conversation in a ConvoLink-owned tab and verify it really is that
-   * thread before anyone types into it.
-   */
   private async resolveThread(target: ThreadTarget, tabs: readonly DiscoveredTab[]): Promise<DiscoveredTab> {
     const existing = findThreadTab(tabs, target);
     if (existing) return existing;
@@ -216,29 +175,26 @@ export class TabManagerService {
     if (!this.journalService || !this.browser.navigate) return null;
     const previous = this.journalService.getPrevious(tab.targetId);
     if (!previous?.url) return null;
-
-    const lockHandle = await this.lockService.acquireLock(tab.targetId);
-    let sessionHandle: SessionHandle | null = null;
-    try {
-      sessionHandle = await this.browser.attach(tab.targetId);
-      await this.browser.navigate(sessionHandle, previous.url);
-      return { restoredUrl: previous.url };
-    } finally {
-      if (sessionHandle) await this.browser.detach(sessionHandle);
-      await this.lockService.releaseLock(lockHandle);
-    }
+    return this.lockService.withLock(tab.targetId, async () => {
+      const handle = await this.browser.attach(tab.targetId);
+      try {
+        await this.browser.navigate!(handle, previous.url!);
+        return { restoredUrl: previous.url! };
+      } finally {
+        await this.browser.detach(handle);
+      }
+    });
   }
 
   public async goBack(targetId: string): Promise<void> {
     if (!this.browser.goBack) return;
-    const lockHandle = await this.lockService.acquireLock(targetId);
-    let sessionHandle: SessionHandle | null = null;
-    try {
-      sessionHandle = await this.browser.attach(targetId);
-      await this.browser.goBack(sessionHandle);
-    } finally {
-      if (sessionHandle) await this.browser.detach(sessionHandle);
-      await this.lockService.releaseLock(lockHandle);
-    }
+    await this.lockService.withLock(targetId, async () => {
+      const handle = await this.browser.attach(targetId);
+      try {
+        await this.browser.goBack!(handle);
+      } finally {
+        await this.browser.detach(handle);
+      }
+    });
   }
 }

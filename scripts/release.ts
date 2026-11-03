@@ -70,9 +70,6 @@ export async function runRelease(targetArg?: string, dryRun = false): Promise<vo
     process.exit(1);
   }
 
-  // Also sync root unpacked folder
-  await buildExtension({ target: "chrome", outDir: EXT_ROOT, zip: false, version: targetVersion });
-
   const assets: string[] = [
     chromeRes.zipPath!,
     chromeRes.versionedZipPath!,

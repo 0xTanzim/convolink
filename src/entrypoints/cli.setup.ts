@@ -16,6 +16,8 @@ export interface SetupInput {
   readonly transport?: TransportId;
   readonly platform?: PlatformId;
   readonly verifyTab?: boolean;
+  readonly saveOnly?: boolean;
+  readonly noVerify?: boolean;
   readonly workDir?: string;
   /** Injected by tests; defaults to the real terminal selector. */
   readonly select?: typeof selectFromList;
@@ -38,8 +40,16 @@ export function isInteractive(): boolean {
  */
 export async function applySetup(input: SetupInput): Promise<SetupOutcome> {
   const select = input.select ?? selectFromList;
+  if (!input.browserId && !isInteractive() && !input.select) {
+    throw new ConvoError(
+      "selection-unavailable",
+      "Interactive browser selection is unavailable in non-interactive environments.",
+      "Pass --browser explicitly (e.g. --browser chrome), or use --json.",
+    );
+  }
+
   const installed = await discoverBrowsers();
-  if (installed.length === 0) {
+  if (installed.length === 0 && !input.saveOnly && !input.noVerify) {
     throw new ConvoError(
       "no-browser-found",
       `No supported browser found. Searched: ${searchLocations().join(", ")}`,
@@ -65,11 +75,17 @@ export async function applySetup(input: SetupInput): Promise<SetupOutcome> {
     ),
   );
 
-  const verified = await verifySetup(resolution, {
-    pageProbe: input.verifyTab !== false,
-    platform: input.platform ?? "deepseek",
-  });
-  if (!verified.ok && verified.error) throw verified.error;
+  let warning: string | undefined;
+  if (!input.saveOnly && !input.noVerify) {
+    const verified = await verifySetup(resolution, {
+      pageProbe: input.verifyTab !== false,
+      platform: input.platform ?? "deepseek",
+    });
+    if (!verified.ok && verified.error) throw verified.error;
+    warning = verified.warning;
+  } else {
+    warning = "Saved without socket verification (--save-only).";
+  }
 
   const config: ConvoProjectConfig = {
     version: 1,
@@ -83,7 +99,7 @@ export async function applySetup(input: SetupInput): Promise<SetupOutcome> {
 
   const store = new ProjectConfigAdapter();
   await store.save(config, input.workDir);
-  return { config, resolution, ...(verified.warning ? { warning: verified.warning } : {}) };
+  return { config, resolution, ...(warning ? { warning } : {}) };
 }
 
 async function chooseBrowser(
@@ -94,6 +110,12 @@ async function chooseBrowser(
   if (input.browserId) {
     const match = installed.find((candidate) => candidate.descriptor.id === input.browserId);
     if (!match) {
+      if (input.saveOnly || input.noVerify) {
+        return {
+          descriptor: describeBrowser(input.browserId),
+          executable: input.browserPath ?? "",
+        };
+      }
       throw new ConvoError(
         "no-browser-found",
         `${input.browserId} is not installed on this machine.`,
@@ -125,21 +147,33 @@ async function chooseProfile(
       (profile) => profile.userDataDir === input.profilePath || profile.profileId === input.profilePath,
     );
     if (match) return match;
+    if (input.saveOnly || input.noVerify) {
+      return {
+        profileId: "custom", userDataDir: input.profilePath, name: "Custom Profile",
+        isDefault: false, requiresDedicatedProfile: false, browser: (input.browserId ?? "chrome") as BrowserId,
+        email: "", debuggable: false,
+      };
+    }
     throw new ConvoError(
-      "configuration-invalid",
-      `No profile matched '${input.profilePath}'.`,
+      "configuration-invalid", `No profile matched '${input.profilePath}'.`,
       "Run `convo setup --show`-style discovery, or pass a profile directory that exists.",
     );
   }
 
   if (profiles.length === 0) return null;
+  if (!isInteractive() && !input.select && profiles.length > 1) {
+    throw new ConvoError(
+      "selection-unavailable",
+      "Interactive profile selection is unavailable in non-interactive environments.",
+      "Pass --profile explicitly, or use a browser with a single profile.",
+    );
+  }
 
   const chosen = await select(
     "Which profile? (logins come from here)",
-    profiles.map((profile) => ({
-      id: profile.userDataDir,
-      label: `${profile.name}${profile.email ? ` <${profile.email}>` : ""}`,
-      hint: profile.debuggable ? "debuggable" : "needs a restart",
+    profiles.map((p) => ({
+      id: p.userDataDir, label: `${p.name}${p.email ? ` <${p.email}>` : ""}`,
+      hint: p.debuggable ? "debuggable" : "needs a restart",
     })),
   );
   if (!chosen) throw new ConvoError("selection-unavailable", "Profile selection cancelled.", "Re-run `convo setup` when ready.");

@@ -26,24 +26,32 @@ export class LockService {
   public async acquireLock(targetId: string, ttlMs: number = LockService.DEFAULT_TTL_MS): Promise<LockHandle> {
     HostEnv.ensureDirs();
     const lockPath = HostEnv.getTabLockPath(targetId);
-    if (fs.existsSync(lockPath)) {
-      this.evaluateExistingLock(targetId, lockPath);
-    }
-
     const payload: LockPayload = {
       pid: process.pid,
       targetId,
       acquiredAt: new Date().toISOString(),
       expiresAt: Date.now() + ttlMs,
     };
+    const content = JSON.stringify(payload, null, 2);
 
     try {
-      fs.writeFileSync(lockPath, JSON.stringify(payload, null, 2), { flag: "wx", mode: 0o600 });
+      fs.writeFileSync(lockPath, content, { flag: "wx", mode: 0o600 });
+      return { targetId, lockPath, pid: process.pid, acquiredAt: payload.acquiredAt };
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code !== "EEXIST") {
+        throw new LockAcquisitionError(targetId, -1, lockPath);
+      }
+    }
+
+    // Existing lock encountered; evaluate staleness
+    this.evaluateExistingLock(targetId, lockPath);
+
+    try {
+      fs.writeFileSync(lockPath, content, { flag: "wx", mode: 0o600 });
+      return { targetId, lockPath, pid: process.pid, acquiredAt: payload.acquiredAt };
     } catch {
       throw new LockAcquisitionError(targetId, -1, lockPath);
     }
-
-    return { targetId, lockPath, pid: process.pid, acquiredAt: payload.acquiredAt };
   }
 
   /**
@@ -51,7 +59,12 @@ export class LockService {
    */
   public async releaseLock(handle: LockHandle): Promise<void> {
     try {
-      if (fs.existsSync(handle.lockPath)) fs.unlinkSync(handle.lockPath);
+      if (!fs.existsSync(handle.lockPath)) return;
+      const raw = fs.readFileSync(handle.lockPath, "utf8");
+      const payload: LockPayload = JSON.parse(raw);
+      if (payload.pid === handle.pid && payload.acquiredAt === handle.acquiredAt) {
+        fs.unlinkSync(handle.lockPath);
+      }
     } catch {}
   }
 
@@ -101,7 +114,9 @@ export class LockService {
       const payload: LockPayload = JSON.parse(fs.readFileSync(handle.lockPath, "utf8"));
       if (payload.pid !== process.pid) return;
       const updated: LockPayload = { ...payload, expiresAt: Date.now() + extensionMs };
-      fs.writeFileSync(handle.lockPath, JSON.stringify(updated, null, 2), "utf8");
+      const tmpPath = `${handle.lockPath}.${process.pid}.tmp`;
+      fs.writeFileSync(tmpPath, JSON.stringify(updated, null, 2), { mode: 0o600 });
+      fs.renameSync(tmpPath, handle.lockPath);
     } catch {}
   }
 

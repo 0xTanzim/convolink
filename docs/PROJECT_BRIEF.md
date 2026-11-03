@@ -10,7 +10,7 @@
 
 ## 2. Problem Statement: The "Dual-Brain Amnesia" Gap
 
-Software engineers routinely conduct deep architectural explorations, debugging sessions, and trade-off analyses using authenticated web AI interfaces (ChatGPT Plus/Pro, DeepSeek R1, Google Gemini Advanced). These web sessions represent hours of refined context, extensive reasoning, and unmetered compute.
+Software engineers routinely conduct deep architectural explorations, debugging sessions, and trade-off analyses using authenticated web AI interfaces (ChatGPT Plus/Pro, DeepSeek, Google Gemini Advanced, Claude Pro). These web sessions represent hours of refined context, extensive reasoning, and unmetered compute.
 
 However, when an engineer transitions to their local terminal to execute changes, their autonomous coding agent operates with total amnesia. The developer is reduced to a manual clipboard—copying plans from the browser to the terminal and pasting compile errors back into the browser.
 
@@ -35,7 +35,7 @@ ConvoLink transforms authenticated browser tabs into an active, stateful intelli
 ### 3.2 Pillar 2: Intelligence Bridge
 4. **Direct Session Connection:** Connects via Chrome DevTools Protocol (CDP) or W3C WebDriver BiDi to the developer's live browser tabs without spawning new profiles or stealing window focus.
 5. **Multi-Model Comparison & Arbitration:** Broadcasts prompts simultaneously across ChatGPT, Claude, DeepSeek, and Gemini, benchmarks response latency and code volume, and synthesizes a unified consensus solution via a Technical Arbiter (`convo compare --arbitrate`).
-6. **Asymmetric Intelligence Delegation:** Allows cost-effective local agents to borrow upstream reasoning (DeepSeek R1, ChatGPT Think) and live web search grounding on demand.
+6. **Asymmetric Intelligence Delegation:** Allows cost-effective local agents to borrow upstream reasoning (DeepSeek v4.1 Flash, GPT-6 Asta, Claude Opus 5.5) and live web search grounding on demand.
 
 ### 3.3 Pillar 3: Capability Bridge
 7. **Automated Multi-File Artifact Extraction:** Automatically parses `// filepath:` directives and writes structured code files directly to the local filesystem with path-traversal protection.

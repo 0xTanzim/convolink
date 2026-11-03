@@ -8,32 +8,85 @@ interface DaemonReply<T> {
   readonly error?: string;
 }
 
+let fallbackOrchestrator: SessionOrchestrator | null = null;
+
+async function getFallbackOrchestrator(): Promise<SessionOrchestrator> {
+  if (!fallbackOrchestrator) {
+    const [{ loadResolution }, { createContainer }] = await Promise.all([
+      import("./config-context.js"),
+      import("../container.js"),
+    ]);
+    const resolution = await loadResolution();
+    fallbackOrchestrator = createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
+  }
+  return fallbackOrchestrator;
+}
+
+function isSocketDead(err: unknown): boolean {
+  if (!err) return false;
+  const msg = err instanceof Error ? err.message : String(err);
+  return (
+    msg.includes("ENOENT") ||
+    msg.includes("ECONNREFUSED") ||
+    msg.includes("EPIPE") ||
+    msg.includes("closed") ||
+    msg.includes("disconnected") ||
+    msg.includes("ended")
+  );
+}
+
+async function invokeInProcess(
+  command: Parameters<DaemonClient["sendRequest"]>[0],
+  payload?: Record<string, unknown>,
+): Promise<any> {
+  const orch = await getFallbackOrchestrator();
+  switch (command) {
+    case "list": return orch.listTabs();
+    case "ask": return orch.ask(payload as any);
+    case "compare": return orch.compare(payload as any);
+    case "doctor": return orch.doctor();
+    case "tab_new": return orch.createTab(payload?.target as string);
+    case "tab_close": return orch.closeTab(payload?.targetId as string);
+    case "tab_back": return orch.goBack(payload?.targetId as string);
+    case "tab_undo": return orch.undo(payload?.targetId as string);
+    case "thread_export": return orch.exportThread(payload?.threadId as string, payload?.format as any);
+    case "thread_resume": return orch.resumeThread(payload?.threadId as string);
+    case "ledger_search": return orch.searchLedger(payload?.query as string, payload?.limit as number);
+    case "thread_history": return [];
+    default: throw new Error(`Unknown daemon command: ${command}`);
+  }
+}
+
 /**
  * The daemon owns the extension bridge socket on port 9224. A second process
  * that tries to create its own browser adapter fails with "Is port 9224 in
  * use?", so every browser-bound call is forwarded to the daemon instead.
+ * If the daemon socket closes or is unreachable (e.g. user killed daemon),
+ * transparently fall back to an in-process orchestrator.
  */
-function forward(
+export function forward(
   client: DaemonClient,
   command: Parameters<DaemonClient["sendRequest"]>[0],
   payload?: Record<string, unknown>,
 ): () => Promise<any> {
   return async () => {
-    const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
-    if (!reply.ok) throw new Error(reply.error ?? `daemon command '${command}' failed`);
-    return reply.result;
+    try {
+      const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
+      if (!reply.ok) throw new Error(reply.error ?? `daemon command '${command}' failed`);
+      return reply.result;
+    } catch (error) {
+      if (isSocketDead(error)) {
+        return await invokeInProcess(command, payload);
+      }
+      throw error;
+    }
   };
 }
 
 export async function createMcpOrchestrator(): Promise<SessionOrchestrator> {
   const client = new DaemonClient();
   if (!(await client.isAlive())) {
-    const [{ loadResolution }, { createContainer }] = await Promise.all([
-      import("./config-context.js"),
-      import("../container.js"),
-    ]);
-    const resolution = await loadResolution();
-    return createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
+    return getFallbackOrchestrator();
   }
 
   const shim: Pick<

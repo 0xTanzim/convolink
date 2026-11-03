@@ -74,7 +74,7 @@ No file within `src/core/` may import any browser automation framework, WebSocke
 
 ### 3.2 Pillar 2: Intelligence Bridge Subsystems
 - **Multi-Model Comparison Engine (`src/core/services/comparison-engine.ts`):** Dispatches parallel queries across ChatGPT, Claude, DeepSeek, and Gemini with staggered 250ms offsets to prevent CDP frame congestion. Uses `Promise.allSettled` for isolated failure domains.
-- **Stage 2 Technical Arbiter (`src/core/services/comparison-coordinator.service.ts`):** Gathers candidate outputs and prompts an arbiter reasoning model (e.g. DeepSeek R1) to critique flaws and deliver a synthesized consensus solution (`convo compare --arbitrate`).
+- **Stage 2 Technical Arbiter (`src/core/services/comparison-coordinator.service.ts`):** Gathers candidate outputs and prompts an arbiter reasoning model (e.g. DeepSeek v4.1 Flash / Claude Opus 5.5) to critique flaws and deliver a synthesized consensus solution (`convo compare --arbitrate`).
 - **Asymmetric Delegation & Thinking Toggles:** Allows local agents to query frontier models via `convo ask` with `--think` and live web search grounding.
 
 ### 3.3 Pillar 3: Capability Bridge Subsystems

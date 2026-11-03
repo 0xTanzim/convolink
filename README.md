@@ -61,7 +61,7 @@ Streams architectural specifications, state invariants, data schemas, and design
 Allows local coding agents running smaller or cost-effective models to delegate complex algorithmic reasoning, tricky debugging, and architectural judgment to powerful frontier web models.
 
 ### 3. ⚡ The Capability Bridge
-Allows local agents to borrow upstream web capabilities—**extended thinking (DeepSeek R1, OpenAI o-series)**, **live web search grounding**, **deep research**, and **multi-model cross-validation**—using your existing authenticated web subscriptions with zero per-token API charges.
+Allows local agents to borrow upstream web capabilities—**extended thinking (DeepSeek v4.1 Flash, GPT-6 Asta, Claude Opus 5.5)**, **live web search grounding**, **deep research**, and **multi-model cross-validation**—using your existing authenticated web subscriptions with zero per-token API charges.
 
 ---
 
@@ -586,6 +586,11 @@ bun run build     # Compiles zero-dependency standalone dist bundles
 
 Visit our official documentation site for complete architectural guides, ADR-001 through ADR-017, and Linux setup:  
 👉 **[https://0xtanzim.github.io/convolink/](https://0xtanzim.github.io/convolink/)**
+
+### 🤖 Agent-Ready Documentation
+For LLMs, autonomous coding agents, and IDE context injection:
+- **Index (`/llms.txt`):** [https://0xtanzim.github.io/convolink/llms.txt](https://0xtanzim.github.io/convolink/llms.txt) (Curated markdown index and prompt context)
+- **Full Bundle (`/llms-full.txt`):** [https://0xtanzim.github.io/convolink/llms-full.txt](https://0xtanzim.github.io/convolink/llms-full.txt) (Single-file concatenated complete documentation)
 
 ---
 

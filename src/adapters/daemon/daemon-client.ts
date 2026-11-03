@@ -65,6 +65,22 @@ export class DaemonClient {
         }
       });
 
+      socket.on("end", () => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error("IPC connection closed prematurely by daemon"));
+        }
+      });
+
+      socket.on("close", (hadError) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          reject(new Error(`IPC connection closed (hadError=${hadError})`));
+        }
+      });
+
       socket.on("error", (err) => {
         if (!settled) {
           settled = true;

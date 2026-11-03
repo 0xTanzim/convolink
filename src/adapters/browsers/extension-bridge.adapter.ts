@@ -12,6 +12,7 @@ import { ClientRegistry, mapClientTabs, type ClientHealth, type ConnectedClient 
 import { isLoopbackAddress, isValidExtensionOrigin, validateHandshakeToken } from "./extension-bridge.security.js";
 import { formatCompoundTargetId, parseCompoundTargetId } from "../../core/ports/extension-protocol.js";
 import type { BridgeTokenService } from "../../core/services/bridge-token.service.js";
+import { translateExpression } from "./extension-bridge.translator.js";
 
 interface PendingRequest {
   readonly ws: ServerWebSocket<unknown>;
@@ -66,26 +67,39 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   public async start(): Promise<void> {
     if (this.server) return;
     const adapter = this;
-    this.server = Bun.serve({
-      port: this.port,
-      hostname: "127.0.0.1",
-      async fetch(req, server) {
-        const pathname = new URL(req.url).pathname;
-        if (req.method === "GET" && pathname === "/status") {
-          try { await adapter.listTabs(); } catch {}
-          return Response.json({ protocolVersion: 2, clients: adapter.registry.health() });
+    try {
+      this.server = Bun.serve({
+        port: this.port,
+        hostname: "127.0.0.1",
+        async fetch(req, server) {
+          const pathname = new URL(req.url).pathname;
+          if (req.method === "GET" && pathname === "/status") {
+            try { await adapter.listTabs(); } catch {}
+            return Response.json({ protocolVersion: 2, clients: adapter.registry.health() });
+          }
+          if (!isValidExtensionOrigin(req.headers.get("origin"))) return new Response("Forbidden: Origin", { status: 403 });
+          if (!isLoopbackAddress(server.requestIP(req)?.address)) return new Response("Forbidden: IP", { status: 403 });
+          if (server.upgrade(req, { data: undefined })) return undefined;
+          return new Response("ConvoLink Extension Bridge", { status: 200 });
+        },
+        websocket: {
+          open: () => {},
+          message: (ws, msg) => { adapter.handleIncomingMessage(ws, msg.toString()); },
+          close: (ws) => { adapter.handleDisconnect(ws); },
+        },
+      });
+    } catch (err: any) {
+      if (err?.code === "EADDRINUSE") {
+        const isHealthy = await fetch(`http://127.0.0.1:${this.port}/status`, {
+          signal: AbortSignal.timeout(500),
+        }).then((res) => res.ok).catch(() => false);
+        if (isHealthy) {
+          // Port is occupied by a live healthy bridge server; avoid crashing
+          return;
         }
-        if (!isValidExtensionOrigin(req.headers.get("origin"))) return new Response("Forbidden: Origin", { status: 403 });
-        if (!isLoopbackAddress(server.requestIP(req)?.address)) return new Response("Forbidden: IP", { status: 403 });
-        if (server.upgrade(req, { data: undefined })) return undefined;
-        return new Response("ConvoLink Extension Bridge", { status: 200 });
-      },
-      websocket: {
-        open: () => {},
-        message: (ws, msg) => { adapter.handleIncomingMessage(ws, msg.toString()); },
-        close: (ws) => { adapter.handleDisconnect(ws); },
-      },
-    });
+      }
+      throw err;
+    }
     this.sweeper ??= setInterval(() => this.evictStaleClients(), this.sweepIntervalMs);
   }
 
@@ -104,9 +118,58 @@ export class ExtensionBridgeAdapter implements BrowserPort {
 
   public async health(): Promise<TransportHealth> {
     const start = Date.now();
-    await this.start();
-    const clients = this.registry.health();
     const endpoint = `ws://127.0.0.1:${this.port}`;
+
+    if (!this.server) {
+      try {
+        const res = await fetch(`http://127.0.0.1:${this.port}/status`, {
+          signal: AbortSignal.timeout(300),
+        });
+        if (res.ok) {
+          const body = (await res.json()) as { clients?: ClientHealth[] };
+          const clients = body.clients || [];
+          const openTabs = clients.reduce((sum, c) => sum + (c.tabCount || (c as any).tabsCount || 0), 0);
+          if (clients.length === 0) {
+            return {
+              ok: false,
+              adapterId: this.id,
+              endpoint,
+              openTabsCount: 0,
+              latencyMs: Date.now() - start,
+              capabilities: this.capabilities,
+              error: `No ConvoLink Companion extension connected on ${endpoint}`,
+            };
+          }
+          const labels = clients
+            .map((client) => `${client.browserFamily} [${client.profileLabel}] v${client.extensionVersion}`)
+            .join(", ");
+          return {
+            ok: true,
+            adapterId: this.id,
+            endpoint: `${endpoint} (${labels})`,
+            openTabsCount: openTabs,
+            latencyMs: Date.now() - start,
+            capabilities: this.capabilities,
+          };
+        }
+      } catch {}
+    }
+
+    try {
+      await this.start();
+    } catch (error) {
+      return {
+        ok: false,
+        adapterId: this.id,
+        endpoint,
+        openTabsCount: 0,
+        latencyMs: Date.now() - start,
+        capabilities: this.capabilities,
+        error: (error as Error).message,
+      };
+    }
+
+    const clients = this.registry.health();
     if (clients.length === 0) {
       return {
         ok: false,
@@ -189,7 +252,7 @@ export class ExtensionBridgeAdapter implements BrowserPort {
   }
 
   public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
-    const operation = this.translateExpression(handle.targetId, expression);
+    const operation = translateExpression(handle.targetId, expression);
     const result = await this.sendRequest<unknown>(operation.type, operation.payload, handle.targetId);
     if (expression.includes("/* authCheck */")) return Boolean(!result) as T;
     return result as T;
@@ -350,92 +413,6 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     return tab ? platformForUrl(tab.url) : null;
   }
 
-  private translateExpression(targetId: string, expression: string): { type: string; payload: Record<string, unknown> } {
-    if (expression === "location.href") return { type: "GET_URL", payload: {} };
-    if (expression.includes("/* getLastText */")) {
-      return { type: "GET_LAST_TEXT", payload: { selector: firstQuoted(expression) ?? "" } };
-    }
-    if (expression.includes("/* getText */")) return { type: "GET_TEXT", payload: { selector: firstQuoted(expression) ?? "" } };
-    if (expression.includes("location.reload")) return { type: "RELOAD", payload: {} };
-    if (expression.includes("findContinuationTrigger")) return { type: "PROBE_CONTINUATION", payload: {} };
-    if (expression.includes("findDownloadLinks")) return { type: "PROBE_DOWNLOADS", payload: {} };
-    if (expression.includes("inspectCanvas")) return { type: "INSPECT_CANVAS", payload: {} };
-    if (expression.includes("startNewChat")) return { type: "START_NEW_CHAT", payload: { baseUrl: firstQuoted(expression) ?? "" } };
-    if (expression.includes("send.click()")) return { type: "CLICK", payload: { selector: lastQuoted(expression) ?? "" } };
-    if (expression.includes("c.focus()")) return { type: "FOCUS", payload: { selector: lastQuoted(expression) ?? "" } };
-    if (expression.includes("querySelectorAll(\"*\")") || expression.includes("querySelectorAll('*')")) {
-      return { type: "PROBE_QUIET", payload: {} };
-    }
-    if (expression.includes("/* readThread */")) return { type: "READ_THREAD", payload: { lastN: 20 } };
-    if (expression.includes("/* resolveSelectors */")) return { type: "PROBE_SELECTORS", payload: {} };
-    if (expression.includes("/* awaitCompletion */") || expression.includes("assistantText")) {
-      return { type: "PROBE_STATUS", payload: { beforeTurnCount: 0 } };
-    }
-    if (expression.includes("document.body.innerText")) {
-      return { type: "GET_BODY_INCLUDES", payload: { text: allQuoted(expression).filter(Boolean).pop() ?? "" } };
-    }
-    if (expression.includes("/* triggerContinuation */")) return { type: "TRIGGER_CONTINUATION", payload: {} };
-    if (expression.includes("/* findContinuationTrigger */")) return { type: "PROBE_CONTINUATION", payload: {} };
-
-    // The driver reports a login wall as `login && !composer`; the composer's
-    // absence is the part the extension can observe, and it is inverted back
-    // to the driver's convention in evaluate().
-    if (expression.includes("/* authCheck */")) {
-      // Quote parsing cannot be used here: the composer selector itself
-      // contains quoted literals, so the contract is the only safe source.
-      const composer = selectorContract(expression)?.composer;
-      if (!composer) {
-        throw new ConvoError(
-          "extension-unsupported",
-          "The auth check probe carries no composer selector",
-          "Add the composer selector to the probe or use a transport that evaluates it directly.",
-        );
-      }
-      return { type: "PROBE_MOUNTED", payload: { composer } };
-    }
-
-    const toggles = toggleContract(expression);
-    if (toggles) return { type: "APPLY_TOGGLES", payload: { ...toggles } };
-
-    const contract = selectorContract(expression);
-    const requireContract = (label: string): SelectorContract => {
-      if (!contract || !contract.composer) {
-        throw new ConvoError(
-          "extension-unsupported",
-          `${label} probe is missing its convolink:selectors contract`,
-          "Rebuild the host or use a transport that evaluates the probe directly.",
-        );
-      }
-      return contract;
-    };
-
-    if (expression.includes("c.value || c.innerText")) {
-      const selected = requireContract("Composer-text");
-      return { type: "PROBE_COMPOSER_TEXT", payload: { selector: selected.composer } };
-    }
-    if (expression.includes("aria-disabled")) {
-      const selected = requireContract("Ready");
-      if (!selected.send) {
-        throw new ConvoError(
-          "extension-unsupported",
-          "Ready probe is missing its send selector contract",
-          "Rebuild the host or use a transport that evaluates the probe directly.",
-        );
-      }
-      return { type: "PROBE_READY", payload: { composer: selected.composer, send: selected.send } };
-    }
-    if (expression.includes("document.readyState") && expression.includes("querySelector")) {
-      const selected = requireContract("Mounted");
-      return { type: "PROBE_MOUNTED", payload: { composer: selected.composer } };
-    }
-    if (process.env.CONVOLINK_DEBUG === "1") process.stderr.write(`[unmapped] ${expression.slice(0, 400)}\n`);
-    throw new ConvoError(
-      "extension-unsupported",
-      `The extension transport cannot evaluate arbitrary JavaScript (MV3 CSP): ${expression.slice(0, 80)}`,
-      "Use a CDP/Firefox transport for this platform, or add an operation for this probe.",
-    );
-  }
-
   private handleIncomingMessage(ws: ServerWebSocket<unknown>, raw: string): void {
     try {
       const message = JSON.parse(raw) as Record<string, unknown>;
@@ -532,62 +509,4 @@ function platformForUrl(url: string): string | null {
   if (url.includes("chat.deepseek.com")) return "deepseek";
   if (url.includes("gemini.google.com")) return "gemini";
   return null;
-}
-
-function allQuoted(expression: string): string[] {
-  const matches = expression.match(/"(?:[^"\\]|\\.)*"/g) ?? [];
-  return matches.flatMap((value) => {
-    try {
-      const parsed = JSON.parse(value);
-      return typeof parsed === "string" ? [parsed] : [];
-    } catch {
-      return [];
-    }
-  });
-}
-
-interface SelectorContract {
-  readonly composer?: string;
-  readonly send?: string;
-}
-
-interface ToggleContract extends Record<string, unknown> {
-  readonly selector: string;
-  readonly selectedClass: string;
-  readonly toggles: Record<string, { label: string; selected: boolean }>;
-}
-
-function toggleContract(expression: string): ToggleContract | null {
-  const match = expression.match(/\/\*\s*convolink:toggles\s+(\{[\s\S]*?\})\s*\*\//);
-  if (!match || !match[1]) return null;
-  try {
-    const parsed = JSON.parse(match[1]) as ToggleContract;
-    return parsed.selector && parsed.selectedClass && parsed.toggles ? parsed : null;
-  } catch {
-    return null;
-  }
-}
-
-function selectorContract(expression: string): SelectorContract | null {
-  const match = expression.match(/\/\*\s*convolink:selectors\s+(\{[\s\S]*?\})\s*\*\//);
-  if (!match || !match[1]) return null;
-  try {
-    return JSON.parse(match[1]) as SelectorContract;
-  } catch {
-    return null;
-  }
-}
-
-function firstQuoted(expression: string): string | null {
-  return allQuoted(expression)[0] ?? null;
-}
-
-/**
- * Selectors are appended after any literal in the expression (for example
- * `document.readyState === "complete"`), so the last quoted string is the
- * selector. Taking the first one silently sent "complete" as a CSS selector.
- */
-function lastQuoted(expression: string, offsetFromEnd = 0): string | null {
-  const quoted = allQuoted(expression);
-  return quoted[quoted.length - 1 - offsetFromEnd] ?? null;
 }

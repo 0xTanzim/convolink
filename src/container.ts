@@ -16,6 +16,8 @@ import { StateJournalService } from "./core/services/journal.service.js";
 import { TabManagerService } from "./core/services/tab-manager.service.js";
 import { ComparisonCoordinator } from "./core/services/comparison-coordinator.service.js";
 import { SqliteLedgerAdapter } from "./adapters/storage/sqlite-ledger.adapter.js";
+import { fileTabRegistry } from "./adapters/browsers/tab-registry.js";
+import { defaultTabReadiness } from "./adapters/platforms/tab-readiness.adapter.js";
 import { SessionOrchestrator } from "./core/services/orchestrator.js";
 import { BridgeTokenService } from "./core/services/bridge-token.service.js";
 import { normalizeBrowserName } from "./core/env/browser-name.js";
@@ -87,7 +89,10 @@ export function createContainer(options?: ContainerOptions): AppContainer {
   const journalService = new StateJournalService();
   const threadStore = options?.threadStore ?? new SqliteLedgerAdapter();
 
-  const tabManager = new TabManagerService(browser, drivers, lockService, journalService);
+  const tabManager = new TabManagerService(browser, drivers, lockService, journalService, {
+    tabRegistry: fileTabRegistry,
+    tabReadiness: defaultTabReadiness,
+  });
   const comparisonCoordinator = new ComparisonCoordinator(undefined, tabManager, fileSink);
 
   const orchestrator = new SessionOrchestrator({

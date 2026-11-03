@@ -1,74 +1,150 @@
+/**
+ * MCP tool definitions for ConvoLink.
+ *
+ * Each definition surfaces to the agent via `tools/list`. The description,
+ * parameter comments, and outputSchema are the primary mechanism by which the
+ * agent learns when and how to call each tool.
+ *
+ * Design constraints (November 2026 research):
+ *   - arXiv 2602.14878: compact, high-signal descriptions improve task success
+ *     +5.85pp vs free-form prose. Every description must state: purpose, timing
+ *     contract, when-to-call, and what NOT to do.
+ *   - MCP spec 2026-07-28: `title` (human display name) and `annotations`
+ *     (readOnlyHint, destructiveHint, idempotentHint) are required for
+ *     spec-compliant servers.
+ *   - dbggr.dev Oct 2026: tool selection accuracy falls from 97% at 3 tools to
+ *     ~50% at 18. Every tool description must actively prevent misuse.
+ */
+
+/** Tool behaviour hints — MCP spec 2025-03-26 / 2026-07-28. */
+export interface McpToolAnnotations {
+  /** Tool does not modify state. Default false (assume mutating). */
+  readonly readOnlyHint?: boolean;
+  /** Modification is destructive or irreversible. Default true (conservative). */
+  readonly destructiveHint?: boolean;
+  /** Safe to call again with identical arguments. Default false. */
+  readonly idempotentHint?: boolean;
+  /** Tool interacts with external / open-world entities. Default true. */
+  readonly openWorldHint?: boolean;
+}
+
 export interface McpToolDefinition {
   readonly name: string;
+  /** Human-readable display name shown in agent UIs (MCP 2026-07-28). */
+  readonly title: string;
   readonly description: string;
+  readonly annotations?: McpToolAnnotations;
   readonly outputSchema?: Record<string, unknown>;
   readonly inputSchema: {
     readonly type: "object";
     readonly properties: Record<string, unknown>;
     readonly required?: readonly string[];
+    readonly additionalProperties?: boolean;
   };
 }
 
+/** Shared workspaceRoot parameter added to all stateful tools. */
+const WORKSPACE_ROOT_PARAM = {
+  type: "string",
+  description:
+    "Absolute path to the project root. Required when the MCP server was started from $HOME or a directory different from the project. Set CONVOLINK_WORKSPACE env var as a persistent alternative.",
+} as const;
+
+/** Shared browser + profile params used across multiple tools. */
+const BROWSER_PARAM = {
+  type: "string",
+  enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"],
+  description: "Override browser selection. Usually not needed when .convo/config.json is set.",
+} as const;
+
+const PROFILE_PARAM = {
+  type: "string",
+  description: "Browser profile name, email, or index. Usually not needed when .convo/config.json is set.",
+} as const;
+
 export const MCP_TOOLS: readonly McpToolDefinition[] = [
+  // ─────────────────────────────────────────────────────────────────────────
+  // Core interaction tools
+  // ─────────────────────────────────────────────────────────────────────────
   {
     name: "convo_ask",
-    description: "Submit a prompt to an AI browser tab (ChatGPT, DeepSeek, Gemini, Claude) with deep reasoning and web grounding. Automatically extracts and persists generated code blocks to local workspace files.",
+    title: "Ask a Browser AI",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: [
+      "BLOCKING (10–180 s) — Send one prompt to a live browser AI tab and wait for the complete response.",
+      "Do NOT call any other tool until this returns.",
+      "",
+      "SESSION CONTINUITY: Pass `targetId` from the previous structured.tabId to continue the same tab.",
+      "If you have a `threadUrl`, pass it directly — no tab setup needed (skips convo_tab + convo_list_tabs).",
+      "Set `openTab:true` only when convo_list_tabs shows no managed tab for the target platform.",
+      "",
+      "After each call, pin structured.tabId and pass it as `targetId` on all subsequent calls to this session.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        prompt: { type: "string", description: "Prompt text to send to the browser AI" },
-        platform: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Target AI platform" },
-        targetId: { type: "string", description: "Optional targetId of a specific open browser tab" },
-        writeFiles: { type: "boolean", description: "Whether to extract and persist code blocks to local workspace" },
-        outDir: { type: "string", description: "Destination directory for extracted code blocks" },
-        newChat: { type: "boolean", description: "Whether to reset conversation to a fresh chat first" },
-        openTab: { type: "boolean", description: "Whether to spawn a new background tab" },
-        think: { type: "boolean", description: "Toggle deep thinking/reasoning mode (e.g. DeepSeek Reasoner, Claude Thinking, ChatGPT o-series)" },
-        search: { type: "boolean", description: "Toggle live web search/DeepSearch grounding" },
-        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Preferred browser to use or launch" },
-        profile: { type: "string", description: "Optional browser profile name, email, or index to target" },
-        threadUrl: { type: "string", format: "uri", description: "Conversation URL to continue (https://chatgpt.com/c/…, https://chat.deepseek.com/a/chat/s/…, https://claude.ai/chat/…)" },
+        prompt:        { type: "string",  description: "Prompt text to send. Required." },
+        platform:      { type: "string",  enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Target AI platform. Omit to auto-attach to the first ready managed tab." },
+        targetId:      { type: "string",  description: "CDP targetId from a previous convo_ask structured.tabId. Pass this to continue the same conversation without tab-discovery overhead." },
+        threadUrl:     { type: "string",  format: "uri", description: "Full conversation URL to resume (e.g. https://chatgpt.com/c/abc123). Attaches directly — skips convo_tab and convo_list_tabs entirely." },
+        think:         { type: "boolean", description: "Enable deep reasoning mode (DeepSeek R1, Claude Extended Thinking, ChatGPT o-series). Increases wait to 30–180 s." },
+        search:        { type: "boolean", description: "Enable live web search grounding (ChatGPT Search, DeepSeek DeepSearch)." },
+        writeFiles:    { type: "boolean", description: "Extract code blocks to local workspace files (reads '// filepath:' directives from the response)." },
+        outDir:        { type: "string",  description: "Output directory for extracted files. Default: ./artifacts" },
+        openTab:       { type: "boolean", description: "Spawn a new background tab before sending. Use only when convo_list_tabs shows no managed tab for this platform." },
+        newChat:       { type: "boolean", description: "Reset to a fresh conversation before sending. Destroys current thread context — confirm intent before using." },
+        browser:       BROWSER_PARAM,
+        profile:       PROFILE_PARAM,
+        workspaceRoot: WORKSPACE_ROOT_PARAM,
       },
       required: ["prompt"],
     },
     outputSchema: {
       type: "object",
       properties: {
-        platform: { type: "string" },
-        tabId: { type: "string" },
-        threadId: { type: ["string", "null"] },
-        threadUrl: { type: ["string", "null"] },
-        elapsedMs: { type: "number" },
-        continued: { type: "boolean" },
-        text: { type: "string" },
+        tabId:     { type: "string",            description: "PIN THIS — pass as targetId on every subsequent convo_ask call to continue this session without tab rediscovery." },
+        platform:  { type: "string",            description: "Platform that responded." },
+        threadUrl: { type: ["string", "null"],  description: "Resumable conversation URL for cross-session continuity." },
+        threadId:  { type: ["string", "null"],  description: "Internal thread ID for convo_search / convo_thread." },
+        elapsedMs: { type: "number",            description: "Wall-clock time the model took to respond." },
+        continued: { type: "boolean",           description: "True if this was a continuation of an existing conversation." },
+        text:      { type: "string",            description: "Full markdown response from the model." },
       },
       required: ["platform", "tabId", "elapsedMs", "text"],
     },
   },
+
   {
     name: "convo_compare",
-    description: "Benchmark a task across multiple frontier models in parallel and optionally synthesize a unified consensus solution via Technical Arbiter.",
+    title: "Compare Across Frontier Models",
+    annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true },
+    description: [
+      "BLOCKING (60–300 s) — Fan a prompt out to multiple AI platforms in parallel, then optionally synthesize consensus via Technical Arbiter.",
+      "Do NOT call any other tool until this returns.",
+      "To continue existing conversations: set `continue:true` (reuses open managed tabs) or pass `threads:{}` with per-platform URLs.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        prompt: { type: "string", description: "The task or prompt to compare across models" },
-        platforms: { type: "array", items: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"] }, description: "Models to compare" },
-        arbitrate: { type: "boolean", description: "Execute stage 2 consensus synthesis via Technical Arbiter" },
-        arbiter: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Designate arbiter platform" },
-        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Preferred browser to use or launch" },
-        profile: { type: "string", description: "Optional browser profile name, email, or index to target" },
+        prompt:        { type: "string", description: "The task or question to compare across models. Required." },
+        platforms:     { type: "array", items: { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"] }, description: "Models to compare. Default: [chatgpt, deepseek, gemini]." },
+        arbitrate:     { type: "boolean", description: "Execute Stage 2 consensus synthesis via Technical Arbiter after all platforms respond." },
+        arbiter:       { type: "string", enum: ["chatgpt", "deepseek", "gemini", "claude"], description: "Designate the arbiter platform for consensus synthesis." },
+        browser:       BROWSER_PARAM,
+        profile:       PROFILE_PARAM,
         threads: {
           type: "object",
-          description: "Per-platform conversation URLs to continue. Omitted platforms start a fresh chat.",
+          description: "Per-platform conversation URLs to continue. Omit platforms that should start fresh.",
           properties: {
-            chatgpt: { type: "string", format: "uri" },
-            claude: { type: "string", format: "uri" },
+            chatgpt:  { type: "string", format: "uri" },
+            claude:   { type: "string", format: "uri" },
             deepseek: { type: "string", format: "uri" },
-            gemini: { type: "string", format: "uri" },
+            gemini:   { type: "string", format: "uri" },
           },
           additionalProperties: false,
         },
-        continue: { type: "boolean", description: "Reuse the currently open conversations instead of starting fresh (default: false)" },
+        continue:      { type: "boolean", description: "Reuse currently open managed tabs per platform instead of starting fresh chats." },
+        workspaceRoot: WORKSPACE_ROOT_PARAM,
       },
       required: ["prompt"],
     },
@@ -76,16 +152,16 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       type: "object",
       properties: {
         comparisonId: { type: "string" },
-        durationMs: { type: "number" },
+        durationMs:   { type: "number" },
         platforms: {
           type: "array",
           items: {
             type: "object",
             properties: {
-              platform: { type: "string" },
-              status: { type: "string", enum: ["success", "failed", "timeout"] },
+              platform:  { type: "string" },
+              status:    { type: "string", enum: ["success", "failed", "timeout"] },
               elapsedMs: { type: "number" },
-              threadId: { type: ["string", "null"] },
+              threadId:  { type: ["string", "null"] },
             },
             required: ["platform", "status", "elapsedMs"],
           },
@@ -94,20 +170,31 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       required: ["comparisonId", "platforms"],
     },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Status / configuration tools
+  // ─────────────────────────────────────────────────────────────────────────
   {
     name: "convo_status",
-    description: "Report the browser, profile, transport, and endpoint ConvoLink will use for this project, with the source of each value. Use this before other browser tools to avoid guessing.",
-    inputSchema: { type: "object", properties: {} },
+    title: "Read Active Configuration",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    description:
+      "Returns the resolved transport, browser, profile, and endpoint for this project, showing the source of each value (project config, user config, or environment). " +
+      "Call this to read .convo/config.json — never read the file directly.",
+    inputSchema: {
+      type: "object",
+      properties: { workspaceRoot: WORKSPACE_ROOT_PARAM },
+    },
     outputSchema: {
       type: "object",
       properties: {
-        ok: { type: "boolean" },
+        ok:    { type: "boolean" },
         setup: {
           type: "object",
           properties: {
-            browserId: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"] },
-            transport: { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"] },
-            endpoint: { type: "string" },
+            browserId:   { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"] },
+            transport:   { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"] },
+            endpoint:    { type: "string" },
             profilePath: { type: "string" },
           },
           required: ["browserId", "transport", "endpoint"],
@@ -116,42 +203,87 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       required: ["ok"],
     },
   },
+
   {
     name: "convo_setup",
-    description: "Set the browser and profile for this project. Call it with NO arguments to get the profile choice: when the client supports MCP elicitation the user is asked in a native modal and .convo/config.json is written for you; otherwise the same choices come back as requiresUserSelection. Pass browser (and optionally profile) to set it explicitly. The combination is verified before anything is written.",
+    title: "Configure Browser & Profile",
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    description: [
+      "Persist browser and profile for this project workspace (writes .convo/config.json).",
+      "With no arguments: prompts the user (native modal if elicitation is supported) or returns profile options as text.",
+      "With browser + profile arguments: saves config immediately without prompting.",
+      "Never edit .convo/config.json directly — use this tool or convo_profile.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Browser to drive" },
-        profile: { type: "string", description: "Profile directory path or profile id" },
-        transport: { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"] },
-        verifyTab: { type: "boolean", description: "Also verify a platform page in a temporary tab" },
+        browser:       { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Browser to drive for this project." },
+        profile:       { type: "string", description: "Profile directory path, email, or profile id to bind." },
+        transport:     { type: "string", enum: ["raw-cdp", "agent-browser", "firefox-bidi", "extension-bridge"], description: "Transport override. Default: extension-bridge." },
+        verifyTab:     { type: "boolean", description: "Also verify a platform page in a temporary tab after saving." },
+        workspaceRoot: WORKSPACE_ROOT_PARAM,
       },
     },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Onboarding / health
+  // ─────────────────────────────────────────────────────────────────────────
   {
     name: "convo_onboard",
-    description: "One call that reports what is ready for this project (daemon, extension pairing, profile, transport) and the exact next step. Call this before any browser work, and again after acting on nextAction. Exit-code equivalents: nextAction.kind=command means the agent can fix it, kind=user means a human must act.",
+    title: "Onboard — Check Session Readiness",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    description: [
+      "CALL THIS FIRST on any new session before any browser work.",
+      "Returns ok:true when ready, or nextAction with the single step needed.",
+      "nextAction.kind: 'command' (you run it), 'user' (human must act — stop and show instruction), 'tool' (call that MCP tool).",
+      "Repeat after each action until ok:true. Then do NOT call this again mid-session unless transport-down error occurs.",
+    ].join("\n"),
+    inputSchema: {
+      type: "object",
+      properties: { workspaceRoot: WORKSPACE_ROOT_PARAM },
+      additionalProperties: false,
+    },
+  },
+
+  {
+    name: "convo_doctor",
+    title: "Diagnose Connection Health",
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    description: [
+      "Inspect connection health: remote debugging ports (Chrome :9222, Firefox :9223, Extension :9224), open AI tabs, selector readiness, and active profiles.",
+      "Always call with fix:false (default) first to diagnose. Read the report before deciding any action.",
+      "WARNING — fix:true: DESTRUCTIVE. Terminates live session locks and kills active browser connections.",
+      "Only call fix:true when the user explicitly asks to reset or fix the connection.",
+    ].join("\n"),
+    inputSchema: {
+      type: "object",
+      properties: {
+        fix:           { type: "boolean", description: "DESTRUCTIVE when true — terminates live session locks and kills browser processes. Default false. Only use on explicit user instruction to reset." },
+        browser:       { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Target browser to diagnose. Omit to check all." },
+        workspaceRoot: WORKSPACE_ROOT_PARAM,
+      },
+    },
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Tab management
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    name: "convo_list_tabs",
+    title: "List Open AI Tabs",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    description: [
+      "Discover open browser tabs managed by ConvoLink.",
+      "WHEN TO CALL: Only when you have lost the targetId from a previous convo_ask response.",
+      "If you already have a targetId from this session, pass it directly to convo_ask — skip this tool.",
+      "Each tab includes: targetId, platform, url, threadId, managed flag.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {},
+      additionalProperties: false,
     },
-  },
-  {
-    name: "convo_doctor",
-    description: "Check ConvoLink health, remote debugging ports (Chrome :9222, Firefox :9223, Extension :9224), open AI tabs, selector readiness, and active browser profiles. Pass fix: true to automatically purge ghost processes and stale mutex locks.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        fix: { type: "boolean", description: "When true, automatically terminates orphan ghost browser processes and clears stale lockfiles to self-heal. Default: false" },
-        browser: { type: "string", enum: ["chrome", "brave", "edge", "chromium", "firefox", "zen"], description: "Optional target browser to diagnose" },
-      },
-    },
-  },
-  {
-    name: "convo_list_tabs",
-    description: "Inspect all open browser tabs. Returns targetId, platform, title, current URL, threadId, and whether ConvoLink owns the tab. Always call this first before managing tabs.",
-    inputSchema: { type: "object", properties: {} },
     outputSchema: {
       type: "object",
       properties: {
@@ -162,9 +294,9 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
             properties: {
               targetId: { type: "string" },
               platform: { type: ["string", "null"] },
-              url: { type: "string" },
+              url:      { type: "string" },
               threadId: { type: ["string", "null"] },
-              managed: { type: "boolean" },
+              managed:  { type: "boolean" },
             },
             required: ["targetId", "url", "managed"],
           },
@@ -173,53 +305,86 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
       required: ["tabs"],
     },
   },
+
   {
     name: "convo_tab",
-    description: "Manage browser tabs: spawn a new background AI tab ('new'), close an idle tab ('close'), navigate back ('back'), or rollback accidental chat resets ('undo').",
+    title: "Tab Lifecycle Management",
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    description: [
+      "Manage browser tab lifecycle. Actions:",
+      "  'new'   — Spawn a background AI tab. Use only when convo_list_tabs shows no managed tab for the platform.",
+      "  'close' — Close a tab ConvoLink opened. Errors with not-owned if the tab was not opened by ConvoLink.",
+      "  'back'  — Navigate the active tab back in browser history.",
+      "  'undo'  — Restore the previous conversation URL if an accidental reset occurred.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["new", "close", "back", "undo"], description: "Tab action to perform" },
-        target: { type: "string", description: "Platform name ('deepseek' | 'chatgpt' | 'gemini' | 'claude') or full URL for action 'new'" },
-        targetId: { type: "string", description: "Target ID of the tab for actions 'close', 'back', or 'undo'" },
+        action:   { type: "string", enum: ["new", "close", "back", "undo"], description: "Tab action to perform. Required." },
+        target:   { type: "string", description: "Platform ('deepseek' | 'chatgpt' | 'gemini' | 'claude') or full URL — for action 'new' only." },
+        targetId: { type: "string", description: "CDP targetId of the tab — for actions 'close', 'back', or 'undo'." },
       },
       required: ["action"],
     },
   },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // History / search / thread management
+  // ─────────────────────────────────────────────────────────────────────────
   {
     name: "convo_search",
-    description: "Execute full-text FTS5 search across all historical conversation turns and extracted code snippets in the local SQLite ledger.",
+    title: "Search Conversation History",
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true },
+    description:
+      "Full-text FTS5 search across all historical conversation turns, architectural decisions, and extracted code snippets in the local SQLite ledger. " +
+      "Use to find a past threadId before calling convo_thread resume, or to retrieve prior architectural context.",
     inputSchema: {
       type: "object",
       properties: {
-        query: { type: "string", description: "Search query or keywords" },
-        limit: { type: "number", description: "Maximum number of results (default: 10)" },
+        query: { type: "string", description: "Search query or keywords." },
+        limit: { type: "number", description: "Maximum results to return. Default: 10." },
       },
       required: ["query"],
     },
   },
+
   {
     name: "convo_thread",
-    description: "Manage conversation threads: export thread history as Markdown or JSON ('export'), reopen a saved thread from SQLite into an active browser tab ('resume'), or inspect session checkpoints ('history').",
+    title: "Thread Export / Resume / History",
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    description: [
+      "Manage saved conversation threads. Actions:",
+      "  'export'  — Export full thread as Markdown or JSON. Requires threadId (find via convo_search).",
+      "  'resume'  — Reopen a saved thread in an active browser tab. Returns a new targetId for further convo_ask calls.",
+      "  'history' — List session checkpoints for a tab. Requires targetId.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["export", "resume", "history"], description: "Thread action to perform" },
-        threadId: { type: "string", description: "Thread ID for 'export' or 'resume'" },
-        targetId: { type: "string", description: "Tab targetId for 'history'" },
-        format: { type: "string", enum: ["markdown", "json"], description: "Export format for action 'export' (default: markdown)" },
+        action:   { type: "string", enum: ["export", "resume", "history"], description: "Thread action to perform. Required." },
+        threadId: { type: "string", description: "Thread ID for 'export' or 'resume'. Find via convo_search." },
+        targetId: { type: "string", description: "Tab targetId for 'history' action." },
+        format:   { type: "string", enum: ["markdown", "json"], description: "Export format for action 'export'. Default: markdown." },
       },
       required: ["action"],
     },
   },
+
   {
     name: "convo_profile",
-    description: "Inspect and manage host browser profiles (Google Chrome, Edge, Brave): discover profiles and account emails ('list'), or bind the active workspace to a specific profile ('select').",
+    title: "Browser Profile Management",
+    annotations: { readOnlyHint: false, destructiveHint: false },
+    description: [
+      "List or bind browser profiles (Chrome, Edge, Brave) for this project.",
+      "  'list'   — Discover profiles and their account emails.",
+      "  'select' — Bind this workspace to a profile (writes .convo/config.json). Pass index, email, or name as target.",
+      "In most sessions, call convo_setup instead — it handles profile selection with user prompting built in.",
+    ].join("\n"),
     inputSchema: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["list", "select"], description: "Profile action (default: 'list')" },
-        target: { type: "string", description: "Profile index (e.g. '1'), account email, or name for action 'select'" },
+        action: { type: "string", enum: ["list", "select"], description: "Profile action. Default: 'list'." },
+        target: { type: "string", description: "Profile index (e.g. '1'), account email, or display name — for action 'select'." },
       },
     },
   },

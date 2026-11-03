@@ -1,37 +1,53 @@
 import { BrowserDiscoveryService } from "../adapters/browsers/browser-discovery.js";
 import { BrowserLauncherService } from "../adapters/browsers/browser-launcher.js";
 import { inspectFirefoxProfile } from "../adapters/browsers/firefox-profile.js";
+import { loadResolution } from "./config-context.js";
 
 const DEFAULT_BIDI_PORT = 9223;
 const KILL_WAIT_MS = 250;
 const KILL_WAIT_TRIES = 40;
 
 /**
- * Firefox exposes WebDriver BiDi only when it is started with a debug port, and
- * a profile can be held by one process. So ConvoLink either starts Firefox on
- * the real profile, or refuses — it never opens a second, empty instance.
+ * Gecko browsers (Firefox, Zen) expose WebDriver BiDi only when started with
+ * a debug port, and a profile can be held by one process. So ConvoLink either
+ * starts the browser on the real profile, or refuses — it never opens a second,
+ * empty instance.
  */
 export async function handleFirefoxConnect(args: string[] = []): Promise<number> {
-  if (!args.includes("--firefox")) {
-    console.error("Usage: convo connect --firefox [--restart] [--port=9223]");
-    console.error("  --restart  close the already-open Firefox and reopen the same profile with BiDi");
-    return 1;
+  const isZenFlag = args.includes("--zen");
+  const isFirefoxFlag = args.includes("--firefox");
+
+  let targetBrowser: "firefox" | "zen" = isZenFlag ? "zen" : "firefox";
+
+  if (!isZenFlag && !isFirefoxFlag) {
+    const res = await loadResolution();
+    if (res.ok && res.value.browserId === "zen") {
+      targetBrowser = "zen";
+    } else if (res.ok && res.value.browserId === "firefox") {
+      targetBrowser = "firefox";
+    } else {
+      console.error("Usage: convo connect [--zen|--firefox] [--restart] [--port=9223]");
+      console.error("  --restart  close the already-open browser and reopen the same profile with BiDi");
+      return 1;
+    }
   }
+
+  const browserLabel = targetBrowser === "zen" ? "Zen Browser" : "Firefox";
   const restart = args.includes("--restart");
   const portArg = args.find((a) => a.startsWith("--port="))?.split("=")[1];
   const port = portArg ? Number(portArg) : DEFAULT_BIDI_PORT;
 
-  const profiles = await new BrowserDiscoveryService().getProfilesForBrowser("firefox");
+  const profiles = await new BrowserDiscoveryService().getProfilesForBrowser(targetBrowser);
   const profile = profiles.find((p) => p.email) ?? profiles[0];
   if (!profile) {
-    console.error("❌ No Firefox profile found on this machine.");
+    console.error(`❌ No ${browserLabel} profile found on this machine.`);
     return 1;
   }
 
   const lock = inspectFirefoxProfile(profile.userDataDir);
   if (lock.locked && !lock.debugging && !restart) {
-    console.error(`❌ Firefox is already open (pid ${lock.pid}) without remote debugging.`);
-    console.error("   Firefox only enables BiDi in the process that starts it, and one profile can only be held once.");
+    console.error(`❌ ${browserLabel} is already open (pid ${lock.pid}) without remote debugging.`);
+    console.error(`   ${browserLabel} only enables BiDi in the process that starts it, and one profile can only be held once.`);
     console.error("   Re-run with --restart: it closes that window and reopens the same profile — your logins stay.");
     return 1;
   }
@@ -50,18 +66,19 @@ export async function handleFirefoxConnect(args: string[] = []): Promise<number>
 
   const started = await new BrowserLauncherService().ensureBrowserRunning({
     profilePath: profile.userDataDir,
-    browser: "firefox",
+    browser: targetBrowser,
     port,
     timeoutMs: 25_000,
   });
 
   if (!started) {
-    console.error("❌ Firefox did not provide a debugging port on this profile.");
-    console.error("   Close any other Firefox window, then retry.");
+    console.error(`❌ ${browserLabel} did not provide a debugging port on this profile.`);
+    console.error(`   Close any other ${browserLabel} window, then retry.`);
     return 1;
   }
 
-  console.log(`\n🦊 Firefox ready on your real profile: ${profile.userDataDir}`);
+  const icon = targetBrowser === "zen" ? "🌀" : "🦊";
+  console.log(`\n${icon} ${browserLabel} ready on your real profile: ${profile.userDataDir}`);
   console.log(`   BiDi: ws://127.0.0.1:${port}/session`);
   console.log("   Same cookies and logins — no new instance, no extension.");
   console.log(`\nNext: convo ask -p deepseek "hello" --transport firefox-bidi`);

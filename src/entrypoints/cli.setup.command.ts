@@ -12,8 +12,27 @@ interface SetupFlags {
   readonly input: SetupInput;
 }
 
+function printSetupHelp(): void {
+  console.log(`Usage: convo setup [options]
+
+Configure which browser and profile ConvoLink should drive.
+
+Options:
+  -b, --browser <name>    Browser name (chrome, brave, edge, chromium, firefox, zen)
+  --profile <path>        Profile directory or profile ID
+  --transport <name>      Transport mode (raw-cdp, firefox-bidi, agent-browser, extension-bridge)
+  --save-only, --no-verify Save configuration immediately without probing browser socket
+  --no-verify-tab         Skip opening test tab during verification
+  --show                  Display current project configuration
+  --reset                 Delete .convo/config.json
+  --json                  Output machine-readable JSON
+  -h, --help              Show this help message
+`);
+}
+
 function parseFlags(args: readonly string[]): SetupFlags {
   const browserId = valueOf(args, "--browser") ?? valueOf(args, "-b");
+  const saveOnly = args.includes("--save-only") || args.includes("--no-verify");
   return {
     show: args.includes("--show"),
     reset: args.includes("--reset"),
@@ -23,6 +42,8 @@ function parseFlags(args: readonly string[]): SetupFlags {
       ...(valueOf(args, "--profile") ? { profilePath: valueOf(args, "--profile")! } : {}),
       ...(valueOf(args, "--transport") ? { transport: valueOf(args, "--transport") as TransportId } : {}),
       verifyTab: !args.includes("--no-verify-tab"),
+      saveOnly,
+      noVerify: saveOnly,
     },
   };
 }
@@ -35,6 +56,11 @@ function valueOf(args: readonly string[], flag: string): string | undefined {
 }
 
 export async function handleSetup(args: string[]): Promise<number> {
+  if (args.includes("--help") || args.includes("-h")) {
+    printSetupHelp();
+    return 0;
+  }
+
   const flags = parseFlags(args);
 
   if (flags.reset) {

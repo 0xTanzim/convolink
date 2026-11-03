@@ -11,7 +11,7 @@ Many naive browser automation scripts detect when an AI model finishes generatin
 
 This approach frequently fails:
 1. **Network Jitter:** Server-sent event (SSE) frame pauses trigger premature completion.
-2. **Thinking Models:** DeepSeek R1 and OpenAI o1 pause during internal chain-of-thought generation before outputting answer text.
+2. **Thinking Models:** DeepSeek v4.1 Flash and GPT-6 Asta pause during internal chain-of-thought generation before outputting answer text.
 3. **Canvas / Code Renders:** ChatGPT Canvas and Claude Artifacts render asynchronously after the chat stream ends.
 
 ## The 3-Signal Settling Engine

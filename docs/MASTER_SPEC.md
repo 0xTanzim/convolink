@@ -9,7 +9,7 @@
 
 ### 1.1 The Problem Statement: The "Dual-Brain Amnesia" Gap
 Modern software engineering happens across two isolated surfaces:
-1. **The Web Brain Surface (ChatGPT, DeepSeek, Gemini, Claude):** Where engineers spend hours doing deep R&D, debating system trade-offs, exploring edge cases, and running long-horizon reasoning (`DeepThink` / `o-series` / `Gemini Thinking`) with zero per-token API cost.
+1. **The Web Brain Surface (ChatGPT, DeepSeek, Gemini, Claude):** Where engineers spend hours doing deep R&D, debating system trade-offs, exploring edge cases, and running long-horizon reasoning (`DeepThink` / `GPT-6 Asta` / `Gemini Thinking`) with zero per-token API cost.
 2. **The Local Executor Surface (Claude Code, Antigravity, OpenCode, Codex):** Where autonomous CLI coding agents inspect local files, run compilers, and edit repositories.
 
 **The Disconnect:** When an engineer moves from a 2-hour browser R&D session to their terminal, the local CLI coding agent starts with **total amnesia**. The human is forced to act as a manual clipboard—copying architecture specs from the browser, pasting them into the CLI, copying terminal stack traces, and pasting them back into the browser.

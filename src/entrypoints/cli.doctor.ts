@@ -67,7 +67,9 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
           id: "debug-endpoint",
           state: "fail",
           detail: input.transportError ?? "debug endpoint not reachable",
-          remediation: resolution?.browserId === "firefox" || resolution?.browserId === "zen"
+          remediation: resolution?.browserId === "zen"
+            ? "convo connect --zen"
+            : resolution?.browserId === "firefox"
             ? "convo connect --firefox"
             : `start ${resolution?.browserId ?? "the browser"} with --remote-debugging-port=<port>`,
         },
@@ -82,7 +84,9 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
             id: "profile",
             state: "fail",
             detail: `profile held by pid ${lock.pid ?? "?"} without debugging`,
-            remediation: "convo connect --firefox --restart",
+            remediation: resolution.browserId === "zen"
+              ? "convo connect --zen --restart"
+              : "convo connect --firefox --restart",
           }
         : { id: "profile", state: "ok", detail: resolution.profilePath },
     );

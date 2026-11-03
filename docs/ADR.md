@@ -30,7 +30,7 @@ Browser automation tools evolve rapidly (`Playwright`, `agent-browser`, raw CDP 
 Accepted (Revised Milestone 2)
 
 ### Context
-Silent pauses during deep reasoning (DeepSeek R1, ChatGPT Think, o-series) caused premature stream cutoff when using naive text length stabilization. Furthermore, standard `.innerText` scraping destroys code indentation and captures UI button text (`"Copy code"`).
+Silent pauses during deep reasoning (DeepSeek v4.1 Flash, ChatGPT Think, GPT-6 Asta) caused premature stream cutoff when using naive text length stabilization. Furthermore, standard `.innerText` scraping destroys code indentation and captures UI button text (`"Copy code"`).
 
 ### Decision
 1. **3-Signal Streaming Settling (`StreamSettlingDetector`):** Generation is declared complete only when all three independent signals coincide:
@@ -267,7 +267,7 @@ Multi-model comparisons often produce conflicting architectural recommendations.
 
 ### Decision
 1. **Stage 1 (Parallel Gathering):** Query candidate models (ChatGPT, Gemini, DeepSeek) in parallel.
-2. **Stage 2 (Consensus Synthesis):** Package successful outputs into an arbitration brief and dispatch to a designated Arbiter (defaulting to DeepSeek R1).
+2. **Stage 2 (Consensus Synthesis):** Package successful outputs into an arbitration brief and dispatch to a designated Arbiter (defaulting to DeepSeek v4.1 Flash / Claude Opus 5.5).
 3. Arbiter identifies flaws, extracts superior trade-offs, and outputs a single synthesized production specification. Expose via `--arbitrate` and `--arbiter`.
 
 ### Consequences

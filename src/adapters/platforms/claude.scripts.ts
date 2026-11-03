@@ -74,18 +74,33 @@ export function getClaudeAwaitCompletionExpr(beforeTurnCount: number): string {
       )
     );
 
+    const isUserMessage = (el) => Boolean(
+      el.matches('[data-testid="user-message"], .font-user-message') ||
+      el.querySelector('[data-testid="user-message"]') ||
+      el.closest('[data-testid="user-message"]')
+    );
+
+    const isAssistantMessage = (el) => Boolean(
+      (el.matches('[data-testid="assistant-message"], div.font-claude-message, div[data-is-streaming="true"]') ||
+       el.querySelector('[data-testid="assistant-message"]')) &&
+      !isUserMessage(el)
+    );
+
     const turns = Array.from(document.querySelectorAll('div[data-test-render-count], div.font-claude-message, div[data-is-streaming], [data-testid="user-message"], [data-testid="assistant-message"]'));
     const last = turns.length > 0 ? turns[turns.length - 1] : null;
+    const isLastAssistant = Boolean(last && isAssistantMessage(last));
+    const assistantTurns = turns.filter(isAssistantMessage);
+    const lastAssistant = assistantTurns.length > 0 ? assistantTurns[assistantTurns.length - 1] : null;
     let assistantText = '';
     const codeBlocks = [];
 
-    if (last) {
-      const raw = (last.innerText || '').trim();
+    if (lastAssistant) {
+      const raw = (lastAssistant.innerText || '').trim();
       assistantText = raw
         .replace(/^Claude responded:\\s*/i, '')
         .replace(/[\\uE000-\\uF8FF\\s]*(?:just now|\\d+\\s*(?:sec|min|hr|d)s?\\s*ago)[\\s\\S]*$/i, '')
         .trim();
-      const pres = last.querySelectorAll('pre');
+      const pres = lastAssistant.querySelectorAll('pre');
       pres.forEach(p => {
         const lang = (p.querySelector('code')?.className || '').replace(/.*language-(\\w+).*/, '$1') || 'text';
         codeBlocks.push({ language: lang, code: (p.querySelector('code') || p).textContent || '' });
@@ -94,7 +109,7 @@ export function getClaudeAwaitCompletionExpr(beforeTurnCount: number): string {
 
     return {
       turnsCount: turns.length,
-      hasNewTurn: turns.length > ${beforeTurnCount},
+      hasNewTurn: turns.length > ${beforeTurnCount} && isLastAssistant,
       isGenerating,
       isThinking,
       assistantText,

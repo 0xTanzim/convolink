@@ -1,0 +1,234 @@
+# ConvoLink: Complete Agentic Context & Documentation Bundle
+
+> Autonomous AI conversation continuity runtime linking upstream web AI models (ChatGPT, Claude, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, PID-aware mutex locking, and Model Context Protocol (MCP) tooling.
+
+Version: 1.3.0
+Date: November 2026
+Repository: https://github.com/0xTanzim/convolink
+Documentation: https://0xtanzim.github.io/convolink/
+
+---
+
+## 1. Executive Summary & The Three Pillars
+
+ConvoLink transforms the developer's live, authenticated browser tabs into an active, stateful intelligence layer for local coding agents (Cursor, Claude Code, Antigravity, Windsurf, Codex, OpenCode).
+
+1. **Context Bridge:** Durable conversation ledger (`ThreadStore` over SQLite FTS5 in WAL mode), symmetric turn persistence (user prompts + assistant responses), thread portability (`convo export`), full-text search (`convo search`), and compiled snapshots (`.convo/CONTEXT.md`).
+2. **Intelligence Bridge:** Real-time web AI tab interaction (`convo ask`), parallel multi-model comparison (`convo compare`), Stage 2 Technical Arbiter consensus synthesis (`--arbitrate`), deep thinking toggles (`--think`), and live web search grounding borrowing.
+3. **Capability Bridge:** Native browser automation (`RawCdpAdapter`, `FirefoxBidiAdapter`, `ExtensionBridgeAdapter`), multi-file code artifact extraction (`// filepath:` via `ArtifactService` and `WorkspaceFileSink`), automated multi-chunk stream continuation, PID-aware `tmpfs` mutex locking (`$XDG_RUNTIME_DIR/convolink/`), and non-blocking security gating (`PolicyGatePort`).
+
+---
+
+## 2. Core Operational Rules for AI Agents
+
+When interacting with ConvoLink through CLI or MCP:
+
+### 2.1 The Iron Laws of ConvoLink
+1. **Never spawn a unauthenticated browser:** Connecting to an unauthenticated headless browser destroys the user's logged-in session. ConvoLink drives the user's real browser session.
+2. **Never close tabs you did not open:** ConvoLink enforces strict tab ownership (`not-owned`). Only tabs provisioned by ConvoLink are closed on cleanup.
+3. **Pin the session tab (`tabId`):** After calling `convo_ask`, store `structured.tabId` and supply it as `targetId` on all subsequent turns to preserve continuous multi-turn conversational context.
+4. **Use `threadUrl` for atomic attachment:** If a specific conversation URL is known, pass `threadUrl` directly to `convo_ask` or `convo ask` to attach in one atomic operation.
+5. **Declarative setup (`--save-only`):** When configuring ConvoLink programmatically before the browser is started, pass `--save-only` / `--no-verify` to persist `.convo/config.json` without failing on offline sockets.
+6. **Timing contract (BLOCKING):** `convo_ask` and `convo_compare` are synchronous blocking operations. They wait until the model finishes generating. Do NOT fire parallel tool calls or cancel prematurely.
+
+---
+
+## 3. CLI Command Reference
+
+### `convo setup`
+Configure which browser and profile ConvoLink should drive:
+```bash
+convo setup [options]
+```
+- `-b, --browser <name>`: Browser name (`chrome`, `brave`, `edge`, `chromium`, `firefox`, `zen`).
+- `--profile <path>`: Profile directory or profile ID.
+- `--transport <name>`: Transport mode (`raw-cdp`, `firefox-bidi`, `agent-browser`, `extension-bridge`).
+- `--save-only, --no-verify`: Save configuration immediately without probing browser socket (offline/declarative).
+- `--no-verify-tab`: Skip opening test tab during verification.
+- `--show`: Display current project configuration from `.convo/config.json`.
+- `--reset`: Delete `.convo/config.json`.
+- `--json`: Output machine-readable JSON envelope.
+
+### `convo doctor`
+Audits system readiness, host environment, remote debugging ports, open tabs, and selector health:
+```bash
+convo doctor [--launch] [--json]
+```
+
+### `convo ask`
+Query an active web AI tab and stream the complete response:
+```bash
+convo ask "prompt" [options]
+```
+- `-p, --platform <name>`: `chatgpt`, `claude`, `deepseek`, `gemini`.
+- `-t, --targetId <id>`: Target specific CDP tab ID or shorthand (`#1`, `#2`).
+- `--threadUrl <url>`: Direct conversation URL to attach to.
+- `-n, --new`: Reset tab to fresh chat before submitting prompt.
+- `--open-tab`: Spawn brand-new tab in background before submitting.
+- `--think`: Enable deep thinking mode (DeepSeek v4.1 Flash, GPT-6 Asta, Claude Opus 5.5).
+- `--search`: Enable live web search grounding.
+- `-w, --write-files`: Extract files tagged with `// filepath:` to disk.
+- `-o, --out-dir <path>`: Output directory for written files (default: `./artifacts`).
+- `--json`: Output machine-readable JSON envelope.
+
+### `convo compare`
+Broadcast query across multiple frontier models in parallel:
+```bash
+convo compare "prompt" [options]
+```
+- `--platforms <list>`: Comma-separated list (`chatgpt,claude,deepseek,gemini`).
+- `--arbitrate`: Execute Stage 2 Technical Arbiter consensus synthesis.
+- `--arbiter <name>`: Designate judge platform (default: `deepseek`).
+- `--out-dir <path>`: Output directory for `REPORT.md` (default: `./artifacts`).
+
+### `convo tab`
+Tab lifecycle management:
+```bash
+convo tab new <platformOrUrl>
+convo tab close <targetId>
+convo tab back [targetId]
+convo tab undo [targetId]
+```
+
+### `convo thread`
+Durable thread persistence:
+```bash
+convo resume <threadId>
+convo export <threadId> [--format markdown|json]
+convo search <query> [--limit 10]
+```
+
+---
+
+## 4. Model Context Protocol (MCP) Integration
+
+Registered as `convolink` over stdio (`convo mcp`).
+
+```json
+{
+  "mcpServers": {
+    "convolink": {
+      "command": "convo",
+      "args": ["mcp"]
+    }
+  }
+}
+```
+
+### 4.1 MCP Tool Schemas
+
+#### `convo_ask`
+```typescript
+convo_ask({
+  prompt: string,               // required
+  platform?: "chatgpt" | "deepseek" | "gemini" | "claude",
+  targetId?: string,            // reuse tab from last response (PIN THIS)
+  threadUrl?: string,           // direct resume URL — skips tab setup entirely
+  think?: boolean,              // enable reasoning mode (30–180 s)
+  search?: boolean,             // enable live web search grounding
+  writeFiles?: boolean,         // extract code blocks via '// filepath:' directives
+  outDir?: string,              // output dir for extracted files (default: ./artifacts)
+  openTab?: boolean,            // spawn tab only when convo_list_tabs shows none
+  newChat?: boolean,            // DESTRUCTIVE — resets current thread context
+  workspaceRoot?: string,       // absolute project path (required if MCP started from $HOME)
+})
+```
+
+**Output format:**
+```json
+{
+  "tabId": "tab-1234",
+  "platform": "deepseek",
+  "threadUrl": "https://chat.deepseek.com/a/chat/s/abc123",
+  "threadId": "abc123",
+  "elapsedMs": 1420,
+  "text": "Answer from model..."
+}
+```
+
+#### `convo_compare`
+```typescript
+convo_compare({
+  prompt: string,
+  platforms?: Array<"chatgpt" | "deepseek" | "gemini" | "claude">,
+  arbitrate?: boolean,
+  arbiter?: "chatgpt" | "deepseek" | "gemini" | "claude",
+  continue?: boolean,
+  workspaceRoot?: string,
+})
+```
+
+#### `convo_setup`
+```typescript
+convo_setup({
+  browser?: "chrome" | "brave" | "edge" | "chromium" | "firefox" | "zen",
+  profile?: string,
+  transport?: "extension-bridge" | "raw-cdp" | "firefox-bidi" | "agent-browser",
+  saveOnly?: boolean,
+  noVerify?: boolean,
+  workspaceRoot?: string,
+})
+```
+
+#### `convo_doctor`
+```typescript
+convo_doctor({
+  fix: boolean,                 // false = safe diagnose; true = clear stale locks
+  workspaceRoot?: string,
+})
+```
+
+#### `convo_onboard`
+Readiness report and single recommended next step. Call once before initial browser actions.
+
+---
+
+## 5. Error Codes & Recovery Contracts
+
+All MCP errors return `isError: true` with a structured payload:
+
+```json
+{
+  "structured": {
+    "error": {
+      "code": "browser-unreachable",
+      "message": "Remote debugging port 9222 is offline.",
+      "retryable": false,
+      "nextTool": "convo_doctor",
+      "nextArgs": { "fix": false }
+    }
+  }
+}
+```
+
+| Error Code | Meaning | Recovery Action |
+| :--- | :--- | :--- |
+| `configuration-required` | `.convo/config.json` is missing | Call `convo_onboard` or run `convo setup` |
+| `configuration-invalid` | Config file is corrupt or unreadable | Run `convo setup --reset` |
+| `no-browser-found` | No supported browser binary detected | Install Chrome/Firefox or specify `--browserPath` |
+| `browser-unreachable` | Browser remote debugging port is offline | Run `convo doctor --launch` or start browser with debugging |
+| `transport-disconnected` | WebSocket or daemon connection dropped | Self-healing will attempt in-process fallback; check `convo doctor` |
+| `session-busy` | Tab locked by another process | Wait 5 seconds and retry `convo_ask` once |
+| `transport-timeout` | Model generation exceeded timeout window | Check tab status with `convo_list_tabs`; do not blindly resubmit |
+| `not-owned` | Attempted to close user's unowned tab | Refused by policy; do not retry |
+| `login-required` | Upstream web session needs user authentication | Instruct human user to log in via browser |
+| `challenge-detected` | CAPTCHA or Cloudflare verification active | Instruct human user to solve challenge in browser |
+
+---
+
+## 6. Architecture & Technical Invariants
+
+### 6.1 Pure Hexagonal Domain Kernel (`src/core/`)
+`src/core/` contains strictly zero imports from browser automation libraries (`playwright`, `puppeteer`, `ws`, `agent-browser`). All external interactions are abstracted behind pure Port interfaces (`BrowserPort`, `PlatformPort`, `ThreadStore`, `PolicyGatePort`, `TabRegistryPort`, `TabReadinessPort`).
+
+### 6.2 3-Signal Streaming Settling
+Never rely on text length stabilization alone. Stream completion requires:
+1. **Action Container State:** Stop button or loading spinner absent.
+2. **Thinking Transition:** Collapsible thinking accordions closed/static.
+3. **Quiescence Window:** Zero DOM mutations or stream frames for $\ge$ 400ms continuously.
+
+### 6.3 Indentation-Preserving Artifact Extraction
+Code blocks marked with `// filepath: path/to/file.ext` or `<!-- file: path/to/file.ext -->` are extracted with exact tab/space whitespace preservation and written to disk with directory traversal containment guards (`WorkspaceFileSink`).
+
+### 6.4 PID-Aware `tmpfs` Mutex Locking
+Tab locks reside in `$XDG_RUNTIME_DIR/convolink/` in RAM (`tmpfs`), avoiding disk wear. Lock handles verify PID ownership on release, use atomic POSIX `wx` creation to prevent TOCTOU races, and automatically reclaim dead-PID locks (`process.kill(pid, 0)`).

@@ -76,4 +76,43 @@ describe("pollUntilSettled", () => {
 
     expect(result.timedOut).toBe(true);
   });
+
+  it("does not report completion via loose text mismatch when hasNewTurn is false", () => {
+    const status = {
+      hasNewTurn: false,
+      turnsCount: 1,
+      assistantText: "previous turn text from prior prompt",
+      isGenerating: false,
+      isThinking: false,
+    };
+    // before.lastTurnHash is empty or different, but hasNewTurn is explicitly false
+    const isNew = hasNewCompletion(status, {
+      turnCount: 1,
+      lastTurnHash: "something else",
+      submittedPromptHash: "abc",
+    });
+    expect(isNew).toBe(false);
+  });
+
+  it("preserves partial text in settle result when timeout occurs during generation", async () => {
+    const browser = new StaticThinkingBrowser();
+    browser.evaluate = async <T>(): Promise<T> =>
+      ({
+        turnsCount: 2,
+        hasNewTurn: true,
+        isGenerating: true, // Still generating, so it will time out
+        isThinking: false,
+        assistantText: "partially generated response before timeout",
+      }) as T;
+
+    const result = await pollUntilSettled(browser, handle, "probe", {
+      timeoutMs: 400,
+      quiescenceMs: 100,
+      textOf: completionText,
+      isNew: (status) => hasNewCompletion(status, before),
+    });
+
+    expect(result.timedOut).toBe(true);
+    expect(completionText(result.status)).toBe("partially generated response before timeout");
+  });
 });

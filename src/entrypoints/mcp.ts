@@ -52,6 +52,16 @@ export async function runMcpServer(
     void cleanup();
   });
 
+  (output as any)?.on?.("error", (err: any) => {
+    if (err?.code === "EPIPE") return;
+  });
+
+  const safeWrite = (data: string) => {
+    try {
+      output.write(data);
+    } catch {}
+  };
+
   mcpServer = server ?? new McpServer({
     orchestrator: async () => {
       // Delegate to the daemon when it is running: it owns the extension
@@ -60,7 +70,7 @@ export async function runMcpServer(
       return createMcpOrchestrator();
     },
     onActivity: () => idleController.recordActivity(),
-    notify: (message) => output.write(JSON.stringify(message) + "\n"),
+    notify: (message) => safeWrite(JSON.stringify(message) + "\n"),
   });
 
   const rl = readline.createInterface({ input, terminal: false });
@@ -71,17 +81,29 @@ export async function runMcpServer(
       if (!trimmed) continue;
       idleController.recordActivity();
 
+      let request: JsonRpcRequest;
       try {
-        const request = JSON.parse(trimmed) as JsonRpcRequest;
-        const response = await mcpServer.handleMessage(request);
-        if (response) output.write(JSON.stringify(response) + "\n");
-      } catch (err: unknown) {
+        request = JSON.parse(trimmed) as JsonRpcRequest;
+      } catch (parseErr: unknown) {
         const errorResponse = {
           jsonrpc: "2.0",
           id: null,
-          error: { code: -32700, message: "Parse error", data: err instanceof Error ? err.message : String(err) },
+          error: { code: -32700, message: "Parse error", data: parseErr instanceof Error ? parseErr.message : String(parseErr) },
         };
-        output.write(JSON.stringify(errorResponse) + "\n");
+        safeWrite(JSON.stringify(errorResponse) + "\n");
+        continue;
+      }
+
+      try {
+        const response = await mcpServer.handleMessage(request);
+        if (response) safeWrite(JSON.stringify(response) + "\n");
+      } catch (err: unknown) {
+        const errorResponse = {
+          jsonrpc: "2.0",
+          id: request.id ?? null,
+          error: { code: -32603, message: "Internal error", data: err instanceof Error ? err.message : String(err) },
+        };
+        safeWrite(JSON.stringify(errorResponse) + "\n");
       }
     }
   } finally {

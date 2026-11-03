@@ -166,7 +166,9 @@ export class McpServer {
   }
 
   public async shutdown(): Promise<void> {
-    await this.resolvedOrchestrator?.shutdown().catch(() => {});
+    if (typeof (this.resolvedOrchestrator as any)?.shutdown === "function") {
+      await (this.resolvedOrchestrator as any).shutdown().catch(() => {});
+    }
   }
 
   private progressPort(token: string | number) {

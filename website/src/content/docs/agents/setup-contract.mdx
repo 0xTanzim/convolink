@@ -51,6 +51,18 @@ Clients without the capability — Claude Code and Codex today — get the same 
 `requiresUserSelection` text block, and nothing hangs. Decline, cancel and timeout all fall
 back to that block.
 
+## Declarative Offline Setup (`--save-only`)
+
+For containerized environments, CI pipelines, or autonomous workflows where configuration precedes service startup:
+```bash
+convo setup --browser chrome --profile "/path/to/profile" --save-only
+```
+Or via MCP:
+```typescript
+convo_setup({ browser: "chrome", profile: "/path/to/profile", saveOnly: true })
+```
+This writes `.convo/config.json` immediately without requiring the browser socket to be active first.
+
 <Aside type="note" title="Elicitation is capability-gated on purpose">
 A client that never answers must not strand a tool call. The timeout resolves as `cancel`,
 which degrades to the text path instead of blocking the turn.

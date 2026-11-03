@@ -97,4 +97,22 @@ def two(): return 2
     expect(artifacts.length).toBe(2);
     expect(artifacts.map((a) => a.relativePath)).toEqual(["artifact-1.ts", "artifact-2.py"]);
   });
+
+  it("updates artifact in place when subsequent block provides more complete content for the same path", () => {
+    const codeBlocks = [
+      {
+        language: "typescript",
+        code: "// filepath: src/calc.ts\nexport function calc() {\n  // truncated...",
+      },
+      {
+        language: "typescript",
+        code: "// filepath: src/calc.ts\nexport function calc() {\n  return 42;\n}\nexport function reset() {}\n",
+      },
+    ];
+
+    const artifacts = service.extractArtifacts("", codeBlocks);
+    expect(artifacts.length).toBe(1);
+    expect(artifacts[0]?.relativePath).toBe("src/calc.ts");
+    expect(artifacts[0]?.content).toContain("export function reset()");
+  });
 });

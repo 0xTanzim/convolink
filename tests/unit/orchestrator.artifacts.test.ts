@@ -107,4 +107,72 @@ describe("SessionOrchestrator Artifacts & Continuation", () => {
     expect(continuationChecked).toBe(true);
     expect(result.turn.markdownContent).toContain("Part 1");
   });
+
+  it("does not duplicate cumulative text when platform appends into same container", async () => {
+    const browser = new FakeBrowserPort();
+    browser.listTabs = async () => [
+      { targetId: "tab-gpt-cont-dup", title: "ChatGPT", url: "https://chatgpt.com/c/gpt-dup" },
+    ];
+    browser.evalResponseMap.set("submitPrompt", {
+      turnCount: 0,
+      lastTurnHash: "0",
+      submittedPromptHash: "10",
+    });
+
+    let awaitCount = 0;
+    let continuationChecked = false;
+    browser.evaluate = async (handle, expr) => {
+      browser.evaluatedExpressions.push(expr);
+      if (expr.includes("document.readyState")) return true as any;
+      if (expr.includes("/* findContinuationTrigger */")) {
+        if (!continuationChecked) {
+          continuationChecked = true;
+          return { hasContinuation: true, triggerSelector: "button" } as any;
+        }
+        return { hasContinuation: false } as any;
+      }
+      if (expr.includes("awaitCompletion")) {
+        awaitCount++;
+        if (awaitCount === 1) {
+          return {
+            turnsCount: 2,
+            hasNewTurn: true,
+            isGenerating: false,
+            assistantText: "First section content.",
+            codeBlocks: [],
+          } as any;
+        }
+        // Second completion returns cumulative text from the same container
+        return {
+          turnsCount: 2,
+          hasNewTurn: true,
+          isGenerating: false,
+          assistantText: "First section content. Second section content.",
+          codeBlocks: [],
+        } as any;
+      }
+      for (const [key, value] of browser.evalResponseMap.entries()) {
+        if (expr.includes(key)) return value as any;
+      }
+      return {} as any;
+    };
+
+    const orchestrator = new SessionOrchestrator({
+      browser,
+      drivers: [new ChatGPTDriver()],
+      lockService: new LockService(),
+      policyGate: new PolicyService(),
+    });
+
+    const result = await orchestrator.ask({
+      prompt: "Continue test",
+      platform: "chatgpt",
+      autoContinue: true,
+    });
+
+    // Content should NOT contain "First section content." twice
+    const occurrences = result.turn.markdownContent.split("First section content.").length - 1;
+    expect(occurrences).toBe(1);
+    expect(result.turn.markdownContent).toBe("First section content. Second section content.");
+  });
 });

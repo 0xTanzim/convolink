@@ -7,7 +7,7 @@ import { buildOnboardReport, type OnboardFacts } from "../core/services/onboardi
 import { collectOnboardFacts } from "./onboard.facts.js";
 import { buildCapabilities } from "./cli.doctor.js";
 import { applySetup } from "./cli.setup.js";
-import { toConvoError } from "../core/errors/convo-error.js";
+import { toConvoError, type ConvoErrorCode } from "../core/errors/convo-error.js";
 import type { BrowserId, TransportId } from "../core/ports/config.port.js";
 import { isContinuableThread, parseThreadUrl, type ThreadTarget } from "../core/services/setup/thread-target.js";
 import { isManagedTabRef } from "../adapters/browsers/tab-registry.js";
@@ -68,12 +68,25 @@ function threadsFrom(raw: unknown): Partial<Record<PlatformId, ThreadTarget>> | 
   return Object.keys(map).length > 0 ? map : undefined;
 }
 
+const NEXT_TOOL_HINTS: Partial<Record<ConvoErrorCode, { tool: string; args: Record<string, unknown> }>> = {
+  "configuration-required": { tool: "convo_onboard", args: {} },
+  "configuration-invalid": { tool: "convo_onboard", args: {} },
+  "browser-unreachable": { tool: "convo_doctor", args: { fix: false } },
+  "transport-disconnected": { tool: "convo_doctor", args: { fix: false } },
+  "transport-mismatch": { tool: "convo_doctor", args: { fix: false } },
+  "not-ready": { tool: "convo_doctor", args: { fix: false } },
+  "session-busy": { tool: "convo_ask", args: {} },
+  "thread-not-found": { tool: "convo_search", args: {} },
+};
+
 export async function executeMcpTool(
   orchestrator: SessionOrchestrator,
   name: string,
   args: Record<string, unknown> = {},
   options?: ExecuteToolOptions,
 ): Promise<McpToolExecutionResult> {
+  const workspaceRoot = typeof args.workspaceRoot === "string" && args.workspaceRoot.trim() ? args.workspaceRoot.trim() : undefined;
+  const workDir = workspaceRoot ?? options?.workDir;
   try {
     switch (name) {
       case "convo_ask": {
@@ -82,13 +95,36 @@ export async function executeMcpTool(
         const browserReady = await ensureMcpBrowserReady(orchestrator, {
           browser,
           profile,
-          ...(options?.workDir ? { workDir: options.workDir } : {}),
+          ...(workDir ? { workDir } : {}),
           ...(options?.discoverProfiles ? { discoverProfiles: options.discoverProfiles } : {}),
         });
         if (!browserReady.ok) {
-          return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
+          return {
+            text: browserReady.errorText ?? "Browser is not ready.",
+            isError: true,
+            structured: {
+              error: {
+                code: "browser-unreachable",
+                message: browserReady.errorText ?? "Browser is not ready.",
+                nextTool: "convo_doctor",
+              },
+            },
+          };
         }
         const prompt = typeof args.prompt === "string" ? args.prompt : String(args.prompt ?? "");
+        if (!prompt.trim()) {
+          return {
+            text: "Error: 'prompt' must not be empty.",
+            isError: true,
+            structured: {
+              error: {
+                code: "invalid-argument",
+                message: "'prompt' must not be empty.",
+                remediation: "Provide a non-empty prompt string.",
+              },
+            },
+          };
+        }
         const platform = typeof args.platform === "string" ? (args.platform as PlatformId) : undefined;
         const targetId = typeof args.targetId === "string" ? args.targetId : undefined;
         const writeFiles = typeof args.writeFiles === "boolean" ? args.writeFiles : undefined;
@@ -128,13 +164,36 @@ export async function executeMcpTool(
         const browserReady = await ensureMcpBrowserReady(orchestrator, {
           browser,
           profile,
-          ...(options?.workDir ? { workDir: options.workDir } : {}),
+          ...(workDir ? { workDir } : {}),
           ...(options?.discoverProfiles ? { discoverProfiles: options.discoverProfiles } : {}),
         });
         if (!browserReady.ok) {
-          return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
+          return {
+            text: browserReady.errorText ?? "Browser is not ready.",
+            isError: true,
+            structured: {
+              error: {
+                code: "browser-unreachable",
+                message: browserReady.errorText ?? "Browser is not ready.",
+                nextTool: "convo_doctor",
+              },
+            },
+          };
         }
         const prompt = typeof args.prompt === "string" ? args.prompt : String(args.prompt ?? "");
+        if (!prompt.trim()) {
+          return {
+            text: "Error: 'prompt' must not be empty.",
+            isError: true,
+            structured: {
+              error: {
+                code: "invalid-argument",
+                message: "'prompt' must not be empty.",
+                remediation: "Provide a non-empty prompt string.",
+              },
+            },
+          };
+        }
         const platforms = Array.isArray(args.platforms) ? (args.platforms as PlatformId[]) : undefined;
         const arbitrate = typeof args.arbitrate === "boolean" ? args.arbitrate : undefined;
         const arbiter = typeof args.arbiter === "string" ? (args.arbiter as PlatformId) : undefined;
@@ -161,7 +220,7 @@ export async function executeMcpTool(
       }
 
       case "convo_status": {
-        const resolution = await loadResolution(undefined, options?.workDir);
+        const resolution = await loadResolution(undefined, workDir);
         if (!resolution.ok) {
           return {
             text: JSON.stringify({ ok: false, error: resolution.error }),
@@ -198,7 +257,7 @@ export async function executeMcpTool(
               profilePath: picked.userDataDir,
               ...(typeof args.transport === "string" ? { transport: args.transport as TransportId } : {}),
               verifyTab: args.verifyTab === true,
-              ...(options?.workDir ? { workDir: options.workDir } : {}),
+              ...(workDir ? { workDir } : {}),
             });
             const structured = { ok: true, config: outcome.config, warning: outcome.warning ?? null, answeredBy: "elicitation" };
             return { text: JSON.stringify(structured), structured };
@@ -229,7 +288,7 @@ export async function executeMcpTool(
           ...(typeof args.profile === "string" ? { profilePath: args.profile } : {}),
           ...(typeof args.transport === "string" ? { transport: args.transport as TransportId } : {}),
           verifyTab: args.verifyTab === true,
-          ...(options?.workDir ? { workDir: options.workDir } : {}),
+          ...(workDir ? { workDir } : {}),
         });
         const structured = { ok: true, config: outcome.config, warning: outcome.warning ?? null };
         return { text: JSON.stringify(structured), structured };
@@ -244,18 +303,19 @@ export async function executeMcpTool(
         const fix = args.fix === true;
         const fixResult = fix ? await runSelfHealingClean() : undefined;
         const report = await orchestrator.doctor();
-        const resolution = await loadResolution(undefined, options?.workDir);
+        const resolution = await loadResolution(undefined, workDir);
         const capabilities = await buildCapabilities({
           resolution: resolution.ok ? resolution.value : null,
           transportOk: report.transportHealth.ok,
           ...(report.transportHealth.error ? { transportError: report.transportHealth.error } : {}),
         });
+        const supportedTabs = (report.tabs ?? []).filter((tab) => Boolean(tab.platformId ?? (tab as any).platform));
         const structured = {
           ok: report.transportHealth.ok,
           configured: resolution.ok ? resolution.value : null,
           capabilities,
           transportHealth: report.transportHealth,
-          tabs: report.tabs,
+          tabs: supportedTabs,
           ...(fixResult ? { fixResult } : {}),
         };
         return { text: JSON.stringify(structured), structured };
@@ -284,76 +344,160 @@ export async function executeMcpTool(
         if (action === "new") {
           const target = typeof args.target === "string" && args.target.trim() ? args.target.trim() : "chatgpt";
           const tab = await orchestrator.createTab(target);
-          return { text: `Spawned tab [${tab.targetId}] for ${tab.url}` };
+          return { text: `Spawned tab [${tab.targetId}] for ${tab.url}`, structured: { ok: true, tab } };
         }
         if (action === "close") {
           const targetId = typeof args.targetId === "string" ? args.targetId.trim() : "";
-          if (!targetId) return { text: "Error: targetId is required for action 'close'. Call convo_list_tabs to view active tab IDs.", isError: true };
+          if (!targetId) {
+            return {
+              text: "Error: targetId is required for action 'close'. Call convo_list_tabs to view active tab IDs.",
+              isError: true,
+              structured: {
+                error: {
+                  code: "invalid-argument",
+                  message: "targetId is required for action 'close'.",
+                  nextTool: "convo_list_tabs",
+                },
+              },
+            };
+          }
           await orchestrator.closeTab(targetId);
-          return { text: `Closed tab [${targetId}]` };
+          return { text: `Closed tab [${targetId}]`, structured: { ok: true, targetId } };
         }
         if (action === "back") {
           const targetId = typeof args.targetId === "string" ? args.targetId.trim() : undefined;
           await orchestrator.goBack(targetId);
-          return { text: "Navigated active tab back in browser history." };
+          return { text: "Navigated active tab back in browser history.", structured: { ok: true } };
         }
         if (action === "undo") {
           const targetId = typeof args.targetId === "string" ? args.targetId.trim() : undefined;
           const res = await orchestrator.undo(targetId);
-          return { text: res ? `Restored previous conversation URL: ${res.restoredUrl}` : "No previous checkpoint found to restore." };
+          return {
+            text: res ? `Restored previous conversation URL: ${res.restoredUrl}` : "No previous checkpoint found to restore.",
+            structured: { ok: Boolean(res), restoredUrl: res?.restoredUrl ?? null },
+          };
         }
-        return { text: `Error: Invalid action '${action}'. Valid actions: 'new', 'close', 'back', 'undo'.`, isError: true };
+        return {
+          text: `Error: Invalid action '${action}'. Valid actions: 'new', 'close', 'back', 'undo'.`,
+          isError: true,
+          structured: {
+            error: {
+              code: "invalid-argument",
+              message: `Invalid action '${action}'. Valid actions: 'new', 'close', 'back', 'undo'.`,
+            },
+          },
+        };
       }
 
       case "convo_search": {
         const query = typeof args.query === "string" ? args.query.trim() : "";
         const limit = typeof args.limit === "number" ? args.limit : 10;
         const results = await orchestrator.searchLedger(query, limit);
-        if (results.length === 0) return { text: `No results matching "${query}".` };
+        if (results.length === 0) return { text: `No results matching "${query}".`, structured: { results: [] } };
         const text = results.map((r) => `• [Thread ${r.threadId}] Turn ${r.turnIndex} (${r.role}):\n  ${r.snippet}`).join("\n\n");
-        return { text };
+        return { text, structured: { results } };
       }
 
       case "convo_thread": {
         const action = typeof args.action === "string" ? args.action : "";
         if (action === "export") {
           const threadId = typeof args.threadId === "string" ? args.threadId.trim() : "";
-          if (!threadId) return { text: "Error: threadId is required for action 'export'. Call convo_search to find historical thread IDs.", isError: true };
+          if (!threadId) {
+            return {
+              text: "Error: threadId is required for action 'export'. Call convo_search to find historical thread IDs.",
+              isError: true,
+              structured: {
+                error: {
+                  code: "invalid-argument",
+                  message: "threadId is required for action 'export'.",
+                  nextTool: "convo_search",
+                },
+              },
+            };
+          }
           const format = args.format === "json" ? "json" : "markdown";
           const output = await orchestrator.exportThread(threadId, format);
-          return { text: output };
+          return { text: output, structured: { ok: true, threadId, format } };
         }
         if (action === "resume") {
           const threadId = typeof args.threadId === "string" ? args.threadId.trim() : "";
-          if (!threadId) return { text: "Error: threadId is required for action 'resume'. Call convo_search to find historical thread IDs.", isError: true };
+          if (!threadId) {
+            return {
+              text: "Error: threadId is required for action 'resume'. Call convo_search to find historical thread IDs.",
+              isError: true,
+              structured: {
+                error: {
+                  code: "invalid-argument",
+                  message: "threadId is required for action 'resume'.",
+                  nextTool: "convo_search",
+                },
+              },
+            };
+          }
           const tab = await orchestrator.resumeThread(threadId);
-          return { text: `Reopened saved thread [${threadId}] in tab [${tab.targetId}]: ${tab.url}` };
+          return {
+            text: `Reopened saved thread [${threadId}] in tab [${tab.targetId}]: ${tab.url}`,
+            structured: { ok: true, threadId, tab },
+          };
         }
         if (action === "history") {
           const targetId = typeof args.targetId === "string" ? args.targetId.trim() : undefined;
           const history = await orchestrator.getHistory(targetId);
-          if (!history || history.length === 0) return { text: "No session history recorded for this tab yet." };
+          if (!history || history.length === 0) {
+            return { text: "No session history recorded for this tab yet.", structured: { ok: true, history: [] } };
+          }
           const lines = history.map((h, i) => `  ${i + 1}. [${h.timestamp}] ${h.url}`);
-          return { text: `Session Checkpoints:\n${lines.join("\n")}` };
+          return { text: `Session Checkpoints:\n${lines.join("\n")}`, structured: { ok: true, history } };
         }
-        return { text: `Error: Invalid action '${action}'. Valid actions: 'export', 'resume', 'history'.`, isError: true };
+        return {
+          text: `Error: Invalid action '${action}'. Valid actions: 'export', 'resume', 'history'.`,
+          isError: true,
+          structured: {
+            error: {
+              code: "invalid-argument",
+              message: `Invalid action '${action}'. Valid actions: 'export', 'resume', 'history'.`,
+            },
+          },
+        };
       }
 
       case "convo_profile": {
         const action = typeof args.action === "string" ? args.action : "list";
         if (action === "select") {
           const target = typeof args.target === "string" ? args.target : "";
-          return selectProfile(target, options?.workDir);
+          return selectProfile(target, workDir);
         }
-        return { text: await getProfilesListText(options?.workDir) };
+        return { text: await getProfilesListText(workDir) };
       }
 
       default:
-        return { text: `Unknown tool: ${name}. Call tools/list to inspect valid tools.`, isError: true };
+        return {
+          text: `Unknown tool: ${name}. Call tools/list to inspect valid tools.`,
+          isError: true,
+          structured: {
+            error: {
+              code: "unknown-tool",
+              message: `Unknown tool: ${name}. Call tools/list to inspect valid tools.`,
+            },
+          },
+        };
     }
   } catch (err: unknown) {
     const error = toConvoError(err);
-    return { text: JSON.stringify({ ok: false, error: error.toJSON() }), isError: true };
+    const nextToolHint = NEXT_TOOL_HINTS[error.code];
+    return {
+      text: `[${error.code}] ${error.message} — ${error.remediation}`,
+      isError: true,
+      structured: {
+        error: {
+          code: error.code,
+          message: error.message,
+          remediation: error.remediation,
+          retryable: error.retryable,
+          ...(nextToolHint ? { nextTool: nextToolHint.tool, nextArgs: nextToolHint.args } : {}),
+        },
+      },
+    };
   }
 }
 

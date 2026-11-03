@@ -1,0 +1,26 @@
+# ConvoLink
+
+> Autonomous AI conversation continuity runtime linking upstream web AI models (ChatGPT, Claude, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, PID-aware mutex locking, and Model Context Protocol (MCP) tooling.
+
+ConvoLink enables local IDE coding agents (Cursor, Claude Code, Antigravity, Windsurf, Codex, OpenCode) to drive the developer's authenticated browser session with zero API fees, borrow upstream reasoning (DeepSeek v4.1 Flash, GPT-6 Asta, Claude Opus 5.5, Gemini 4 Carbon), extract multi-file code artifacts (`// filepath:`), and execute multi-model comparisons with Stage 2 Technical Arbiter consensus synthesis.
+
+## Core Documentation
+
+- [Quickstart & 60-Second Setup](https://0xtanzim.github.io/convolink/getting-started/quickstart): 60-second setup, universal 1-line installer, companion extension, and connection verification.
+- [CLI Reference](https://0xtanzim.github.io/convolink/commands/overview): Complete CLI reference for ask, compare, doctor, setup, tab, resume, export, and search commands.
+- [Model Context Protocol (MCP) Integration](https://0xtanzim.github.io/convolink/integrations/mcp): 11 JSON-RPC stdio tools, structured error envelopes, and session pinning contracts.
+- [The Setup Contract & Agent Rules](https://0xtanzim.github.io/convolink/agents/setup-contract): Machine-actionable exit codes, nextAction semantics, and offline `--save-only` setup.
+- [Agent Skills & Prompts](https://0xtanzim.github.io/convolink/agents/skills): Agent system prompt and skill specifications for optimal tool invocation.
+
+## Architecture & System Design
+
+- [The Three Pillars](https://0xtanzim.github.io/convolink/architecture/three-pillars): Context Bridge (durable turn ledger), Intelligence Bridge (multi-model comparison), and Capability Bridge (browser automation).
+- [Stream Settling & Quiescence](https://0xtanzim.github.io/convolink/architecture/stream-settling): 3-signal streaming detection engine preventing premature stream cutoff during silent reasoning intervals.
+- [Safety & tmpfs Mutex Locking](https://0xtanzim.github.io/convolink/architecture/safety-mutex): PID-aware mutex in `$XDG_RUNTIME_DIR/convolink/` preventing concurrent tab collisions with automatic stale lock reclamation.
+- [Multi-Model Comparison & Arbitration](https://0xtanzim.github.io/convolink/commands/compare-arbitrate): Parallel execution across frontier models with anonymized Arbiter consensus synthesis.
+- [Artifact Extraction & File Sinks](https://0xtanzim.github.io/convolink/commands/artifact-extraction): Automatic parsing of `// filepath:` directives with path traversal containment.
+- [Architecture Decision Records (ADRs)](https://0xtanzim.github.io/convolink/architecture/adr): ADR-001 through ADR-017 formal hexagonal engineering records.
+
+## Complete Context Bundle
+
+- [Full LLM Context (llms-full.txt)](https://0xtanzim.github.io/convolink/llms-full.txt): Complete, concatenated markdown documentation for context window ingestion.

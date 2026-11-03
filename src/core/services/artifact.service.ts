@@ -38,7 +38,6 @@ export class ArtifactService {
 
   public extractArtifacts(markdown: string, codeBlocks?: readonly CodeBlock[]): ExtractedArtifact[] {
     const artifacts: ExtractedArtifact[] = [];
-    const seenPaths = new Set<string>();
     let fallbackCounter = 1;
 
     // 1. If structured DOM codeBlocks are provided, treat them as the authoritative source
@@ -46,9 +45,11 @@ export class ArtifactService {
       for (const block of codeBlocks) {
         const item = this.parseBlock(block.language, block.code, fallbackCounter);
         if (!item.isExplicitPath) fallbackCounter++;
-        if (!seenPaths.has(item.relativePath)) {
-          seenPaths.add(item.relativePath);
+        const existingIndex = artifacts.findIndex((a) => a.relativePath === item.relativePath);
+        if (existingIndex === -1) {
           artifacts.push(item);
+        } else if (item.content.length >= artifacts[existingIndex]!.content.length) {
+          artifacts[existingIndex] = item;
         }
       }
       return artifacts;
@@ -59,9 +60,11 @@ export class ArtifactService {
     for (const match of matches) {
       const item = this.parseBlock(match[1] || "text", match[2] || "", fallbackCounter);
       if (!item.isExplicitPath) fallbackCounter++;
-      if (!seenPaths.has(item.relativePath)) {
-        seenPaths.add(item.relativePath);
+      const existingIndex = artifacts.findIndex((a) => a.relativePath === item.relativePath);
+      if (existingIndex === -1) {
         artifacts.push(item);
+      } else if (item.content.length >= artifacts[existingIndex]!.content.length) {
+        artifacts[existingIndex] = item;
       }
     }
 

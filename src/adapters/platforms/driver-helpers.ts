@@ -399,8 +399,14 @@ export function completionText(status: CompletionProbeStatus): string {
 }
 
 export function hasNewCompletion(status: CompletionProbeStatus, before: TurnFingerprint): boolean {
-  const text = completionText(status);
-  return Boolean(status.hasNewTurn || (text.length > 0 && text !== before.lastTurnHash));
+  if (typeof status.hasNewTurn === "boolean") {
+    return status.hasNewTurn;
+  }
+  const currentCount = status.turnsCount ?? status.turnIndex ?? status.mdCount;
+  if (typeof currentCount === "number") {
+    return currentCount > before.turnCount;
+  }
+  return false;
 }
 
 export interface SettleResult<T> {

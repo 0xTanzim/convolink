@@ -69,7 +69,9 @@ export function getGeminiAwaitCompletionExpr(beforeTurnCount: number): string {
 
     const models = Array.from(document.querySelectorAll('model-response'));
     const turns = Array.from(document.querySelectorAll('user-query, model-response'));
-    const hasNewTurn = turns.length > ${beforeTurnCount};
+    const lastTurn = turns.length > 0 ? turns[turns.length - 1] : null;
+    const isLastModel = Boolean(lastTurn && lastTurn.tagName.toLowerCase() === 'model-response');
+    const hasNewTurn = turns.length > ${beforeTurnCount} && isLastModel;
     const lastModel = models.length > 0 ? models[models.length - 1] : null;
 
     const contentNode = lastModel ? (lastModel.querySelector('message-content, .markdown, .model-response-text') || lastModel) : null;

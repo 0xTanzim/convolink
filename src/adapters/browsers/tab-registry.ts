@@ -1,14 +1,9 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { HostEnv } from "../../core/env/host-env.js";
+import type { ManagedTabRecord, TabRef, TabRegistryPort } from "../../core/ports/tab-registry.port.js";
 
-export interface ManagedTabRecord {
-  readonly targetId: string;
-  readonly platform: string;
-  readonly url: string;
-  readonly threadId: string | null;
-  readonly createdAt: string;
-}
+export type { ManagedTabRecord, TabRef, TabRegistryPort };
 
 const FILE = "tabs.json";
 
@@ -46,12 +41,6 @@ export function forgetManagedTab(targetId: string): void {
 
 export function isManagedTab(targetId: string): boolean {
   return readAll().some((record) => record.targetId === targetId);
-}
-
-export interface TabRef {
-  readonly targetId: string;
-  readonly url: string;
-  readonly threadId: string | null;
 }
 
 /**
@@ -94,3 +83,14 @@ export function clearManagedTabs(): void {
     fs.rmSync(registryPath(), { force: true });
   } catch {}
 }
+
+import { TabManagerService } from "../../core/services/tab-manager.service.js";
+
+export const fileTabRegistry: TabRegistryPort = {
+  recordManagedTab,
+  forgetManagedTab,
+  isManagedTab,
+  isManagedTabRef,
+};
+
+TabManagerService.setDefaultRegistry(fileTabRegistry);

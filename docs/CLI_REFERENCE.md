@@ -39,11 +39,21 @@ Exhaustive reference for all 16 commands provided by `convo` / `convolink`.
 - `--targetId`, `-t`: Target specific CDP tab ID or shorthand (`#1`, `#2`).
 - `--new`, `-n`: Reset tab to fresh chat before submitting prompt.
 - `--open-tab`: Spawn brand-new tab in background before submitting.
-- `--think` / `--no-think`: Enable or disable deep thinking mode (e.g. DeepSeek R1).
+- `--think` / `--no-think`: Enable or disable deep thinking mode (e.g. DeepSeek v4.1 Flash, GPT-6 Asta, Claude Opus 5.5).
 - `--search` / `--no-search`: Enable or disable web search grounding.
 - `--write-files`, `-w`: Extract files tagged with `// filepath:` to disk.
 - `--out-dir`, `-o`: Output directory for written files (default: `./artifacts`).
 - `--transport`: Engine: `raw-cdp` (default), `extension-bridge`, `firefox-bidi`, `agent-browser`.
+
+### `convo setup`
+- `-b`, `--browser <name>`: Browser name (`chrome`, `brave`, `edge`, `chromium`, `firefox`, `zen`).
+- `--profile <path>`: Profile directory or profile ID.
+- `--transport <name>`: Transport mode (`raw-cdp`, `firefox-bidi`, `agent-browser`, `extension-bridge`).
+- `--save-only`, `--no-verify`: Save configuration immediately without probing browser socket (declarative/offline setup).
+- `--no-verify-tab`: Skip opening test tab during verification.
+- `--show`: Display current project configuration from `.convo/config.json`.
+- `--reset`: Delete `.convo/config.json`.
+- `--json`: Output machine-readable JSON envelope.
 
 ### Extension transport (protocol v2)
 
