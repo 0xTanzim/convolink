@@ -5,6 +5,7 @@ export interface ExtensionClientStatus {
   readonly browserFamily: string;
   readonly profileLabel: string;
   readonly extensionVersion: string;
+  readonly buildId?: string;
   readonly tabCount: number;
   readonly lastHeartbeat: number;
 }

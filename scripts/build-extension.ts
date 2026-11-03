@@ -10,6 +10,7 @@ export interface BuildOptions {
 
 export interface BuildResult {
   readonly success: boolean;
+  readonly buildId?: string;
   readonly outDir: string;
   readonly zipPath?: string;
   readonly versionedZipPath?: string;
@@ -18,6 +19,11 @@ export interface BuildResult {
 }
 
 const ROOT_DIR = path.resolve(import.meta.dir, "..");
+
+/** A reload is only meaningful if the running bundle can prove which build it is. */
+export function createBuildId(now = Date.now()): string {
+  return now.toString(36);
+}
 const EXT_ROOT = path.join(ROOT_DIR, "extensions/convolink-companion");
 const AI_HOSTS = [
   "https://chatgpt.com/*",
@@ -40,7 +46,12 @@ export function buildManifest(target: "chrome" | "firefox", version: string): Re
     name: "ConvoLink Companion",
     version,
     description: "Zero-flag intelligence & context bridge for ConvoLink and local AI agents.",
-    permissions: ["tabs", "storage", "alarms", "scripting"],
+    // chrome.debugger is Chromium-only; Firefox uses a different protocol and
+    // would reject the manifest outright.
+    permissions:
+      target === "chrome"
+        ? ["tabs", "storage", "alarms", "scripting", "debugger", "activeTab"]
+        : ["tabs", "storage", "alarms", "scripting", "activeTab"],
     host_permissions: AI_HOSTS,
     background:
       target === "firefox"
@@ -75,6 +86,12 @@ export async function buildExtension(options: BuildOptions): Promise<BuildResult
     await bundle(path.join(EXT_ROOT, "entrypoints/background.ts"), outDir, "background.js");
     await bundle(path.join(EXT_ROOT, "entrypoints/popup/main.ts"), outDir, "popup.js");
 
+    const buildId = createBuildId();
+    fs.writeFileSync(
+      path.join(outDir, "build-meta.json"),
+      JSON.stringify({ version, buildId, builtAt: new Date().toISOString() }, null, 2),
+    );
+
     const popupHtml = fs
       .readFileSync(path.join(EXT_ROOT, "entrypoints/popup/index.html"), "utf-8")
       .replace(/src=["']\.\/main\.ts["']/, 'src="./popup.js"');
@@ -97,7 +114,7 @@ export async function buildExtension(options: BuildOptions): Promise<BuildResult
       fs.copyFileSync(zipPath, versionedZipPath);
     }
 
-    return { success: true, outDir, zipPath, versionedZipPath, version };
+    return { success: true, buildId, outDir, zipPath, versionedZipPath, version };
   } catch (error) {
     return { success: false, outDir, error: (error as Error).message };
   }

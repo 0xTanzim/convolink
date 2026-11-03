@@ -1,4 +1,15 @@
-export type IpcCommand = "ask" | "compare" | "doctor" | "list" | "ping" | "stop" | "tab_new" | "tab_close" | "eval";
+export type IpcCommand =
+  | "ask"
+  | "compare"
+  | "doctor"
+  | "list"
+  | "ping"
+  | "stop"
+  | "tab_new"
+  | "tab_close"
+  | "tab_focus"
+  | "ext_exec"
+  | "eval";
 
 export interface IpcRequest {
   readonly id: string;

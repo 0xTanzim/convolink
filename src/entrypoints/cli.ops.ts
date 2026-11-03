@@ -160,6 +160,23 @@ export async function handleTab(
     return 0;
   }
 
+  if (sub === "focus") {
+    if (!args[1]) return printError(new Error("Target ID is required to focus a tab."));
+    if (useDaemon) await daemon.sendRequest("tab_focus", { targetId: args[1] });
+    else {
+      const browser = orchestrator.getBrowser();
+      const handle = await browser.attach(args[1]);
+      try {
+        await browser.bringToFront(handle);
+      } finally {
+        await browser.detach(handle);
+      }
+    }
+    if (flags.json) printJson(successEnvelope("tab", { focused: args[1] }));
+    else console.log(`🎯 Focused tab [${args[1]}]`);
+    return 0;
+  }
+
   if (sub === "close") {
     if (!args[1]) return printError(new Error("Target ID is required to close a tab."));
     if (useDaemon) await daemon.sendRequest("tab_close", { targetId: args[1] });

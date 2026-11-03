@@ -135,6 +135,28 @@ export class BridgeDaemonService {
         const p = (payload ?? {}) as Record<string, any>;
         return this.orchestrator.closeTab(String(p.targetId));
       }
+      case "tab_focus": {
+        const p = (payload ?? {}) as Record<string, any>;
+        const browser = this.orchestrator.getBrowser();
+        const handle = await browser.attach(String(p.targetId));
+        try {
+          await browser.bringToFront(handle);
+          return { active: true, targetId: String(p.targetId) };
+        } finally {
+          await browser.detach(handle);
+        }
+      }
+      case "ext_exec": {
+        const p = (payload ?? {}) as Record<string, any>;
+        const browser = this.orchestrator.getBrowser() as {
+          id?: string;
+          rawCommand?: (type: string, payload?: Record<string, unknown>, targetId?: string) => Promise<unknown>;
+        };
+        if (typeof browser.rawCommand !== "function") {
+          throw new Error(`Transport ${browser.id ?? "unknown"} has no raw command channel`);
+        }
+        return browser.rawCommand(String(p.type), (p.payload ?? {}) as Record<string, unknown>, p.targetId ? String(p.targetId) : undefined);
+      }
       case "eval": {
         const p = (payload ?? {}) as Record<string, any>;
         const handle = await this.orchestrator.getBrowser().attach(String(p.targetId));

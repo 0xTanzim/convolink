@@ -69,9 +69,10 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     this.server = Bun.serve({
       port: this.port,
       hostname: "127.0.0.1",
-      fetch(req, server) {
+      async fetch(req, server) {
         const pathname = new URL(req.url).pathname;
         if (req.method === "GET" && pathname === "/status") {
+          try { await adapter.listTabs(); } catch {}
           return Response.json({ protocolVersion: 2, clients: adapter.registry.health() });
         }
         if (!isValidExtensionOrigin(req.headers.get("origin"))) return new Response("Forbidden: Origin", { status: 403 });
@@ -175,6 +176,10 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     await this.sendAction("BRING_TO_FRONT", handle.targetId, {});
   }
 
+  public async trustedKey(handle: SessionHandle, key: string): Promise<void> {
+    await this.sendAction("TRUSTED_KEY", handle.targetId, { key });
+  }
+
   public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
     const operation = this.translateExpression(handle.targetId, expression);
     const result = await this.sendRequest<unknown>(operation.type, operation.payload, handle.targetId);
@@ -210,6 +215,9 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     const client = this.registry.getAll().length === 1 ? this.registry.getAll()[0]! : this.registry.getPrimary();
     if (!client) throw new BrowserConnectionError(`ws://127.0.0.1:${this.port}`, "Extension is not connected");
     const result = await this.sendRequestToClient<{ tabId?: number; title?: string; url?: string }>(client.ws, "CREATE_TAB", { url });
+    // Refresh the client's tab cache before callers probe the new tab; platform
+    // routing is derived from that cache.
+    await this.listTabs().catch(() => []);
     const nativeId = Number(result?.tabId);
     const multi = this.registry.getAll().length > 1;
     return {
@@ -225,6 +233,19 @@ export class ExtensionBridgeAdapter implements BrowserPort {
 
   public navigate(handle: SessionHandle, url: string): Promise<void> {
     return this.sendAction("NAVIGATE", handle.targetId, { url });
+  }
+
+  /**
+   * Escape hatch for diagnostics and capabilities the BrowserPort does not
+   * model yet (scroll, hover, screenshot). Routed exactly like any other
+   * command, so ownership and auth still apply.
+   */
+  public async rawCommand<T = unknown>(
+    type: string,
+    payload: Record<string, unknown> = {},
+    targetId?: string,
+  ): Promise<T> {
+    return this.sendRequest<T>(type, payload, targetId);
   }
 
   private sendAction(type: string, targetId: string, extra: Record<string, unknown>): Promise<void> {
@@ -244,11 +265,17 @@ export class ExtensionBridgeAdapter implements BrowserPort {
     return this.sendRequestToClient<T>(client.ws, type, body);
   }
 
+  private trace(message: string): void {
+    if (process.env.CONVOLINK_DEBUG === "1") process.stderr.write(`[ext-bridge] ${message}\n`);
+  }
+
   private sendRequestToClient<T>(ws: ServerWebSocket<unknown>, type: string, payload: Record<string, unknown>): Promise<T> {
     const id = ++this.messageCounter;
+    this.trace(`→ ${type} id=${id} target=${String(payload.targetId ?? "-")} platform=${String(payload.platform ?? "-")}`);
     return new Promise<T>((resolve, reject) => {
       const timer = setTimeout(() => {
         this.pendingRequests.delete(id);
+        this.trace(`✗ timeout ${type} id=${id} after ${this.requestTimeoutMs}ms`);
         reject(new ConvoError("transport-timeout", `Extension request ${type} timed out.`, "Reload the extension and retry.", { retryable: true }));
       }, this.requestTimeoutMs);
       this.pendingRequests.set(id, { ws, resolve: resolve as (value: unknown) => void, reject, timer });
@@ -326,6 +353,12 @@ export class ExtensionBridgeAdapter implements BrowserPort {
         const pending = this.pendingRequests.get(message.id)!;
         this.pendingRequests.delete(message.id);
         clearTimeout(pending.timer);
+        this.trace(
+          `${message.ok === true ? "✓" : "✗"} id=${message.id} ` +
+            (message.ok === true
+              ? `result=${JSON.stringify(message.result)?.slice(0, 240)}`
+              : JSON.stringify(message.error)),
+        );
         if (message.ok === true) pending.resolve(message.result);
         else {
           const error = message.error as { code?: string; message?: string } | undefined;

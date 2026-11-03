@@ -24,7 +24,9 @@ export const IS_VISIBLE_JS = `const isVisible = (el) => {
   return true;
 };`;
 
-const PROBE_TIMEOUT_MS = 3_000;
+// A single status probe must be short enough to keep the poll loop responsive,
+// but long enough to absorb a serialized MV3 executeScript round trip.
+const PROBE_TIMEOUT_MS = 8_000;
 const POLL_MS = 120;
 const QUIET_MS = 400;
 const DEFAULT_SUBMIT_BUDGET_MS = 30_000;
@@ -47,8 +49,27 @@ function remaining(deadline: number): number {
   return Math.max(0, deadline - Date.now());
 }
 
-async function probe<T>(browser: BrowserPort, handle: SessionHandle, expression: string): Promise<T | undefined> {
-  return withDeadline(browser.evaluate<T>(handle, expression), PROBE_TIMEOUT_MS);
+async function probe<T>(
+  browser: BrowserPort,
+  handle: SessionHandle,
+  expression: string,
+  onError?: (error: unknown) => void,
+): Promise<T | undefined> {
+  const evaluation = browser.evaluate<T>(handle, expression);
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const deadline = new Promise<undefined>((resolve) => {
+    timer = setTimeout(() => resolve(undefined), PROBE_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([evaluation, deadline]);
+  } catch (error) {
+    onError?.(error);
+    return undefined;
+  } finally {
+    if (timer) clearTimeout(timer);
+    // The losing side of the race must never surface as an unhandled rejection.
+    void evaluation.catch(() => undefined);
+  }
 }
 
 export async function waitForMounted(
@@ -212,6 +233,13 @@ export async function waitForAndClickSendButton(
   debug("enter fallback");
   await browser.pressKey(handle, composerSelector, "Enter").catch(() => {});
 
+  if (!(await waitForComposerEmpty(browser, handle, composerSelector, 600))) {
+    // Editors that ignore synthetic KeyboardEvents still accept browser-level
+    // input, so the extension transport can escalate one step.
+    debug("trusted enter fallback");
+    await browser.trustedKey?.(handle, "Enter").catch(() => {});
+  }
+
   if (await waitForComposerEmpty(browser, handle, composerSelector, Math.min(2500, remaining(deadline)))) {
     debug("submitted after enter");
     return;
@@ -239,8 +267,31 @@ const NUDGE_EXPR = (composerSelector: string) => `(() => {
 
 const RELOAD_EXPR = `(() => { location.reload(); return true; })()`;
 
+/**
+ * The prompt counts as submitted only when it appears OUTSIDE the composer.
+ * `document.body.innerText` also contains whatever is still sitting in the
+ * composer, so a plain body check reports success for an unsent message.
+ */
 async function promptVisible(browser: BrowserPort, handle: SessionHandle, marker: string): Promise<boolean> {
-  return (await probe<boolean>(browser, handle, `(document.body.innerText || "").includes(${marker})`)) === true;
+  return (
+    (await probe<boolean>(
+      browser,
+      handle,
+      `(() => {
+        const body = document.body ? (document.body.innerText || "") : "";
+        if (!body.includes(${marker})) return false;
+        const composer = document.querySelector('div[contenteditable="true"], textarea, [role="textbox"]');
+        const composerText = composer
+          ? ((composer.innerText || composer.value || "") as string)
+          : "";
+        // Marker only lives in the composer, so it never became a turn.
+        if (composerText.includes(${marker})) {
+          return body.replace(composerText, "").includes(${marker});
+        }
+        return true;
+      })()`,
+    )) === true
+  );
 }
 
 /**
@@ -379,9 +430,12 @@ export async function pollUntilSettled(
   let lastText = "";
   let lastChange = start;
   let lastDebug = 0;
+  let lastProbeError: unknown;
 
   while (Date.now() < deadline) {
-    const status = await probe<CompletionProbeStatus>(browser, handle, probeExpr);
+    const status = await probe<CompletionProbeStatus>(browser, handle, probeExpr, (error) => {
+      lastProbeError = error;
+    });
     if (status) {
       lastStatus = status;
       const text = options.textOf(status);
@@ -402,6 +456,9 @@ export async function pollUntilSettled(
     await sleep(POLL_MS);
   }
 
-  if (!lastStatus) throw new TimeoutError("The page did not answer status probes.", options.timeoutMs);
+  if (!lastStatus) {
+    const detail = lastProbeError instanceof Error ? ` Last error: ${lastProbeError.message}` : "";
+    throw new TimeoutError(`The page did not answer status probes.${detail}`, options.timeoutMs);
+  }
   return { status: lastStatus, elapsedMs: Date.now() - start, timedOut: true };
 }

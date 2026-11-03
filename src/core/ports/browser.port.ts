@@ -59,6 +59,9 @@ export interface BrowserPort {
   fillText(handle: SessionHandle, selector: string, text: string): Promise<void>;
   click(handle: SessionHandle, selector: string): Promise<void>;
   pressKey(handle: SessionHandle, selector: string, key: string): Promise<void>;
+
+  /** Browser-level (trusted) keystroke, for editors that ignore synthetic events */
+  trustedKey?(handle: SessionHandle, key: string): Promise<void>;
   setInputFiles(handle: SessionHandle, selector: string, filePaths: string[]): Promise<void>;
   downloadFile?(handle: SessionHandle, url: string): Promise<Buffer>;
 

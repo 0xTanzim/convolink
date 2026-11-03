@@ -40,11 +40,25 @@ export type ExtensionCommand =
   | "RELOAD"
   | "START_NEW_CHAT"
   | "FILL_TEXT"
+  | "TYPE_TEXT"
   | "CLICK"
+  | "HOVER"
+  | "SCROLL"
+  | "SCROLL_TO"
   | "PRESS_KEY"
+  | "TRUSTED_KEY"
+  | "TRUSTED_TYPE"
+  | "WAIT_FOR_SELECTOR"
+  | "SELECT_OPTION"
+  | "GET_HTML"
+  | "DIAGNOSE"
   | "BRING_TO_FRONT"
+  | "ACTIVATE_TAB"
+  | "TAB_INFO"
   | "CREATE_TAB"
   | "CLOSE_TAB"
+  | "DUPLICATE_TAB"
+  | "SCREENSHOT"
   | "NAVIGATE";
 
 export interface ClientHandshake {
@@ -55,6 +69,7 @@ export interface ClientHandshake {
   readonly browserFamily: BrowserFamily;
   readonly profileLabel: string;
   readonly extensionVersion: string;
+  readonly buildId?: string;
   readonly token?: string;
 }
 

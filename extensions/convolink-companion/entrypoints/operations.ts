@@ -130,17 +130,19 @@ export function bodyIncludesOp(marker: string): boolean {
   return (document.body?.innerText || "").includes(marker);
 }
 
-function codeBlocksOf(text: string): Array<{ language: string; code: string }> {
-  const blocks: Array<{ language: string; code: string }> = [];
-  const pattern = /```([a-zA-Z0-9_-]*)\n([\s\S]*?)```/g;
-  let match: RegExpExecArray | null;
-  while ((match = pattern.exec(text)) !== null) {
-    blocks.push({ language: match[1] || "text", code: match[2] || "" });
-  }
-  return blocks;
-}
 
 export function readThreadOp(selectors: PlatformSelectors, lastN: number) {
+  // executeScript serializes this function alone; every helper must be inline.
+  // A thrown error would arrive as a null result, hiding the cause, so the
+  // whole body reports its own failure.
+  try {
+  const codeBlocksOf = (root: Element): Array<{ language: string; code: string }> =>
+    Array.from(root.querySelectorAll("pre")).map((pre) => {
+      const codeEl = pre.querySelector("code");
+      const code = (codeEl?.textContent ?? pre.textContent ?? "").replace(/\n$/, "");
+      const language = /language-([a-zA-Z0-9_-]+)/.exec(codeEl?.className || "")?.[1] || "text";
+      return { language, code };
+    });
   const nodes = Array.from(document.querySelectorAll(selectors.turns)).slice(-Math.max(1, lastN));
   const turns = nodes.map((node, index) => {
     const isUser = Boolean(node.querySelector(selectors.user)) || node.matches(selectors.user);
@@ -150,22 +152,33 @@ export function readThreadOp(selectors: PlatformSelectors, lastN: number) {
       turnIndex: index,
       role: isUser ? "user" : "assistant",
       markdownContent: text,
-      codeBlocks: isUser ? [] : codeBlocksOf(text),
+      codeBlocks: isUser ? [] : codeBlocksOf(textNode.nodeType === 1 ? (textNode as Element) : node),
       contentHash: String(text.length),
     };
   });
   return { layoutVariant: "companion-v2", turns };
+  } catch (error) {
+    return { layoutVariant: "companion-v2", turns: [], probeError: String((error as Error)?.message ?? error) };
+  }
 }
 
-const visibleInPage = (el: Element | null): boolean => {
-  if (!el) return false;
-  const rect = el.getBoundingClientRect();
-  if (rect.width <= 0 || rect.height <= 0) return false;
-  const style = getComputedStyle(el);
-  return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
-};
-
 export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) {
+  // executeScript serializes this function alone; every helper must be inline.
+  try {
+  const visibleInPage = (el: Element | null): boolean => {
+    if (!el) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return false;
+    const style = getComputedStyle(el);
+    return style.display !== "none" && style.visibility !== "hidden" && style.opacity !== "0";
+  };
+  const codeBlocksOf = (root: Element): Array<{ language: string; code: string }> =>
+    Array.from(root.querySelectorAll("pre")).map((pre) => {
+      const codeEl = pre.querySelector("code");
+      const code = (codeEl?.textContent ?? pre.textContent ?? "").replace(/\n$/, "");
+      const language = /language-([a-zA-Z0-9_-]+)/.exec(codeEl?.className || "")?.[1] || "text";
+      return { language, code };
+    });
   const nodes = Array.from(document.querySelectorAll(selectors.turns));
   const last = nodes[nodes.length - 1] as HTMLElement | undefined;
   const assistantNode = last ? ((last.querySelector(selectors.assistant) ?? last) as HTMLElement) : null;
@@ -180,6 +193,9 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
     isThinking: visibleInPage(document.querySelector(selectors.thinking)),
     assistantText,
     text: assistantText,
-    codeBlocks: assistantText ? codeBlocksOf(assistantText) : [],
+    codeBlocks: assistantNode ? codeBlocksOf(assistantNode) : [],
   };
+  } catch (error) {
+    return { turnsCount: 0, hasNewTurn: false, isGenerating: false, isThinking: false, assistantText: "", text: "", codeBlocks: [], probeError: String((error as Error)?.message ?? error) };
+  }
 }

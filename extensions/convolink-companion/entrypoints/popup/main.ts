@@ -32,6 +32,20 @@ document.addEventListener("DOMContentLoaded", async () => {
 
   await refreshStatus();
 
+  try {
+    const response = await fetch(api.runtime.getURL("build-meta.json"));
+    if (response.ok) {
+      const meta = (await response.json()) as { version?: string; buildId?: string; builtAt?: string };
+      const buildInfo = document.getElementById("buildInfo");
+      if (buildInfo) {
+        const built = meta.builtAt ? new Date(meta.builtAt).toLocaleString() : "";
+        buildInfo.textContent = `v${meta.version ?? "?"} · build ${meta.buildId ?? "dev"}${built ? ` · ${built}` : ""}`;
+      }
+    }
+  } catch {
+    // Build metadata is diagnostic only.
+  }
+
   const ua = navigator.userAgent.toLowerCase();
   if (ua.includes("brave") || (navigator as any).brave) {
     browserBadge.textContent = "Brave";

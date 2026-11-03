@@ -32,7 +32,10 @@ describe("Extension Build & Packaging Pipeline", () => {
     expect(manifest.permissions).toContain("scripting");
     expect(manifest.permissions).toContain("tabs");
     expect(manifest.permissions).toContain("alarms");
-    expect(manifest.permissions).not.toContain("debugger");
+    // Chromium-only capability: trusted input and tab screenshots.
+    expect(manifest.permissions).toContain("debugger");
+    expect(manifest.permissions).toContain("activeTab");
+    expect(fs.existsSync(path.join(chromeDir, "build-meta.json"))).toBe(true);
     expect(manifest.background.service_worker).toBe("background.js");
   });
 
@@ -48,6 +51,8 @@ describe("Extension Build & Packaging Pipeline", () => {
     expect(manifest.manifest_version).toBe(3);
     expect(manifest.background.scripts).toEqual(["background.js"]);
     expect(manifest.browser_specific_settings?.gecko?.id).toBe("companion@convolink.local");
+    // Firefox uses a different debugging protocol; the manifest must not ask for it.
+    expect(manifest.permissions).not.toContain("debugger");
   });
 
   it("generates both manifests from one version and host list", () => {
@@ -64,7 +69,8 @@ describe("Extension Build & Packaging Pipeline", () => {
       "https://claude.ai/*",
     ]);
     expect(chrome.host_permissions).toEqual(firefox.host_permissions);
-    expect(chrome.permissions).not.toContain("debugger");
+    expect(chrome.permissions).toContain("debugger");
+    expect(firefox.permissions).not.toContain("debugger");
   });
 
   it("has no duplicate manifest or build-output tree left in the source extension", () => {

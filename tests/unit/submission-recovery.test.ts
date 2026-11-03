@@ -45,6 +45,9 @@ class ScriptedBrowser implements BrowserPort {
       return this.sendEnabled as T;
     }
     if (expression.includes("c.focus()")) return true as T;
+    // promptVisible now separates composer text from conversation text; the
+    // fake models that directly (promptInBody = it became a turn).
+    if (expression.includes("const body = document.body")) return this.promptInBody as T;
     if (expression.includes("innerText || \"\").includes")) return this.promptInBody as T;
     if (expression.includes("trim().length > 0")) return this.textInComposer as T;
     // Mounted probe (composer only) vs send-readiness probe (both selectors).

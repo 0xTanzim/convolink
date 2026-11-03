@@ -15,6 +15,7 @@ export interface ConnectedClient {
   readonly browserFamily: BrowserFamily;
   readonly profileLabel: string;
   readonly extensionVersion: string;
+  readonly buildId: string;
   lastHeartbeat: number;
   tabs: TabDescriptor[];
   tabsReported: boolean;
@@ -27,6 +28,7 @@ export interface ClientHealth {
   readonly browserFamily: BrowserFamily;
   readonly profileLabel: string;
   readonly extensionVersion: string;
+  readonly buildId: string;
   readonly tabCount: number;
   readonly lastHeartbeat: number;
 }
@@ -46,6 +48,7 @@ export class ClientRegistry {
       browserFamily: handshake.browserFamily || "chrome",
       profileLabel: handshake.profileLabel || "Default",
       extensionVersion: handshake.extensionVersion || "0.0.0",
+      buildId: handshake.buildId || "unknown",
       lastHeartbeat: Date.now(),
       tabs: [],
       tabsReported: false,
@@ -120,6 +123,7 @@ export class ClientRegistry {
       browserFamily: client.browserFamily,
       profileLabel: client.profileLabel,
       extensionVersion: client.extensionVersion,
+      buildId: client.buildId,
       tabCount: client.tabs.length,
       lastHeartbeat: client.lastHeartbeat,
     }));

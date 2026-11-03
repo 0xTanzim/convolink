@@ -2,6 +2,7 @@ import { BridgeTokenService } from "../core/services/bridge-token.service.js";
 import { HostEnv } from "../core/env/host-env.js";
 import { fetchExtensionBridgeStatus } from "../adapters/browsers/extension-bridge.status.js";
 import * as path from "node:path";
+import { DaemonClient } from "../adapters/daemon/daemon-client.js";
 
 export async function handleExt(args: string[], tokenService?: BridgeTokenService): Promise<number> {
   const subCommand = args[0] || "pair";
@@ -47,12 +48,44 @@ export async function handleExt(args: string[], tokenService?: BridgeTokenServic
     }
     console.log(`   Connected clients: ${status.clients.length}\n`);
     for (const client of status.clients) {
-      console.log(`   • ${client.browserFamily} [${client.profileLabel}] v${client.extensionVersion} · ${client.tabCount} tab(s)`);
+      const build = client.buildId && client.buildId !== "unknown" ? ` · build ${client.buildId}` : "";
+      console.log(`   • ${client.browserFamily} [${client.profileLabel}] v${client.extensionVersion}${build} · ${client.tabCount} tab(s)`);
     }
     console.log("");
     return 0;
   }
 
-  console.error(`Unknown ext command: ${subCommand}. Available: convo ext pair [--rotate] | convo ext status [--json]`);
+  if (subCommand === "exec") {
+    const type = String(args[1] || "").toUpperCase();
+    if (!type) {
+      console.error("Usage: convo ext exec <COMMAND> ['<json payload>'] [--target <targetId>]");
+      console.error("Example: convo ext exec DIAGNOSE '{}' --target 123456789");
+      return 1;
+    }
+    const targetIndex = args.indexOf("--target");
+    const targetId = targetIndex !== -1 ? args[targetIndex + 1] : undefined;
+    const rawPayload = args[2] && args[2] !== "--target" ? args[2] : "{}";
+    let payload: Record<string, unknown>;
+    try {
+      payload = JSON.parse(rawPayload) as Record<string, unknown>;
+    } catch (error) {
+      console.error(`Invalid JSON payload: ${(error as Error).message}`);
+      return 1;
+    }
+    const daemon = new DaemonClient();
+    if (!(await daemon.isAlive())) {
+      console.error("The bridge daemon is not running. Start it with `convo daemon start`.");
+      return 3;
+    }
+    const response = await daemon.sendRequest("ext_exec", { type, payload, targetId });
+    if (!response.ok) {
+      console.error(`Extension command ${type} failed: ${response.error ?? "unknown error"}`);
+      return 6;
+    }
+    console.log(JSON.stringify({ ok: true, command: type, data: response.result }, null, 2));
+    return 0;
+  }
+
+  console.error(`Unknown ext command: ${subCommand}. Available: convo ext pair [--rotate] | convo ext status [--json] | convo ext exec <COMMAND> [json]`);
   return 1;
 }

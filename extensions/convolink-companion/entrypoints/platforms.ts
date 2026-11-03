@@ -17,7 +17,7 @@ export interface PlatformSelectors {
  */
 export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
   chatgpt: {
-    turns: "article[data-testid^='conversation-turn-'], [data-message-author-role]",
+    turns: "article[data-testid^='conversation-turn-']",
     user: "[data-message-author-role='user']",
     assistant: "[data-message-author-role='assistant']",
     stop: "button[data-testid='stop-button'], button[aria-label*='Stop']",
@@ -26,7 +26,7 @@ export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
     send: "button[data-testid='send-button'], button[aria-label='Send prompt'], button[aria-label='Send']",
   },
   claude: {
-    turns: "[data-testid='chat-message'], .font-claude-message, .font-user-message",
+    turns: "[data-testid='chat-message']",
     user: ".font-user-message, [data-testid='user-message']",
     assistant: ".font-claude-message, [data-testid='assistant-message']",
     stop: "button[aria-label*='Stop'], button[aria-label*='stop']",
@@ -35,7 +35,7 @@ export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
     send: "button[aria-label='Send Message'], button[aria-label*='Send'], button[type='submit']",
   },
   deepseek: {
-    turns: ".ds-message, [class*='message']",
+    turns: ".ds-message",
     user: "[class*='user'], .fbb737a4",
     assistant: ".ds-markdown, [class*='assistant']",
     stop: ".ds-button--stop, button[aria-label*='stop'], button[aria-label*='Stop']",
