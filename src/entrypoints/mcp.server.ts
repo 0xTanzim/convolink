@@ -42,6 +42,8 @@ export interface McpServerOptions {
   readonly workDir?: string;
   /** Writes a JSON-RPC notification (progress) to the client. */
   readonly notify?: (message: unknown) => void;
+  /** Profile discovery seam; production reads the filesystem. */
+  readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
 }
 
 export class McpServer {
@@ -49,6 +51,7 @@ export class McpServer {
   private readonly onActivity?: () => void;
   private readonly workDir?: string;
   private readonly notify?: (message: unknown) => void;
+  private readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
   private resolvedOrchestrator: SessionOrchestrator | null = null;
 
   public constructor(providerOrOptions?: OrchestratorProvider | McpServerOptions) {
@@ -59,6 +62,7 @@ export class McpServer {
       this.onActivity = providerOrOptions.onActivity;
       this.workDir = providerOrOptions.workDir;
       this.notify = providerOrOptions.notify;
+      this.discoverProfiles = providerOrOptions.discoverProfiles;
     }
   }
 
@@ -102,6 +106,7 @@ export class McpServer {
           ...(progressToken !== undefined && this.notify
             ? { onProgress: this.progressPort(progressToken) }
             : {}),
+          ...(this.discoverProfiles ? { discoverProfiles: this.discoverProfiles } : {}),
         });
         return {
           jsonrpc: "2.0",

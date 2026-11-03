@@ -28,6 +28,8 @@ export interface McpToolExecutionResult {
 
 export interface ExecuteToolOptions {
   readonly workDir?: string;
+  /** Test/logic seam: profile discovery touches the filesystem, so callers may inject it. */
+  readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
   readonly onProgress?: { report(event: { stage: string; elapsedMs: number; platform?: string }): void };
 }
 
@@ -64,7 +66,12 @@ export async function executeMcpTool(
       case "convo_ask": {
         const browser = typeof args.browser === "string" ? args.browser : undefined;
         const profile = typeof args.profile === "string" ? args.profile : undefined;
-        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile, ...(options?.workDir ? { workDir: options.workDir } : {}) });
+        const browserReady = await ensureMcpBrowserReady(orchestrator, {
+          browser,
+          profile,
+          ...(options?.workDir ? { workDir: options.workDir } : {}),
+          ...(options?.discoverProfiles ? { discoverProfiles: options.discoverProfiles } : {}),
+        });
         if (!browserReady.ok) {
           return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
         }
@@ -105,7 +112,12 @@ export async function executeMcpTool(
       case "convo_compare": {
         const browser = typeof args.browser === "string" ? args.browser : undefined;
         const profile = typeof args.profile === "string" ? args.profile : undefined;
-        const browserReady = await ensureMcpBrowserReady(orchestrator, { browser, profile, ...(options?.workDir ? { workDir: options.workDir } : {}) });
+        const browserReady = await ensureMcpBrowserReady(orchestrator, {
+          browser,
+          profile,
+          ...(options?.workDir ? { workDir: options.workDir } : {}),
+          ...(options?.discoverProfiles ? { discoverProfiles: options.discoverProfiles } : {}),
+        });
         if (!browserReady.ok) {
           return { text: browserReady.errorText ?? "Browser is not ready.", isError: true };
         }

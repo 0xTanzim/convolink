@@ -10,7 +10,10 @@ import { LockService } from "../../src/core/services/lock.service.js";
 import { PolicyService } from "../../src/core/services/policy.service.js";
 
 describe("McpServer (JSON-RPC over stdio)", () => {
-  const createTestServer = (options?: { workDir?: string }) => {
+  const createTestServer = (options?: {
+    workDir?: string;
+    discoverProfiles?: () => Promise<import("../../src/adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
+  }) => {
     const browser = new FakeBrowserPort();
     browser.evalResponseMap.set("resolveSelectors", {
       ok: true, layoutVariant: "v1", composerSelector: "textarea", sendButtonSelector: "button",
@@ -28,7 +31,11 @@ describe("McpServer (JSON-RPC over stdio)", () => {
       policyGate: new PolicyService(),
     });
 
-    return new McpServer({ orchestrator, workDir: options?.workDir });
+    return new McpServer({
+      orchestrator,
+      workDir: options?.workDir,
+      ...(options?.discoverProfiles ? { discoverProfiles: options.discoverProfiles } : {}),
+    });
   };
 
   it("handles initialize method and returns server capabilities", async () => {
@@ -266,38 +273,47 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.result?.content).toBeDefined();
   });
 
-  it("when transport is offline and no profile is configured, convo_ask guides agent to select a profile", async () => {
+  const askWithOfflineTransport = async (
+    tmpRoot: string,
+    discoverProfiles?: () => Promise<import("../../src/adapters/browsers/browser-discovery.js").DiscoveredProfile[]>,
+  ) => {
+    const offlineBrowser = new FakeBrowserPort();
+    offlineBrowser.health = async () => ({
+      ok: false,
+      adapterId: "fake",
+      endpoint: "fake",
+      openTabsCount: 0,
+      latencyMs: 0,
+    });
+
+    const orchestrator = new SessionOrchestrator({
+      browser: offlineBrowser,
+      drivers: [new DeepSeekDriver()],
+      lockService: new LockService(),
+      policyGate: new PolicyService(),
+    });
+
+    const server = new McpServer({
+      orchestrator,
+      workDir: tmpRoot,
+      ...(discoverProfiles ? { discoverProfiles } : {}),
+    });
+    return await server.handleMessage({
+      jsonrpc: "2.0",
+      id: 42,
+      method: "tools/call",
+      params: { name: "convo_ask", arguments: { prompt: "Hello" } },
+    });
+  };
+
+  it("offers discovered profiles when transport is offline and no profile is configured", async () => {
     const tmpRoot = path.join(os.tmpdir(), `convo-empty-root-${Date.now()}`);
     fs.mkdirSync(tmpRoot, { recursive: true });
-    process.env.CONVO_PROJECT_ROOT = tmpRoot;
 
     try {
-      const offlineBrowser = new FakeBrowserPort();
-      offlineBrowser.health = async () => ({
-        ok: false,
-        adapterId: "fake",
-        endpoint: "fake",
-        openTabsCount: 0,
-        latencyMs: 0,
-      });
-
-      const orchestrator = new SessionOrchestrator({
-        browser: offlineBrowser,
-        drivers: [new DeepSeekDriver()],
-        lockService: new LockService(),
-        policyGate: new PolicyService(),
-      });
-
-      const server = new McpServer({ orchestrator, workDir: tmpRoot });
-      const response = await server.handleMessage({
-        jsonrpc: "2.0",
-        id: 42,
-        method: "tools/call",
-        params: {
-          name: "convo_ask",
-          arguments: { prompt: "Hello" },
-        },
-      });
+      const response = await askWithOfflineTransport(tmpRoot, async () => [
+        { browser: "chrome", profileId: "Default", name: "Personal", email: "me@example.com", userDataDir: "/tmp/chrome" },
+      ]);
 
       expect(response?.id).toBe(42);
       expect(response?.result?.isError).toBe(true);
@@ -305,7 +321,23 @@ describe("McpServer (JSON-RPC over stdio)", () => {
       expect(text).toContain("No browser profile configured");
       expect(text).toContain("convo_profile");
     } finally {
-      delete process.env.CONVO_PROJECT_ROOT;
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
+  it("asks for convo_setup when no profile is configured and none can be discovered", async () => {
+    const tmpRoot = path.join(os.tmpdir(), `convo-empty-root-${Date.now()}`);
+    fs.mkdirSync(tmpRoot, { recursive: true });
+
+    try {
+      const response = await askWithOfflineTransport(tmpRoot, async () => []);
+
+      expect(response?.id).toBe(42);
+      expect(response?.result?.isError).toBe(true);
+      const text = response?.result?.content?.[0]?.text ?? "";
+      expect(text).toContain("No browser profile is configured");
+      expect(text).toContain("convo_setup");
+    } finally {
       fs.rmSync(tmpRoot, { recursive: true, force: true });
     }
   });
