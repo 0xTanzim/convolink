@@ -20,14 +20,19 @@ export function fillTextOp(selector: string, text: string): OpResult {
     el.dispatchEvent(new Event("input", { bubbles: true, composed: true }));
     el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   } else if (el.isContentEditable || el.getAttribute("contenteditable") === "true") {
+    // Replace, never append: the composer is a rich-text editor, so selection
+    // plus insertText is the only path that updates its internal state.
     const range = document.createRange();
     range.selectNodeContents(el);
     const selection = window.getSelection();
     selection?.removeAllRanges();
     selection?.addRange(range);
+    document.execCommand("delete");
     const inserted = document.execCommand("insertText", false, text);
-    if (!inserted || !(el.innerText || "").trim()) el.textContent = text;
-    el.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
+    if (!inserted || (el.innerText || "").trim() !== text.trim()) {
+      el.textContent = text;
+      el.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true, inputType: "insertText", data: text }));
+    }
     el.dispatchEvent(new Event("change", { bubbles: true, composed: true }));
   } else {
     (el as unknown as { value: string }).value = text;
@@ -143,16 +148,28 @@ export function readThreadOp(selectors: PlatformSelectors, lastN: number) {
       const language = /language-([a-zA-Z0-9_-]+)/.exec(codeEl?.className || "")?.[1] || "text";
       return { language, code };
     });
-  const nodes = Array.from(document.querySelectorAll(selectors.turns)).slice(-Math.max(1, lastN));
+  // When a role attribute exists, the marker's parent is the message node.
+  const roleAttr = selectors.turnRoleAttr;
+  const nodes = roleAttr
+    ? Array.from(document.querySelectorAll("[" + roleAttr + "]")).slice(-Math.max(1, lastN)).map((m) => m.parentElement).filter((n): n is HTMLElement => Boolean(n))
+    : Array.from(document.querySelectorAll(selectors.turns)).slice(-Math.max(1, lastN));
+  const roleOf = (node: HTMLElement, marker?: Element | null): "user" | "assistant" => {
+    if (roleAttr) {
+      const attr = (marker ?? node.querySelector("[" + roleAttr + "]"))?.getAttribute(roleAttr);
+      if (attr) return attr === "user" ? "user" : "assistant";
+    }
+    if (node.matches(selectors.user) || node.querySelector(selectors.user)) return "user";
+    return "assistant";
+  };
+  const stripLabel = (text: string): string => text.replace(/^(You said:|ChatGPT said:|You:|Assistant:)\s*/i, "");
   const turns = nodes.map((node, index) => {
-    const isUser = Boolean(node.querySelector(selectors.user)) || node.matches(selectors.user);
-    const textNode = isUser ? (node.querySelector(selectors.user) ?? node) : (node.querySelector(selectors.assistant) ?? node);
-    const text = ((textNode as HTMLElement).innerText || "").trim();
+    const role = roleOf(node);
+    const text = stripLabel(((node as HTMLElement).innerText || "").trim());
     return {
       turnIndex: index,
-      role: isUser ? "user" : "assistant",
+      role,
       markdownContent: text,
-      codeBlocks: isUser ? [] : codeBlocksOf(textNode.nodeType === 1 ? (textNode as Element) : node),
+      codeBlocks: role === "user" ? [] : codeBlocksOf(node),
       contentHash: String(text.length),
     };
   });
@@ -179,14 +196,33 @@ export function statusOp(selectors: PlatformSelectors, beforeTurnCount: number) 
       const language = /language-([a-zA-Z0-9_-]+)/.exec(codeEl?.className || "")?.[1] || "text";
       return { language, code };
     });
-  const nodes = Array.from(document.querySelectorAll(selectors.turns));
+  const roleAttr = selectors.turnRoleAttr;
+  const nodes = roleAttr
+    ? Array.from(document.querySelectorAll("[" + roleAttr + "]")).map((m) => m.parentElement).filter((n): n is HTMLElement => Boolean(n))
+    : Array.from(document.querySelectorAll(selectors.turns));
+  const roleOf = (node: HTMLElement): "user" | "assistant" | null => {
+    if (roleAttr) {
+      const attr = node.querySelector("[" + roleAttr + "]")?.getAttribute(roleAttr);
+      if (attr) return attr === "user" ? "user" : "assistant";
+    }
+    if (node.matches(selectors.user) || node.querySelector(selectors.user)) return "user";
+    if (node.matches(selectors.assistant) || node.querySelector(selectors.assistant)) return "assistant";
+    return null;
+  };
+  const stripLabel = (text: string): string => text.replace(/^(You said:|ChatGPT said:|You:|Assistant:)\s*/i, "");
   const last = nodes[nodes.length - 1] as HTMLElement | undefined;
-  const assistantNode = last ? ((last.querySelector(selectors.assistant) ?? last) as HTMLElement) : null;
-  const assistantText = assistantNode ? (assistantNode.innerText || "").trim() : "";
+  const lastRole = last ? roleOf(last) : null;
+  const assistantNode = roleAttr
+    ? ([...nodes].reverse().find((n) => roleOf(n) === "assistant") as HTMLElement | undefined) ?? null
+    : last
+      ? ((last.querySelector(selectors.assistant) ?? last) as HTMLElement)
+      : null;
+  const assistantText = assistantNode ? stripLabel((assistantNode.innerText || "").trim()) : "";
   return {
     turnsCount: nodes.length,
     turnIndex: Math.max(0, nodes.length - 1),
-    hasNewTurn: nodes.length > beforeTurnCount,
+    // A trailing user message means the assistant turn has not arrived yet.
+    hasNewTurn: nodes.length > beforeTurnCount && (!roleAttr || lastRole === "assistant"),
     // ChatGPT keeps the stop control in the DOM after a response; only a
     // visible stop control means generation is still running.
     isGenerating: visibleInPage(document.querySelector(selectors.stop)),

@@ -47,45 +47,40 @@ export class RawCdpAdapter implements BrowserPort {
     this.isDefaultProfile = options.isDefaultProfile ?? ((port) => isDefaultProfileEndpoint(port));
     if (typeof portOrEndpoint === "number") this.port = portOrEndpoint;
     else {
-      const match = portOrEndpoint.match(/:(\d+)/);
-      this.port = match && match[1] ? parseInt(match[1], 10) : 9222;
-      const hostMatch = portOrEndpoint.match(/^(?:https?:\/\/)?([^:/]+)/);
-      if (hostMatch && hostMatch[1] && !hostMatch[1].startsWith("http")) this.host = hostMatch[1];
+      // Parse as a URL so `[::1]:9222` does not match the `:1` inside the address.
+      const withScheme = portOrEndpoint.includes("://") ? portOrEndpoint : `http://${portOrEndpoint}`;
+      try {
+        const url = new URL(withScheme);
+        this.port = url.port ? parseInt(url.port, 10) : 9222;
+        if (url.hostname) this.host = url.hostname;
+      } catch {
+        const match = portOrEndpoint.match(/:(\d+)(?:\/|$)/);
+        this.port = match && match[1] ? parseInt(match[1], 10) : 9222;
+      }
     }
   }
 
   public async health(): Promise<TransportHealth> {
     const start = Date.now();
-    if (this.isDefaultProfile(this.port)) {
+    try {
+      const tabs = await this.listTabs();
+      return { ok: true, adapterId: this.id, endpoint: `http://${this.host}:${this.port}`, openTabsCount: tabs.length, latencyMs: Date.now() - start };
+    } catch (err: unknown) {
+      const blocked = this.isDefaultProfile(this.port);
       return {
         ok: false,
         adapterId: this.id,
         endpoint: `http://${this.host}:${this.port}`,
         openTabsCount: 0,
-        latencyMs: 0,
-        error: `Blocked: ${DEFAULT_PROFILE_BLOCK_MESSAGE}. Use the Companion Extension, or run "convo connect" for a dedicated debug profile.`,
+        latencyMs: Date.now() - start,
+        error: blocked
+          ? `Blocked: ${DEFAULT_PROFILE_BLOCK_MESSAGE}. Use the Companion Extension, or point at a dedicated debug profile on its own port.`
+          : (err as Error).message,
       };
-    }
-    try {
-      const tabs = await this.listTabs();
-      return { ok: true, adapterId: this.id, endpoint: `http://${this.host}:${this.port}`, openTabsCount: tabs.length, latencyMs: Date.now() - start };
-    } catch (err: unknown) {
-      return { ok: false, adapterId: this.id, endpoint: `http://${this.host}:${this.port}`, openTabsCount: 0, latencyMs: Date.now() - start, error: (err as Error).message };
-    }
-  }
-
-  /**
-   * Attaching to the default-profile browser only raises Chrome's approval modal
-   * and is refused afterwards, so it is treated as unreachable, not retried.
-   */
-  private assertNotDefaultProfile(): void {
-    if (this.isDefaultProfile(this.port)) {
-      throw new BrowserConnectionError(`${this.host}:${this.port}`, DEFAULT_PROFILE_BLOCK_MESSAGE);
     }
   }
 
   private async ensureBrowserWs(): Promise<BrowserWsClient | null> {
-    this.assertNotDefaultProfile();
     if (this.browserWsClient?.isOpen()) return this.browserWsClient;
     const wsUrl = this.browserWsUrl ?? findBrowserWsUrl(this.host, this.port, this.userDataDir);
     if (!wsUrl) return null;
@@ -116,6 +111,12 @@ export class RawCdpAdapter implements BrowserPort {
       if (gw) {
         try { return await queryCdpTargets(gw, this.port); } catch {}
       }
+    }
+    // A port can be claimed by two browsers (default profile on IPv4, a dedicated
+    // profile on IPv6). Only the default-profile hint decides which error to show
+    // once every transport attempt has already failed.
+    if (this.isDefaultProfile(this.port)) {
+      throw new BrowserConnectionError(`${this.host}:${this.port}`, DEFAULT_PROFILE_BLOCK_MESSAGE);
     }
     throw new BrowserConnectionError(`${this.host}:${this.port}`, "Unable to enumerate tabs via HTTP or Browser WS");
   }

@@ -64,7 +64,12 @@ export function createContainer(options?: ContainerOptions): AppContainer {
 
   const defaultPort = transport === "firefox-bidi" ? 9223 : (transport === "extension-bridge" ? 9224 : 9222);
   const port = resolved?.port ?? (options?.cdpEndpoint ? Number(options.cdpEndpoint.match(/:(\d+)/)?.[1] ?? defaultPort) : defaultPort);
-  const endpoint = resolved?.endpoint ?? options?.cdpEndpoint ?? `http://127.0.0.1:${port}`;
+  // A dedicated profile can bind a different interface than 127.0.0.1 (for
+  // example [::1] when the default profile already owns IPv4 on that port).
+  const envHost = process.env.CONVOLINK_HOST;
+  const endpoint = envHost
+    ? `http://${envHost}:${port}`
+    : (resolved?.endpoint ?? options?.cdpEndpoint ?? `http://127.0.0.1:${port}`);
 
   const browser = options?.browser ?? createBrowserAdapter({ transport, endpoint, port });
 

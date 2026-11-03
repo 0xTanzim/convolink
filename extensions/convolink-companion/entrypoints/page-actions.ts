@@ -77,8 +77,9 @@ export function typeTextOp(selector: string, text: string, submit: boolean): Act
       const selection = window.getSelection();
       selection?.removeAllRanges();
       selection?.addRange(range);
+      document.execCommand("delete");
       const inserted = document.execCommand("insertText", false, text);
-      if (!inserted || !(el.innerText || "").trim()) el.textContent = text;
+      if (!inserted || (el.innerText || "").trim() !== text.trim()) el.textContent = text;
     } else {
       el.textContent = text;
     }

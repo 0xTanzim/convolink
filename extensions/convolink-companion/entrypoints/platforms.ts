@@ -8,6 +8,11 @@ export interface PlatformSelectors {
   readonly thinking: string;
   readonly composer: string;
   readonly send: string;
+  /**
+   * Attribute that marks a message role, when the platform no longer exposes
+   * role containers directly. Its element's parent is the message node.
+   */
+  readonly turnRoleAttr?: string;
 }
 
 /**
@@ -17,13 +22,15 @@ export interface PlatformSelectors {
  */
 export const PLATFORM_SELECTORS: Record<PlatformKey, PlatformSelectors> = {
   chatgpt: {
-    turns: "article[data-testid^='conversation-turn-']",
-    user: "[data-message-author-role='user']",
-    assistant: "[data-message-author-role='assistant']",
-    stop: "button[data-testid='stop-button'], button[aria-label*='Stop']",
-    thinking: "[data-testid='reasoning'], .reasoning",
+    // 2026 build: no article/turn containers. Role markers are the stable hook.
+    turns: "[data-conversation-role]",
+    user: "[data-conversation-role='user']",
+    assistant: "[data-conversation-role='assistant']",
+    stop: "button[data-testid='stop-button'], button[aria-label='Stop generating'], button[aria-label='Stop streaming'], button[aria-label='Stop response'], button[aria-label='Stop']:not([aria-label*='dictation' i])",
+    thinking: "[data-testid*='thought'], [data-testid*='thinking'], [class*='thinking']",
     composer: "div.ProseMirror[contenteditable='true'], #prompt-textarea, div[contenteditable='true']",
-    send: "button[data-testid='send-button'], button[aria-label='Send prompt'], button[aria-label='Send']",
+    send: "button[aria-label='Send'], button[data-testid='send-button'], button[aria-label='Send prompt']",
+    turnRoleAttr: "data-conversation-role",
   },
   claude: {
     turns: "[data-testid='chat-message']",

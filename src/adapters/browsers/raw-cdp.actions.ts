@@ -19,8 +19,21 @@ export async function executeCdpClick(
       })()`,
     );
     if (box && box.width > 0 && box.height > 0) {
+      // Human-motor simulation costs one CDP round trip per Bezier point, and a
+      // background renderer answers each one slowly (measured ~3s x 35 points).
+      // It is opt-in now: correctness never depended on the cursor path.
+      if (process.env.CONVOLINK_HUMAN_MOTOR === "1") {
+        const target = computeTargetCoordinates(box);
+        await dispatchCdpHumanClick((m, p) => send(m, p), targetId, target);
+        return;
+      }
       const target = computeTargetCoordinates(box);
-      await dispatchCdpHumanClick((m, p) => send(m, p), targetId, target);
+      await send("Input.dispatchMouseEvent", {
+        type: "mousePressed", x: target.x, y: target.y, button: "left", clickCount: 1,
+      });
+      await send("Input.dispatchMouseEvent", {
+        type: "mouseReleased", x: target.x, y: target.y, button: "left", clickCount: 1,
+      });
       return;
     }
   } catch {}
