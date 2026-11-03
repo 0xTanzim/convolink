@@ -1,6 +1,10 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { PlatformId } from "../core/ports/platform.port.js";
 import { loadResolution } from "./config-context.js";
+import { BrowserDiscoveryService, type DiscoveredProfile } from "../adapters/browsers/browser-discovery.js";
+import type { ElicitationPort } from "./mcp.elicitation.js";
+import { buildOnboardReport, type OnboardFacts } from "../core/services/onboarding.service.js";
+import { collectOnboardFacts } from "./onboard.facts.js";
 import { buildCapabilities } from "./cli.doctor.js";
 import { applySetup } from "./cli.setup.js";
 import { toConvoError } from "../core/errors/convo-error.js";
@@ -26,10 +30,19 @@ export interface McpToolExecutionResult {
   readonly redactedSecretsCount?: number;
 }
 
+/** Setup verification launches a browser; this is the seam tests substitute. */
+export type ApplySetupFn = typeof applySetup;
+
 export interface ExecuteToolOptions {
   readonly workDir?: string;
   /** Test/logic seam: profile discovery touches the filesystem, so callers may inject it. */
   readonly discoverProfiles?: () => Promise<import("../adapters/browsers/browser-discovery.js").DiscoveredProfile[]>;
+  /** Present only when the client advertised the MCP elicitation capability. */
+  readonly elicitation?: ElicitationPort;
+  /** Seam: setup verification starts a browser, so callers may substitute it. */
+  readonly applySetupFn?: ApplySetupFn;
+  /** Seam: onboarding reads daemon/extension/adapter state, so callers may substitute it. */
+  readonly collectOnboardFacts?: () => Promise<OnboardFacts>;
   readonly onProgress?: { report(event: { stage: string; elapsedMs: number; platform?: string }): void };
 }
 
@@ -164,9 +177,51 @@ export async function executeMcpTool(
       case "convo_setup": {
         const browser = typeof args.browser === "string" ? (args.browser as BrowserId) : undefined;
         if (!browser) {
+          // A setup call without a browser is the agent asking "what can I pick?".
+          // Answering with the choice set is what stops it from hand-editing
+          // .convo/config.json to guess.
+          const discover = options?.discoverProfiles ?? (() => new BrowserDiscoveryService().discoverProfiles());
+          const profiles: DiscoveredProfile[] = await discover().catch(() => []);
+          if (profiles.length === 0) {
+            return {
+              text: "Error: 'browser' is required. Call convo_setup with { browser: 'firefox', profile: '<path>' }.",
+              isError: true,
+            };
+          }
+          const choices = profiles.map((profile) => `${profile.name}${profile.email ? ` <${profile.email}>` : ""} (${profile.browser})`);
+
+          const chosen = await askForProfile(options?.elicitation, choices);
+          const picked = chosen === undefined ? undefined : profiles[choices.indexOf(chosen)];
+          if (picked) {
+            const outcome = await (options?.applySetupFn ?? applySetup)({
+              browserId: picked.browser as BrowserId,
+              profilePath: picked.userDataDir,
+              ...(typeof args.transport === "string" ? { transport: args.transport as TransportId } : {}),
+              verifyTab: args.verifyTab === true,
+              ...(options?.workDir ? { workDir: options.workDir } : {}),
+            });
+            const structured = { ok: true, config: outcome.config, warning: outcome.warning ?? null, answeredBy: "elicitation" };
+            return { text: JSON.stringify(structured), structured };
+          }
+
+          const structured = {
+            ok: false,
+            requiresUserSelection: true,
+            question: "Which browser profile should ConvoLink drive for this project?",
+            options: choices,
+            nextTool: "convo_profile",
+          };
           return {
-            text: "Error: 'browser' is required. Call convo_setup with { browser: 'firefox', profile: '<path>' }.",
+            text: [
+              "No browser was given, and a profile is a human decision.",
+              "",
+              "Options:",
+              ...choices.map((choice, index) => `  ${index + 1}) ${choice}`),
+              "",
+              "Ask the user, then persist the answer with: convo_profile({ action: 'select', target: '<index|email|path>' })",
+            ].join("\n"),
             isError: true,
+            structured,
           };
         }
         const outcome = await applySetup({
@@ -178,6 +233,11 @@ export async function executeMcpTool(
         });
         const structured = { ok: true, config: outcome.config, warning: outcome.warning ?? null };
         return { text: JSON.stringify(structured), structured };
+      }
+
+      case "convo_onboard": {
+        const report = buildOnboardReport(await (options?.collectOnboardFacts ?? collectOnboardFacts)());
+        return { text: JSON.stringify(report), structured: { ...report } };
       }
 
       case "convo_doctor": {
@@ -295,4 +355,25 @@ export async function executeMcpTool(
     const error = toConvoError(err);
     return { text: JSON.stringify({ ok: false, error: error.toJSON() }), isError: true };
   }
+}
+
+/**
+ * Asks the human to pick a profile. Returns undefined when the client cannot
+ * ask, declines, or cancels — the caller then falls back to the text choice set.
+ */
+async function askForProfile(port: ElicitationPort | undefined, choices: readonly string[]): Promise<string | undefined> {
+  if (!port?.supported) return undefined;
+  const answer = await port.request({
+    message: "Which browser profile should ConvoLink drive for this project?",
+    requestedSchema: {
+      type: "object",
+      properties: {
+        profile: { type: "string", title: "Browser profile", enum: [...choices] },
+      },
+      required: ["profile"],
+    },
+  });
+  if (answer.action !== "accept") return undefined;
+  const value = answer.content?.profile;
+  return typeof value === "string" && choices.includes(value) ? value : undefined;
 }

@@ -158,7 +158,7 @@ describe("Milestone 6: Standalone Dist Bundling & npm Packaging", () => {
       expect(parsed.id).toBe(1);
       expect(parsed.result).toBeDefined();
       expect(parsed.result.tools).toBeInstanceOf(Array);
-      expect(parsed.result.tools.length).toBe(10);
+      expect(parsed.result.tools.length).toBe(11);
 
       const toolNames = parsed.result.tools.map((t: { name: string }) => t.name);
       expect(toolNames).toContain("convo_ask");

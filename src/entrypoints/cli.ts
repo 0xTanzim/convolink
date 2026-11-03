@@ -23,6 +23,8 @@ import {
 import { handleExt } from "./cli.ext.js";
 import { handleDaemon } from "./cli.daemon.js";
 import { handleAsk, handleCompare } from "./cli.query.js";
+import { handleOnboard } from "./cli.onboard.js";
+import { handleSkill } from "./cli.skill.js";
 
 const BROWSER_COMMANDS = new Set(["list", "ask", "compare", "tab"]);
 
@@ -34,6 +36,8 @@ export async function runCli(args: string[]): Promise<number> {
   if (versionExit !== null) return versionExit;
 
   if (command === "setup") return await handleSetup(args.slice(1));
+  if (command === "onboard") return await handleOnboard(args.slice(1));
+  if (command === "skill") return await handleSkill(args.slice(1));
   if (command === "mcp" || command === "profile" || command === "clean" || command === "ext" || command === "daemon") {
     return await dispatch(command, undefined, args);
   }

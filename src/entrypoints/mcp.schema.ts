@@ -131,6 +131,14 @@ export const MCP_TOOLS: readonly McpToolDefinition[] = [
     },
   },
   {
+    name: "convo_onboard",
+    description: "One call that reports what is ready for this project (daemon, extension pairing, profile, transport) and the exact next step. Call this before any browser work, and again after acting on nextAction. Exit-code equivalents: nextAction.kind=command means the agent can fix it, kind=user means a human must act.",
+    inputSchema: {
+      type: "object",
+      properties: {},
+    },
+  },
+  {
     name: "convo_doctor",
     description: "Check ConvoLink health, remote debugging ports (Chrome :9222, Firefox :9223, Extension :9224), open AI tabs, selector readiness, and active browser profiles. Pass fix: true to automatically purge ghost processes and stale mutex locks.",
     inputSchema: {

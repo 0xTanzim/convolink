@@ -61,7 +61,7 @@ describe("Milestone 5 Challenger Adversarial Stress Suite", () => {
             method: "tools/list",
           });
           expect(listRes?.id).toBe(i * 3 + 2);
-          expect(listRes?.result?.tools?.length).toBe(10);
+          expect(listRes?.result?.tools?.length).toBe(11);
 
           const pingRes = await server.handleMessage({
             jsonrpc: "2.0",
@@ -270,8 +270,8 @@ describe("Milestone 5 Challenger Adversarial Stress Suite", () => {
   // Area 5: 100% Multi-Profile Discovery Schema & Functional Integrity
   // --------------------------------------------------------------------------
   describe("Area 5: Multi-Profile Functional & Schema Integrity", () => {
-    it("verifies the 10 smart cognitive MCP tools are defined with compliant inputSchema structures", () => {
-      expect(MCP_TOOLS.length).toBe(10);
+    it("verifies the 11 smart cognitive MCP tools are defined with compliant inputSchema structures", () => {
+      expect(MCP_TOOLS.length).toBe(11);
       const names = MCP_TOOLS.map((t) => t.name);
 
       expect(names).toContain("convo_ask");
@@ -284,6 +284,7 @@ describe("Milestone 5 Challenger Adversarial Stress Suite", () => {
       expect(names).toContain("convo_profile");
       expect(names).toContain("convo_status");
       expect(names).toContain("convo_setup");
+      expect(names).toContain("convo_onboard");
 
       for (const tool of MCP_TOOLS) {
         expect(tool.name).toBeString();

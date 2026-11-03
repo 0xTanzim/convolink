@@ -53,7 +53,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.result?.capabilities?.tools).toBeDefined();
   });
 
-  it("handles tools/list and returns the 10 smart cognitive tools", async () => {
+  it("handles tools/list and returns the 11 smart cognitive tools", async () => {
     const server = createTestServer();
     const response = await server.handleMessage({
       jsonrpc: "2.0",
@@ -64,7 +64,7 @@ describe("McpServer (JSON-RPC over stdio)", () => {
     expect(response?.id).toBe(2);
     const tools = response?.result?.tools;
     expect(tools).toBeDefined();
-    expect(tools!.length).toBe(10);
+    expect(tools!.length).toBe(11);
 
     const names = tools!.map((t) => t.name);
     expect(names).toContain("convo_ask");
