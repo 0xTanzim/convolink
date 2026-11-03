@@ -107,6 +107,13 @@ export async function buildExtension(options: BuildOptions): Promise<BuildResult
       for (const archive of [zipPath, versionedZipPath]) {
         if (fs.existsSync(archive)) fs.unlinkSync(archive);
       }
+      // CI attaches every *.zip in this directory to the release, so an archive
+      // from an earlier version would be published as part of the new one.
+      for (const entry of fs.readdirSync(parentDir)) {
+        if (entry.startsWith(`convolink-companion-${target}-v`) && entry.endsWith(".zip")) {
+          fs.unlinkSync(path.join(parentDir, entry));
+        }
+      }
       const zipProc = Bun.spawnSync(["zip", "-r", "-q", zipPath, "."], { cwd: outDir });
       if (zipProc.exitCode !== 0) {
         return { success: false, outDir, error: `Zip creation failed: ${zipProc.stderr.toString()}` };

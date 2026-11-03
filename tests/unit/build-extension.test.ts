@@ -98,4 +98,19 @@ describe("Extension Build & Packaging Pipeline", () => {
     const manifest = JSON.parse(fs.readFileSync(path.join(distDir, "manifest.json"), "utf-8"));
     expect(manifest.version).toBe("2.1.0");
   });
+
+  it("removes stale versioned archives so a release never ships an older build", async () => {
+    const hasZip = Bun.spawnSync(["which", "zip"]).exitCode === 0;
+    if (!hasZip) return;
+
+    const distDir = path.join(tempDir, "chrome-mv3");
+    const staleArchive = path.join(tempDir, "convolink-companion-chrome-v1.0.1.zip");
+    fs.writeFileSync(staleArchive, "previous release");
+
+    const result = await buildExtension({ target: "chrome", outDir: distDir, zip: true, version: "1.1.0" });
+
+    expect(result.success).toBe(true);
+    expect(fs.existsSync(staleArchive)).toBe(false);
+    expect(fs.existsSync(path.join(tempDir, "convolink-companion-chrome-v1.1.0.zip"))).toBe(true);
+  });
 });
