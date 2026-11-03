@@ -75,10 +75,16 @@ export function forward(
   payload?: Record<string, unknown>,
 ): () => Promise<any> {
   return async () => {
+    if (fallbackOrchestrator) {
+      return invokeInProcess(command, payload);
+    }
     try {
-      const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
-      if (!reply.ok) throw new Error(reply.error ?? `daemon command '${command}' failed`);
-      return reply.result;
+      if (await client.isAlive()) {
+        const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
+        if (!reply.ok) throw new Error(reply.error ?? `daemon command '${command}' failed`);
+        return reply.result;
+      }
+      return await invokeInProcess(command, payload);
     } catch (error) {
       if (isSocketDead(error)) {
         return await invokeInProcess(command, payload);
@@ -91,7 +97,14 @@ export function forward(
 export async function createMcpOrchestrator(): Promise<SessionOrchestrator> {
   const client = new DaemonClient();
   if (!(await client.isAlive())) {
-    return getFallbackOrchestrator();
+    try {
+      const { loadResolution } = await import("./config-context.js");
+      const res = await loadResolution();
+      if (res.ok && (res.value.transport === "firefox-bidi" || res.value.transport === "extension-bridge")) {
+        const { ensureDaemonRunning } = await import("./cli.daemon.js");
+        await ensureDaemonRunning();
+      }
+    } catch {}
   }
 
   const shim: Pick<

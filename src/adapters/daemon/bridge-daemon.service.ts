@@ -7,6 +7,7 @@ import type { SessionOrchestrator } from "../../core/services/orchestrator.js";
 import type { IpcCommand, IpcRequest } from "./daemon-ipc.types.js";
 import { ExtensionBridgeAdapter } from "../browsers/extension-bridge.adapter.js";
 import { BridgeTokenService } from "../../core/services/bridge-token.service.js";
+import { parseThreadUrl, parseThreadList } from "../../core/services/setup/thread-target.js";
 
 export interface BridgeDaemonOptions {
   readonly orchestrator: SessionOrchestrator;
@@ -113,19 +114,35 @@ export class BridgeDaemonService {
         const p = (payload ?? {}) as Record<string, any>;
         const toggles = (p.toggles || p.deepSearch !== undefined || p.deepThink !== undefined)
           ? { search: p.deepSearch ?? p.toggles?.search, think: p.deepThink ?? p.toggles?.think } : undefined;
+        let thread = p.thread;
+        if (!thread && p.threadUrl) {
+          const parsed = parseThreadUrl(String(p.threadUrl));
+          if (parsed.ok) thread = parsed.target;
+        }
         return this.orchestrator.ask({
           prompt: String(p.prompt ?? ""), platform: p.platform, targetId: p.targetId ? String(p.targetId) : undefined,
           timeoutMs: p.timeoutMs ? Number(p.timeoutMs) : undefined, toggles, files: Array.isArray(p.files) ? p.files : undefined,
           writeFiles: Boolean(p.writeFiles), outDir: p.outDir ? String(p.outDir) : undefined,
           autoContinue: p.autoContinue !== false, newChat: Boolean(p.newChat), openTab: Boolean(p.openTab),
+          ...(thread ? { thread } : {}),
         });
       }
       case "compare": {
         const p = (payload ?? {}) as Record<string, any>;
+        let threads = p.threads;
+        if (!threads && p.threadsRaw) {
+          const parsed = parseThreadList(String(p.threadsRaw));
+          if (parsed.ok) {
+            threads = {} as Record<string, any>;
+            for (const target of parsed.targets) threads[target.platform] = target;
+          }
+        }
         return this.orchestrator.compare({
           prompt: String(p.prompt ?? ""), platforms: Array.isArray(p.platforms) ? p.platforms : undefined,
           arbitrate: Boolean(p.arbitrate), arbiter: p.arbiter, mode: p.mode, outDir: p.outDir,
           timeoutMs: p.timeoutMs ? Number(p.timeoutMs) : undefined,
+          ...(threads ? { threads } : {}),
+          continueThreads: Boolean(p.continueThreads),
         });
       }
       case "tab_new": {

@@ -103,7 +103,12 @@ export class FirefoxBidiAdapter implements BrowserPort {
       return;
     }
     if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-      try { await this.sendRaw(this.socket, "session.end", {}); } catch {}
+      try {
+        await Promise.race([
+          this.sendRaw(this.socket, "session.end", {}),
+          new Promise((r) => setTimeout(r, 1000)),
+        ]);
+      } catch {}
       try { this.socket.close(); } catch {}
       this.socket = undefined;
     }

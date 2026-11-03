@@ -13,6 +13,43 @@ export interface DaemonCliOptions {
   readonly pidPath?: string;
 }
 
+/**
+ * Automatically ensures the background daemon is running, spawning it detached
+ * if needed. Crucial for single-session Gecko BiDi and extension bridge stability.
+ */
+export async function ensureDaemonRunning(options: DaemonCliOptions = {}): Promise<boolean> {
+  const socketPath = options.socketPath ?? HostEnv.getSocketPath();
+  const client = new DaemonClient({ socketPath });
+  if (await client.isAlive()) return true;
+
+  const script = process.argv[1] ?? "";
+  if (!script) return false;
+
+  const dir = path.dirname(socketPath);
+  if (!fs.existsSync(dir)) {
+    try { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); } catch {}
+  }
+  const logPath = path.join(dir, "daemon.log");
+
+  try {
+    const out = fs.openSync(logPath, "a");
+    const child = spawn(process.execPath, [script, "daemon", "start", "--foreground"], {
+      detached: true,
+      stdio: ["ignore", out, out],
+      env: { ...process.env },
+    });
+    child.unref();
+
+    for (let i = 0; i < 30; i++) {
+      await new Promise((r) => setTimeout(r, 100));
+      if (await client.isAlive()) return true;
+    }
+  } catch {
+    return false;
+  }
+  return false;
+}
+
 export async function handleDaemon(args: string[], options: DaemonCliOptions = {}): Promise<number> {
   const sub = args[0] || "status";
   const socketPath = options.socketPath ?? HostEnv.getSocketPath();
@@ -71,23 +108,11 @@ export async function handleDaemon(args: string[], options: DaemonCliOptions = {
         await new Promise(() => {}); // Keep alive
         return 0;
       }
-      const script = process.argv[1] ?? "";
-      const logPath = path.join(path.dirname(socketPath), "daemon.log");
-      const out = fs.openSync(logPath, "a");
-      const child = spawn(process.execPath, [script, "daemon", "start", "--foreground"], {
-        detached: true,
-        stdio: ["ignore", out, out],
-        env: { ...process.env },
-      });
-      child.unref();
-      // Wait up to 3s for daemon to become alive
-      for (let i = 0; i < 30; i++) {
-        await new Promise((r) => setTimeout(r, 100));
-        if (await client.isAlive()) {
-          console.log(`✅ ConvoLink Daemon started in background (PID ${child.pid}).`);
-          console.log(`   Socket: ${socketPath}`);
-          return 0;
-        }
+      const started = await ensureDaemonRunning(options);
+      if (started) {
+        console.log(`✅ ConvoLink Daemon started in background.`);
+        console.log(`   Socket: ${socketPath}`);
+        return 0;
       }
       console.error("❌ Failed to verify daemon startup within timeout.");
       return 1;

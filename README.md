@@ -8,7 +8,7 @@
 [![Runtime](https://img.shields.io/badge/Runtime-Bun%20%3E%3D1.2-black?logo=bun)](https://bun.sh)
 [![TypeScript](https://img.shields.io/badge/TypeScript-v7.0%20Strict%20ESM-blue?logo=typescript)](https://www.typescriptlang.org)
 [![Tests](https://img.shields.io/badge/Tests-648%20passing%20(bun:test)-success)](https://bun.sh)
-[![Release](https://img.shields.io/badge/Release-v1.3.1-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
+[![Release](https://img.shields.io/badge/Release-v1.3.2-purple?logo=github)](https://github.com/0xTanzim/convolink/releases)
 [![Documentation](https://img.shields.io/badge/Documentation-Live%20Site-blue)](https://0xtanzim.github.io/convolink/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
@@ -123,9 +123,9 @@ ConvoLink adheres to the **Zero Ghost Browser Law**: it never spawns unauthentic
 Drives the browser you are already signed into, with **no startup flags** and **no browser
 restarts**. Your ChatGPT Plus, Claude Pro and DeepSeek sessions stay exactly where they are.
 
-1. Download the extension ZIP from [GitHub Releases v1.3.1](https://github.com/0xTanzim/convolink/releases/tag/v1.3.1):
-   - **Chrome / Brave / Edge:** `convolink-companion-chrome-v1.3.1.zip`
-   - **Firefox / Zen Browser:** `convolink-companion-firefox-v1.3.1.zip`
+1. Download the extension ZIP from [GitHub Releases v1.3.2](https://github.com/0xTanzim/convolink/releases/tag/v1.3.2):
+   - **Chrome / Brave / Edge:** `convolink-companion-chrome-v1.3.2.zip`
+   - **Firefox / Zen Browser:** `convolink-companion-firefox-v1.3.2.zip`
 2. Open `chrome://extensions/` (Chrome/Brave/Edge) or `about:debugging#/runtime/this-firefox` (Firefox/Zen Browser), enable Developer mode, and load the extension:
    - **Chrome / Brave / Edge:** Click **Load unpacked** and select `extensions/convolink-companion/.output/chrome-mv3`.
    - **Firefox / Zen Browser:** Click **Load Temporary Add-on...** and select `extensions/convolink-companion/.output/firefox-mv3/manifest.json` (or the zip file).

@@ -33,7 +33,7 @@ export async function handleAsk(
 
   const thread = parsed.threadRaw ? requireThread(parsed.threadRaw) : undefined;
 
-  if (!thread && (await shouldUseDaemon(parsed.launch))) {
+  if (await shouldUseDaemon(parsed.launch)) {
     const daemonClient = new DaemonClient();
     try {
       const res = await daemonClient.sendRequest<AskResult>("ask", {
@@ -41,6 +41,7 @@ export async function handleAsk(
         timeoutMs: parsed.timeoutMs, toggles: parsed.toggles,
         writeFiles: parsed.writeFiles, outDir: parsed.outDir,
         autoContinue: parsed.autoContinue, newChat: parsed.newChat, openTab: parsed.openTab,
+        threadUrl: parsed.threadRaw,
       }, Math.max((parsed.timeoutMs ?? 180_000) + 60_000, 300_000));
       if (!res.ok) throw fromIpcFailure(res.code, res.error);
       return emitAsk(res.result!, flags);
@@ -116,11 +117,13 @@ export async function handleCompare(
     let report: ComparisonReport;
     const threads = parsed.threadsRaw ? requireThreadMap(parsed.threadsRaw) : undefined;
 
-    if (!threads && !parsed.continueThreads && (await shouldUseDaemon(parsed.launch))) {
+    if (await shouldUseDaemon(parsed.launch)) {
       const res = await new DaemonClient().sendRequest<ComparisonReport>("compare", {
         prompt, platforms: parsed.platforms, mode: parsed.mode,
         timeoutMs: parsed.timeoutMs, outDir: parsed.outDir,
         arbitrate: parsed.arbitrate, arbiter: parsed.arbiter,
+        threadsRaw: parsed.threadsRaw,
+        continueThreads: parsed.continueThreads,
       }, Math.max((parsed.timeoutMs ?? 180_000) * 3, 600_000));
       if (!res.ok) throw fromIpcFailure(res.code, res.error);
       report = res.result!;
@@ -160,7 +163,17 @@ function emitCompare(report: ComparisonReport, flags: OutputFlags): number {
 }
 
 async function shouldUseDaemon(launch: boolean): Promise<boolean> {
-  return !launch && (await new DaemonClient().isAlive());
+  if (launch) return false;
+  if (await new DaemonClient().isAlive()) return true;
+  try {
+    const { loadResolution } = await import("./config-context.js");
+    const res = await loadResolution();
+    if (res.ok && (res.value.transport === "firefox-bidi" || res.value.transport === "extension-bridge")) {
+      const { ensureDaemonRunning } = await import("./cli.daemon.js");
+      return await ensureDaemonRunning();
+    }
+  } catch {}
+  return false;
 }
 
 function fail(flags: OutputFlags, command: string, error: unknown): number {

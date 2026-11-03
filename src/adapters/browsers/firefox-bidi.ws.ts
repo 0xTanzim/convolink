@@ -17,6 +17,13 @@ export async function createBidiSocket(
     const timeout = setTimeout(() => reject(new Error("BiDi WebSocket timeout")), 5000);
     ws.onopen = () => { clearTimeout(timeout); resolve(); };
     ws.onerror = (err) => { clearTimeout(timeout); reject(err); };
+    ws.onclose = () => {
+      clearTimeout(timeout);
+      for (const [id, handler] of pending.entries()) {
+        pending.delete(id);
+        handler.resolve(undefined);
+      }
+    };
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data.toString());
