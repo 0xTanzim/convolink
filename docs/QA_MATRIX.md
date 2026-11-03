@@ -35,7 +35,7 @@ Every row is a scenario that must be executed before the extension is treated as
 | W10 | Concurrent asks on one tab | Second run reports contention; no interleaved output | `session-busy`, exit 4 |
 | W11 | Compare with one failing platform | Healthy platform still returns a result | chatgpt 3.1s done, claude failure isolated |
 | W12 | Impossible prompt | Fails within the timeout budget and reports the last probe error | `transport-timeout`, exit 3 at 1.2s budget |
-| W13 | Debugger already attached | Trusted input reports a structured error; other commands work | unit test: DOM fallback attempted, read-only commands unaffected |
+| W13 | Debugger already attached | Trusted input reports a structured error; other commands work | **not reproducible**: with DevTools docked on the target, `chrome.debugger` still attached and the ask returned `devtools` in 5.1s. The conflict path is unit-tested (fallback attempted, read-only unaffected) but this Chrome does not raise it. |
 | W14 | Screenshot without permission | `unsupported` with the reason; other commands work | `Either the '<all_urls>' or 'activeTab' permission is required` |
 | W15 | Probe without a selector contract | `extension-unsupported`; no empty selector is sent | unit test |
 | W16 | Assistant turn mounts before text streams | No completion until text exists | unit test |
