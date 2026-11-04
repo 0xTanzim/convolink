@@ -134,3 +134,14 @@ await convo_setup({
   saveOnly: true,
 });
 ```
+
+---
+
+## 5. Anti-Throttling & Background Multi-Tab Performance
+
+Browsers throttle background tabs aggressively (suspending `requestAnimationFrame` to 0 Hz, throttling timers to 1,000ms batches, and halting virtualized DOM element mounting in SPAs like DeepSeek). ConvoLink v1.3.7 defeats this at three levels:
+
+1. **Chromium (CDP):** `RawCdpAdapter` uses a synthetic focus emulation pool (`Emulation.setFocusEmulationEnabled`, `Page.setWebLifecycleState: active`, `Emulation.setPageVisibilityState`) allowing 60 FPS multi-tab streaming without physical OS focus theft.
+2. **Gecko / Zen (WebDriver BiDi):** Because W3C WebDriver BiDi only permits one active browsing context per window, `ComparisonCoordinator` automatically runs a **Round-Robin Focus Cycler** during parallel comparisons (`convo compare`), rotating spotlight every 1.5s so each tab can flush virtualized DOM buffers.
+3. **Periodic Settle Watchdog:** In `pollUntilSettled`, an automatic re-activation watchdog triggers if output stalls for $> 3$ seconds, preventing timeout hangs during tab switching.
+4. **Engine Launch Prefs:** `browser-launcher` injects anti-throttling flags (`--disable-background-timer-throttling`, `--disable-backgrounding-occluded-windows`) into Chromium and `user_pref("layout.testing.top-level-always-active", true)` into Firefox/Zen profiles.

@@ -11,6 +11,8 @@ export interface ExecutionParams {
   readonly mode?: ExecutionScheduleMode;
   readonly timeoutMs?: number;
   readonly staggerMs?: number;
+  readonly focusCycler?: (targetId: string) => Promise<void>;
+  readonly focusCycleIntervalMs?: number;
 }
 
 export interface ArbitrationParams extends ExecutionParams {
@@ -84,25 +86,51 @@ export class ComparisonEngineService {
   }
 
   private async executeParallel(params: ExecutionParams, staggerMs: number): Promise<ModelExecutionResult[]> {
-    const promises = params.tabs.map(async (tab, index) => {
-      if (index > 0 && staggerMs > 0) {
-        await new Promise((r) => setTimeout(r, index * staggerMs));
-      }
-      return this.runSingleTab(tab, params.prompt, params.timeoutMs);
-    });
+    const pendingTabIds = new Set(params.tabs.map((t) => t.targetId));
+    let cycleTimer: ReturnType<typeof setInterval> | undefined;
 
-    const settled = await Promise.allSettled(promises);
-    return settled.map((res, i) => {
-      if (res.status === "fulfilled") return res.value;
-      const tab = params.tabs[i]!;
-      return {
-        platform: tab.platformId ?? "chatgpt",
-        tab,
-        status: "failed",
-        elapsedMs: 0,
-        error: res.reason instanceof Error ? res.reason.message : String(res.reason),
-      };
-    });
+    if (params.focusCycler && params.tabs.length > 1) {
+      const cycleInterval = params.focusCycleIntervalMs ?? 1500;
+      let currentIndex = 0;
+      cycleTimer = setInterval(() => {
+        const pendingList = params.tabs.filter((t) => pendingTabIds.has(t.targetId));
+        if (pendingList.length <= 1) {
+          if (cycleTimer) clearInterval(cycleTimer);
+          return;
+        }
+        currentIndex = (currentIndex + 1) % pendingList.length;
+        const target = pendingList[currentIndex];
+        if (target) params.focusCycler!(target.targetId).catch(() => {});
+      }, cycleInterval);
+    }
+
+    try {
+      const promises = params.tabs.map(async (tab, index) => {
+        if (index > 0 && staggerMs > 0) {
+          await new Promise((r) => setTimeout(r, index * staggerMs));
+        }
+        try {
+          return await this.runSingleTab(tab, params.prompt, params.timeoutMs);
+        } finally {
+          pendingTabIds.delete(tab.targetId);
+        }
+      });
+
+      const settled = await Promise.allSettled(promises);
+      return settled.map((res, i) => {
+        if (res.status === "fulfilled") return res.value;
+        const tab = params.tabs[i]!;
+        return {
+          platform: tab.platformId ?? "chatgpt",
+          tab,
+          status: "failed",
+          elapsedMs: 0,
+          error: res.reason instanceof Error ? res.reason.message : String(res.reason),
+        };
+      });
+    } finally {
+      if (cycleTimer) clearInterval(cycleTimer);
+    }
   }
 
   private async executeSequential(params: ExecutionParams): Promise<ModelExecutionResult[]> {

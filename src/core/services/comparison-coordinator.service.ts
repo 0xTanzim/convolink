@@ -89,6 +89,13 @@ export class ComparisonCoordinator {
       // queue on that socket and deadlock, so one platform at a time is the
       // reliable default; parallel remains opt-in.
       const mode = options.mode ?? "sequential";
+      let focusCycler: ((targetId: string) => Promise<void>) | undefined;
+      const browser = this.orchestrator.getBrowser();
+      if (mode === "parallel" && browser && (browser.id === "firefox-bidi" || browser.capabilities?.browserFamily === "firefox")) {
+        focusCycler = async (targetId: string) => {
+          await browser.bringToFront({ sessionId: `bidi-${targetId}`, targetId, adapterId: browser.id }).catch(() => {});
+        };
+      }
 
       const execution = await this.engine.executeComparisonWithArbitration({
         prompt: options.prompt,
@@ -96,6 +103,7 @@ export class ComparisonCoordinator {
         mode,
         timeoutMs: options.timeoutMs,
         staggerMs: mode === "parallel" ? 250 : 0,
+        focusCycler,
         arbitrate: options.arbitrate,
         arbiter: options.arbiter,
       });

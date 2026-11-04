@@ -41,6 +41,7 @@ export async function createBidiSocket(
   try {
     await sendRaw(ws, "session.new", { capabilities: {} });
   } catch (err: unknown) {
+    try { ws.close(); } catch {}
     const msg = (err as Error)?.message || "";
     if (msg.includes("Maximum number of active sessions")) {
       throw new ConvoError(

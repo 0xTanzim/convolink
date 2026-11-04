@@ -26,6 +26,62 @@ export interface EnsureBrowserOptions {
   headless?: boolean;
 }
 
+export function buildChromiumArgs(
+  port: number,
+  profilePath?: string,
+  options: { profileDirectory?: string; headless?: boolean } = {},
+): string[] {
+  const args = [
+    `--remote-debugging-port=${port}`,
+    "--disable-background-timer-throttling",
+    "--disable-backgrounding-occluded-windows",
+    "--disable-renderer-backgrounding",
+  ];
+  if (profilePath) args.push(`--user-data-dir=${profilePath}`);
+  if (options.profileDirectory) {
+    const targetDir = profilePath ? path.join(profilePath, options.profileDirectory) : "";
+    const defaultDir = profilePath ? path.join(profilePath, "Default") : "";
+    const profDir = !fs.existsSync(targetDir) && fs.existsSync(defaultDir) ? "Default" : options.profileDirectory;
+    args.push(`--profile-directory=${profDir}`, "--no-first-run");
+  }
+  if (options.headless) {
+    args.push("--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox");
+  }
+  return args;
+}
+
+export function buildGeckoUserPrefs(): string {
+  return [
+    'user_pref("layout.testing.top-level-always-active", true);',
+    'user_pref("dom.min_background_timeout_value", 4);',
+    'user_pref("network.http.max-persistent-connections-per-server", 16);',
+  ].join("\n");
+}
+
+export function ensureGeckoAntiThrottlingPrefs(profilePath: string): void {
+  try {
+    const userJsPath = path.join(profilePath, "user.js");
+    let content = "";
+    if (fs.existsSync(userJsPath)) {
+      content = fs.readFileSync(userJsPath, "utf-8");
+    }
+    const neededPrefs = [
+      'user_pref("layout.testing.top-level-always-active", true);',
+      'user_pref("dom.min_background_timeout_value", 4);',
+    ];
+    let modified = false;
+    for (const pref of neededPrefs) {
+      if (!content.includes(pref)) {
+        content = content ? `${content}\n${pref}` : pref;
+        modified = true;
+      }
+    }
+    if (modified) {
+      fs.writeFileSync(userJsPath, content, "utf-8");
+    }
+  } catch {}
+}
+
 export class BrowserLauncherService {
   private readonly findBinary: (browserName?: string) => string | null;
   private readonly customPortChecker?: (port: number, host?: string) => Promise<boolean>;
@@ -154,24 +210,20 @@ export class BrowserLauncherService {
     if (isGecko && options.profilePath && !this.isProfileLocked(options.profilePath).locked) {
       try { fs.unlinkSync(path.join(options.profilePath, "lock")); } catch {}
       try { fs.unlinkSync(path.join(options.profilePath, ".parentlock")); } catch {}
+      ensureGeckoAntiThrottlingPrefs(options.profilePath);
     }
 
-    const args = [`--remote-debugging-port=${port}`];
+    const isHeadless = options.headless === true || (options.headless === undefined && this.isHeadless());
+    let args: string[];
     if (isGecko) {
-      args.push("-no-remote", "--remote-allow-origins=*");
+      args = [`--remote-debugging-port=${port}`, "-no-remote", "--remote-allow-origins=*"];
       if (options.profilePath) args.push("-profile", options.profilePath);
-      if (options.headless === true || (options.headless === undefined && this.isHeadless())) args.push("-headless");
+      if (isHeadless) args.push("-headless");
     } else {
-      if (options.profilePath) args.push(`--user-data-dir=${options.profilePath}`);
-      if (options.profileDirectory) {
-        const targetDir = options.profilePath ? path.join(options.profilePath, options.profileDirectory) : "";
-        const defaultDir = options.profilePath ? path.join(options.profilePath, "Default") : "";
-        const profDir = !fs.existsSync(targetDir) && fs.existsSync(defaultDir) ? "Default" : options.profileDirectory;
-        args.push(`--profile-directory=${profDir}`, "--no-first-run");
-      }
-      if (options.headless === true || (options.headless === undefined && this.isHeadless())) {
-        args.push("--headless=new", "--disable-gpu", "--disable-dev-shm-usage", "--no-sandbox");
-      }
+      args = buildChromiumArgs(port, options.profilePath, {
+        profileDirectory: options.profileDirectory,
+        headless: isHeadless,
+      });
     }
 
     this.spawner(binary, args, { detached: true, stdio: "ignore" });

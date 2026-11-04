@@ -146,7 +146,9 @@ export class RawCdpAdapter implements BrowserPort {
     if (client) {
       await client.attachToTarget(targetId);
       await this.initStealth(targetId);
-      return { sessionId: `cdp-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
+      const handle: SessionHandle = { sessionId: `cdp-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
+      await this.keepAliveInBackground(handle).catch(() => {});
+      return handle;
     }
     const tabs = await this.listTabs();
     const target = tabs.find((t) => t.targetId === targetId);
@@ -157,7 +159,9 @@ export class RawCdpAdapter implements BrowserPort {
     const ws = await createCdpSocket(target.webSocketDebuggerUrl, targetId, this.host, this.port, pending);
     this.activeSockets.set(targetId, ws);
     await this.initStealth(targetId);
-    return { sessionId: `cdp-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
+    const handle: SessionHandle = { sessionId: `cdp-session-${targetId}-${Date.now()}`, targetId, adapterId: this.id };
+    await this.keepAliveInBackground(handle).catch(() => {});
+    return handle;
   }
 
   private async initStealth(targetId: string): Promise<void> {
@@ -178,6 +182,7 @@ export class RawCdpAdapter implements BrowserPort {
   public async keepAliveInBackground(handle: SessionHandle): Promise<void> {
     await this.send(handle.targetId, "Emulation.setFocusEmulationEnabled", { enabled: true }).catch(() => {});
     await this.send(handle.targetId, "Page.setWebLifecycleState", { state: "active" }).catch(() => {});
+    await this.send(handle.targetId, "Emulation.setPageVisibilityState", { visibilityState: "visible" }).catch(() => {});
     await this.evaluate(handle, `(() => {
       try {
         Object.defineProperty(document, 'hidden', { value: false, configurable: true, writable: true });

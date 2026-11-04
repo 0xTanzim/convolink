@@ -250,6 +250,10 @@ export class BridgeDaemonService {
       this.extAdapter = null;
     }
 
+    try {
+      await this.orchestrator.getBrowser().disconnect?.();
+    } catch {}
+
     if (this.server) {
       await new Promise<void>((resolve) => {
         this.server?.close(() => resolve());

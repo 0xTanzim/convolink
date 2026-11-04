@@ -114,8 +114,25 @@ export class FirefoxBidiAdapter implements BrowserPort {
     }
   }
 
-  public async keepAliveInBackground(_handle: SessionHandle): Promise<void> {}
-  public async bringToFront(_handle: SessionHandle): Promise<void> {}
+  public async keepAliveInBackground(handle: SessionHandle): Promise<void> {
+    await this.bringToFront(handle);
+    try {
+      await this.evaluate(handle, `(() => {
+        try {
+          Object.defineProperty(document, 'hidden', { value: false, writable: true });
+          Object.defineProperty(document, 'visibilityState', { value: 'visible', writable: true });
+          window.dispatchEvent(new Event('visibilitychange'));
+          window.dispatchEvent(new Event('focus'));
+        } catch {}
+      })()`);
+    } catch {}
+  }
+
+  public async bringToFront(handle: SessionHandle): Promise<void> {
+    try {
+      await this.send("browsingContext.activate", { context: handle.targetId });
+    } catch {}
+  }
 
   public async evaluate<T>(handle: SessionHandle, expression: string): Promise<T> {
     const res = await this.send("script.evaluate", { expression, target: { context: handle.targetId }, awaitPromise: true, resultOwnership: "none" });
