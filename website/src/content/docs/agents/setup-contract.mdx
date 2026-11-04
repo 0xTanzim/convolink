@@ -47,21 +47,20 @@ of text. `convo_setup` with **no arguments** then:
 2. waits for the answer (5-minute cap),
 3. writes `.convo/config.json` itself and returns `answeredBy: "elicitation"`.
 
-Clients without the capability — Claude Code and Codex today — get the same choice as a
-`requiresUserSelection` text block, and nothing hangs. Decline, cancel and timeout all fall
-back to that block.
+Clients that do not advertise the capability get the choice as a
+`requiresUserSelection` text block. Decline, cancel, and timeout also return that text
+instead of leaving the tool call waiting indefinitely.
 
 ## Declarative Offline Setup (`--save-only`)
 
-For containerized environments, CI pipelines, or autonomous workflows where configuration precedes service startup:
+For the CLI, `--save-only` writes configuration without probing a browser socket. This is
+useful when preparing a dedicated automation profile before starting its browser:
 ```bash
 convo setup --browser chrome --profile "/path/to/profile" --save-only
 ```
-Or via MCP:
-```typescript
-convo_setup({ browser: "chrome", profile: "/path/to/profile", saveOnly: true })
-```
-This writes `.convo/config.json` immediately without requiring the browser socket to be active first.
+The MCP `convo_setup` tool accepts `browser`, `profile`, `transport`, and `verifyTab`;
+it does not expose the CLI's `saveOnly` option. See its live schema in the MCP client for
+the current arguments.
 
 <Aside type="note" title="Elicitation is capability-gated on purpose">
 A client that never answers must not strand a tool call. The timeout resolves as `cancel`,
@@ -85,4 +84,4 @@ which degrades to the text path instead of blocking the turn.
 | extension `todo` | print the pairing instruction |
 | profile `todo` | ask, then `convo profile select <index\|email>` |
 | transport `blocked` | `convo doctor` and follow its remediation |
-| `warnings[]` non-empty | the extension bundle is stale — tell the user to reload `chrome://extensions` |
+| `warnings[]` non-empty | read the warning and follow its specific remediation |

@@ -11,7 +11,7 @@ Many naive browser automation scripts detect when an AI model finishes generatin
 
 This approach frequently fails:
 1. **Network Jitter:** Server-sent event (SSE) frame pauses trigger premature completion.
-2. **Thinking Models:** DeepSeek v4.1 Flash and GPT-6 Asta pause during internal chain-of-thought generation before outputting answer text.
+2. **Reasoning pauses:** A model may pause before returning more visible response text.
 3. **Canvas / Code Renders:** ChatGPT Canvas and Claude Artifacts render asynchronously after the chat stream ends.
 
 ## The 3-Signal Settling Engine
@@ -31,4 +31,4 @@ flowchart TD
 2. **Thinking Transition:** Collapsible thinking containers must be finalized.
 3. **Quiescence Window:** There must be zero DOM mutation events or stream frames for at least 400ms.
 
-This three-signal guarantee eliminates truncated code blocks and broken multi-file streams.
+Using these signals together is more reliable than checking text length alone and helps reduce premature completion on long answers and code streams.

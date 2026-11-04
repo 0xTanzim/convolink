@@ -22,23 +22,29 @@ flowchart TD
     end
 
     subgraph P3 ["Pillar 3: The Capability Bridge"]
-        Transports["Raw CDP & Extension Bridge"]
+        Transports["Companion Extension · Firefox BiDi · CDP"]
         Artifacts["ArtifactService (// filepath:)"]
         Safety["PolicyGate & tmpfs Mutex"]
     end
 
-    P1 ==> P2 ==> P3
+    Agent["Local CLI / MCP client"] --> P1
+    Agent --> P2
+    Agent --> P3
+    P1 --> Ledger
+    P2 --> Transports
+    P3 --> Agent
 ```
 
 ## Hexagonal Architecture (Ports and Adapters)
 
-ConvoLink enforces strict Inversion of Control (IoC):
-- **Inbound Adapters (`src/entrypoints/`):** CLI and MCP server call use-cases declared in domain services.
-- **Pure Domain Kernel (`src/core/`):** Contains pure business domain logic, orchestrators, and Port interfaces.
-- **Outbound Adapters (`src/adapters/`):** Concrete implementations of transports, platform drivers, and storage sinks.
+ConvoLink separates user-facing entrypoints, domain workflows, and system integrations:
+- **Entrypoints (`src/entrypoints/`):** The CLI and MCP server accept requests and call application services.
+- **Core (`src/core/`):** Domain workflows and Port interfaces define the behavior without depending on browser or storage implementations.
+- **Adapters (`src/adapters/`):** Browser transports, AI platform drivers, configuration, and storage implement those Ports.
+- **Container (`src/container.ts`):** Wires concrete adapters to the services at application startup.
 
 ### The Zero-Import Isolation Law
-Under `AGENTS.md` §1.1, no file within `src/core/` is permitted to import any browser automation framework (`playwright`, `puppeteer`, `ws`, `agent-browser`). Domain services remain 100% decoupled and unit-testable in under 100ms with in-memory fakes (`FakeBrowserPort`, `FakeThreadStore`).
+No file in `src/core/` may import a browser automation framework or network transport. External work must go through a Port declared at the core boundary and implemented by an adapter. This keeps domain behavior testable with in-memory fakes and makes browser or storage implementations replaceable.
 
 ## Granularity Limits
 

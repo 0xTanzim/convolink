@@ -1,132 +1,89 @@
 ---
-title: Chrome & Firefox Companion Extension
-description: Zero-flag browser integration for ConvoLink.
+title: Companion Extension
+description: Connect ConvoLink to the signed-in Chrome-family browser profile you already use.
 ---
 
-import { Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-<Aside type="tip" title="Recommended transport for All Browsers (Chrome, Firefox, Zen, Brave, Edge)">
-If you want ConvoLink to drive the browser you are already using — the one with your
-ChatGPT Plus, Claude Pro, DeepSeek and Gemini sessions — **use this extension**. Chrome 136+
-refuses `--remote-debugging-port` on the default profile, and Gecko BiDi enforces a single session.
-The extension needs no flags, no restart and no second profile.
+The ConvoLink Companion Extension lets the CLI and local coding agents work with supported AI tabs in your existing Chromium browser. Use it with Chrome, Brave, Edge, or Chromium when you want to keep using your everyday signed-in profile.
+
+<Aside type="tip" title="Recommended for everyday Chrome-family profiles">
+  The extension needs no remote-debugging flags and does not ask you to restart your browser. Firefox and Zen already support native WebDriver BiDi, so the extension is optional for those browsers.
 </Aside>
 
-The **ConvoLink Companion Extension** bridges local autonomous coding agents to your active browser tabs without restarting your browser, launching debug flags, or triggering yellow warning banners.
+## How it works
 
-## Architecture
-
-The extension is built in strict TypeScript using the WebExtensions Manifest V3 standard:
+The local CLI talks to the extension over a loopback WebSocket bridge. The extension then performs a fixed set of supported tab and page operations through browser APIs and content scripts.
 
 ```mermaid
 flowchart LR
-    BrowserTab["Active Web AI Tab<br/>(ChatGPT / Claude / DeepSeek / Gemini)"] <--> ExtContent["Content Script<br/>(DOM Mutation Watcher)"]
-    ExtContent <--> ExtBg["Background Service Worker<br/>(chrome.debugger / tabs)"]
-    ExtBg <-->|"Authenticated Local WebSocket<br/>ws://127.0.0.1:9224"| BridgeAdapter["ConvoLink ExtensionBridgeAdapter"]
-    BridgeAdapter <--> LocalAgent["Local Agent / CLI"]
+  Agent[CLI or coding agent] -->|local request| Bridge[ConvoLink local bridge]
+  Bridge <-->|paired WebSocket · 127.0.0.1:9224| Worker[Extension service worker]
+  Worker -->|supported operations| Tab[AI browser tab]
+  Tab -->|response text and state| Worker
+  Worker --> Bridge --> Agent
 ```
 
-## Installation
+ConvoLink does not route prompts through a hosted service. The bridge is local to your machine, and pairing authorizes your CLI to connect to the extension.
 
-Download pre-built packages directly from [GitHub Releases](https://github.com/0xTanzim/convolink/releases):
-- **Chrome / Brave / Edge / Chromium:** `convolink-companion-chrome.zip`
-- **Firefox / Zen Browser:** `convolink-companion-firefox.zip`
+## Install the extension
+
+Download the browser package from [GitHub Releases](https://github.com/0xTanzim/convolink/releases).
 
 <Tabs>
-  <TabItem label="Chromium (Chrome, Brave, Edge)">
-
-  1. Download `convolink-companion-chrome.zip` and extract it to a local folder.
-  2. Open your browser and navigate to `chrome://extensions/`.
-  3. Toggle **Developer mode** in the top-right corner.
-  4. Click **Load unpacked** and select the extracted folder.
-
+  <TabItem label="Chrome, Brave, Edge, Chromium">
+    1. Download and extract `convolink-companion-chrome.zip`.
+    2. Open `chrome://extensions/` and enable **Developer mode**.
+    3. Select **Load unpacked** and choose the extracted extension folder.
+    4. Run `convo ext pair` in a terminal and follow the pairing instructions.
   </TabItem>
-  <TabItem label="Mozilla Firefox">
+  <TabItem label="Firefox (optional)">
+    1. Download and extract `convolink-companion-firefox.zip`.
+    2. Open `about:debugging#/runtime/this-firefox`.
+    3. Select **Load Temporary Add-on** and choose the package's `manifest.json`.
+    4. Run `convo ext pair` and complete the pairing instructions.
 
-  1. Download `convolink-companion-firefox.zip` and extract it.
-  2. Navigate to `about:debugging#/runtime/this-firefox`.
-  3. Click **Load Temporary Add-on** and select `manifest.json`.
-
+    Firefox can also connect through native BiDi with `convo connect --firefox`; you do not need the extension for that path.
   </TabItem>
-  <TabItem label="Build From Source">
-
-```bash
-# Build both Chrome and Firefox packages locally using Bun:
-bun run build:extension
-# Output created in extensions/convolink-companion/.output/ and dist/
-```
-
+  <TabItem label="Build from source">
+    ```bash
+    bun run build:extension
+    ```
+    Build output is written under `extensions/convolink-companion/.output/` and `dist/`.
   </TabItem>
 </Tabs>
 
-## Supported Capabilities
+See [pairing and token management](/convolink/extension/pairing/) for token handling and troubleshooting.
 
-- **Zero Window Theft:** Tab automation runs quietly in background tabs without stealing keyboard focus or OS windows.
-- **Dynamic Content Injection:** Injects prototype setter polyfills to simulate natural human typing in ProseMirror (ChatGPT), Quill (Gemini), and Vue reactive textareas (DeepSeek).
-- **Stream Settling Detection:** Tracks mutation events directly from the page context, signaling completion when response nodes quiesce for 400ms.
+## What it supports
 
-## Transport comparison
+- Find and inspect supported AI tabs in the connected browser.
+- Submit prompts and read completed responses using each site's supported page controls.
+- Continue multi-step requests while keeping the browser window in the background.
+- Report extension build and connection details through `convo ext status`.
 
-Both transports run the same commands. The difference is what the browser lets them do.
+The extension exposes an operation set rather than arbitrary JavaScript execution. It respects tab ownership rules and reports unsupported operations explicitly.
 
-| | Companion Extension | Direct CDP |
+## Pick a transport
+
+| Browser and use case | Recommended transport | Port |
 | :--- | :--- | :--- |
-| Everyday logged-in profile | **Yes** | Blocked on Chrome 136+ |
-| Browser restart or flags | **No** | Yes |
-| Port | `9224` | `9222` |
-| Arbitrary JavaScript | No — fixed operation set | Yes |
-| Screenshots | `<all_urls>` or a user gesture, else `unsupported` | Yes |
-| Close a tab ConvoLink did not open | Refused (`not-owned`, exit 4) | Same policy |
-| Firefox | BiDi transport | — |
+| Everyday Chrome, Brave, Edge, or Chromium profile | Companion Extension | `9224` |
+| Firefox or Zen | Native WebDriver BiDi | `9223` |
+| Dedicated Chromium automation profile, headless, or CI | CDP | `9222` |
 
-## What the extension cannot do
+Chrome 136 and newer require a non-default user-data directory for CDP. For an everyday Chrome profile, use the extension instead of adding remote-debugging flags. See [browser connection setup](/convolink/getting-started/browser-connection/) for the full comparison.
 
-These are boundaries, not bugs. Each fails loudly with a structured code instead of
-silently doing something else.
-
-| Not supported | Why | What you see |
-| :--- | :--- | :--- |
-| Arbitrary `eval` / `Runtime.evaluate` | MV3 content-script CSP blocks `eval()`; MAIN-world injection inherits the page CSP | `extension-unsupported` naming the command |
-| Closing tabs you opened | Automation must never destroy your work | `not-owned`, exit 4 |
-| Screenshots without permission | `captureVisibleTab` requires `<all_urls>` or a user gesture | `unsupported` with the reason |
-| Firefox trusted input | `chrome.debugger` is Chromium-specific | use the BiDi transport |
-
-## Which build is running?
-
-Every build writes `build-meta.json`, the service worker reports that id in the
-handshake, and the CLI prints it:
+## Check which extension is connected
 
 ```bash
 convo ext status
-#   • chrome [Personal] v1.2.1 · build mw0con1f · 2 tab(s)
 ```
 
-Chrome caches an unpacked bundle in memory: **restarting the service worker does not
-re-read `background.js`**. After `bun run build:extension`, click **Reload** on the
-extension card, then confirm the id matches `extensions/convolink-companion/.output/chrome-mv3/build-meta.json`.
-If it does not, `convo ext status` says so directly instead of letting you debug old code.
+The status output includes the connected browser, profile, build id, and tab count. After rebuilding an unpacked extension, reload it from the browser's extensions page, then run the command again to verify the loaded build.
 
-## Known platform issues
+## Safe operation boundaries
 
-Two platform-side behaviours are open and tracked; neither returns a wrong answer
-silently.
+The extension does not expose general page scripting. Tab operations are constrained by ownership checks, and permissions may limit browser actions such as screenshots. When an operation is unavailable, ConvoLink returns a structured error with the reason rather than silently substituting a different action.
 
-- **DeepSeek may not render the transcript after a prompt.** The prompt is delivered and
-  the conversation URL is correct, but the message list never mounts (`turns: 0`).
-  Reloading the tab renders it. A run in this state ends as `transport-timeout`;
-  detection and automatic recovery are planned.
-- **Gemini renders inside a shadow root.** `convo ext exec DIAGNOSE` will report
-  `sendFound: false` on a tab that works, because the send control is not in the light
-  DOM. Submission still succeeds through the Enter fallback, but completion detection is
-  the slowest in the fleet (3.6 s to beyond 100 s for a one-word answer).
-
-Full analysis, evidence and options: `docs/EXTENSION_TRANSPORT_ISSUES.md` in the repository.
-
-## Verifying a connection
-
-```bash
-convo daemon start          # the bridge owns port 9224
-convo ext status            # client, profile, build id, tab count
-convo ext exec DIAGNOSE '{"platform":"chatgpt"}' --target <id>
-convo ask -p chatgpt --transport extension-bridge "Reply with the single word: ok"
-```
+For broader transport and local security details, see [browser connections](/convolink/getting-started/browser-connection/) and [safety and mutexes](/convolink/architecture/safety-mutex/).

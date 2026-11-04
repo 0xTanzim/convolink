@@ -1,116 +1,128 @@
 ---
-title: 60-Second Quickstart
-description: Get up and running with ConvoLink in under a minute.
+title: Quickstart
+description: Install ConvoLink, connect a browser session, and send your first request.
 ---
 
 import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
 
-Connect your local coding agent directly to your active browser tabs.
+This guide takes you from install to a first browser-backed AI request. You need [Bun 1.4 or newer](https://bun.sh) for the recommended Bun commands. ConvoLink runs locally and uses the signed-in browser session you choose.
 
-### 1. Run Instantly or Install Globally
+## 1. Install or run once
 
-   You can run ConvoLink instantly with zero setup, install via the universal 1-line script, or install globally via Bun or npm:
-
-   <Tabs>
-     <TabItem label="1-Line Universal (Recommended)">
-       ```bash
-       # Linux (Ubuntu, Debian, Fedora, Arch, Alpine) & macOS:
-       curl -fsSL https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.sh | bash
-
-       # Windows Native (PowerShell):
-       irm https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.ps1 | iex
-       ```
-       *Creates a standalone executable wrapper at `~/.local/bin/convo` (or Windows `%LOCALAPPDATA%\convolink\bin\convo.cmd`) that invokes `bunx -y convolink@latest`. Requires zero root/sudo and installs zero background daemons.*
-     </TabItem>
-     <TabItem label="Instant (Zero Setup)">
-       ```bash
-       bunx -y convolink@latest doctor
-       # or via npx:
-       npx -y convolink@latest doctor
-       ```
-     </TabItem>
-     <TabItem label="Package Managers">
-       ```bash
-       bun add -g convolink
-       # or via npm:
-       npm install -g convolink
-       # or via pnpm:
-       pnpm add -g convolink
-       ```
-     </TabItem>
-     <TabItem label="From Source">
-       ```bash
-       git clone https://github.com/0xTanzim/convolink.git
-       cd convolink
-       bun install && bun link
-       ```
-     </TabItem>
-   </Tabs>
-
-### 2. Connect Your Real Browser
+Choose one option. You can start without a global install, add a global `convo` command, or use the one-line installer.
 
 <Tabs>
-  <TabItem label="Path A: Companion Extension (Recommended)">
-    Download and install the zero-flag extension from [GitHub Releases](https://github.com/0xTanzim/convolink/releases):
-    - **Chromium:** `convolink-companion-chrome.zip` for Chrome, Brave, Edge, and Chromium.
-    - **Gecko:** `convolink-companion-firefox.zip` for Mozilla Firefox and Zen Browser.
-
-    Load the unpacked folder into `chrome://extensions` or `about:debugging#/runtime/this-firefox`, then pair:
+  <TabItem label="Run without global install">
     ```bash
-    convo ext pair
+    bunx -y convolink@latest doctor
     ```
+    If you use npm instead of Bun, run `npx -y convolink@latest doctor`.
   </TabItem>
-  <TabItem label="Path B: Direct Debugging Ports (Dev Profile)">
-    Start your browser with dedicated automation port:
+  <TabItem label="Install globally">
     ```bash
-    # Chromium:
-    google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/convo-chrome-dev
-
-    # Firefox / Zen Browser:
-    zen --remote-debugging-port 9223 -P <profile-name>
+    bun add -g convolink
+    convo doctor
     ```
+    Or install with `npm install -g convolink` or `pnpm add -g convolink`.
+  </TabItem>
+  <TabItem label="One-line installer">
+    ```bash
+    # Linux and macOS
+    curl -fsSL https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.sh | bash
+
+    # Windows PowerShell
+    irm https://raw.githubusercontent.com/0xTanzim/convolink/main/scripts/install.ps1 | iex
+    ```
+    The installer adds a small `convo` wrapper that runs the latest package with `bunx`; it does not install a background service.
   </TabItem>
 </Tabs>
 
-### 3. Verify Connection Health
+## 2. Connect your browser
 
-Run `convo doctor` to test protocol latency and detect all open AI tabs:
+Choose the path that matches the browser profile you want to use.
+
+<Tabs>
+  <TabItem label="Chrome and Chromium browsers">
+    For your everyday signed-in Chrome, Brave, Edge, or Chromium profile, install the [Companion Extension](/convolink/extension/overview/). It does not require browser debug flags or a restart.
+
+    After loading the extension, pair it with the local CLI:
+
+    ```bash
+    convo ext pair
+    ```
+
+    Follow the command's instructions to copy the pairing token into the extension. Then check the connection with `convo doctor`.
+  </TabItem>
+  <TabItem label="Firefox and Zen">
+    Firefox and Zen support native WebDriver BiDi. Start or connect the selected browser with:
+
+    ```bash
+    convo connect --firefox
+    # or
+    convo connect --zen
+    ```
+
+    The browser extension is optional for these browsers. See [Firefox and Zen connection details](/convolink/getting-started/browser-connection/#firefox-and-zen).
+  </TabItem>
+  <TabItem label="Dedicated Chromium profile">
+    Use CDP when you want a separate automation profile, or when running headless or in CI. Chrome 136 and newer require a non-default user-data directory for remote debugging.
+
+    ```bash
+    google-chrome \
+      --remote-debugging-port=9222 \
+      --user-data-dir="$HOME/.convo/chrome-profile"
+    ```
+
+    Sign in to the AI sites in that dedicated profile, then run `convo doctor`. Do not add debug flags to the everyday Chrome profile.
+  </TabItem>
+</Tabs>
+
+<Aside type="tip" title="Not sure which path to choose?">
+  Use the Companion Extension for your everyday Chromium profile. Use native BiDi for Firefox or Zen. Choose CDP only when a separate Chromium profile is useful to you.
+</Aside>
+
+## 3. Check the connection
 
 ```bash
 convo doctor
 ```
 
-```text
-🔍 Running ConvoLink Doctor...
-[CDP Transport] Status: ONLINE (Latency: 1ms)
-[Tabs] Found 4 supported AI tab(s):
-  • [CHATGPT] Architecture Discussion - ChatGPT (TargetId: A16BE3...) ✅ READY
-  • [CLAUDE] Concurrency Refactoring - Claude (TargetId: 44F12A...) ✅ READY
-  • [DEEPSEEK] Algorithmic Optimization - DeepSeek (TargetId: 713AD6...) ✅ READY
-  • [GEMINI] Cloud Deployment Strategy - Gemini (TargetId: 837BDC...) ✅ READY
-```
+Doctor reports the active transport and whether ConvoLink can reach supported AI tabs. If it reports a setup problem, follow the remediation it prints; see [browser connection troubleshooting](/convolink/getting-started/browser-connection/).
 
-### 4. Submit Your First Query
+## 4. Ask a question
 
-Ask your upstream architect for specifications directly from the terminal:
+Open a supported AI site in the connected browser, then send a prompt:
 
 ```bash
-convo ask --platform chatgpt "Explain the data model for our user authentication service."
+convo ask --platform chatgpt \
+  "Review the authentication flow in this project and list the edge cases I should test."
 ```
 
-<Aside type="tip">
-  You can target specific tabs with shorthand `#1`, `#2` or by specifying `--platform claude`.
-</Aside>
+ConvoLink returns the answer and records the exchange in its local conversation ledger. Continue the same browser conversation by targeting the returned tab, or use `convo search` to find it later.
 
-### 5. Install the Agent Skill for Your AI IDE
+## 5. Connect your coding agent (optional)
 
-Make your coding agents (Antigravity, Cursor, Claude Code, OpenCode) aware of ConvoLink:
+To let an MCP-compatible coding agent call ConvoLink, register this server in the agent's MCP configuration:
+
+```json
+{
+  "mcpServers": {
+    "convolink": {
+      "command": "bunx",
+      "args": ["-y", "convolink@latest", "mcp"]
+    }
+  }
+}
+```
+
+If you installed ConvoLink globally, use `"command": "convo"` and `"args": ["mcp"]` instead. Open [MCP integration](/convolink/integrations/mcp/) for client-specific configuration and the available tools.
+
+## 6. Give your agent project guidance (optional)
+
+Install the ConvoLink agent skill so your coding harness knows when and how to use the CLI:
 
 ```bash
-# Universal Agent Skills CLI:
 npx skills add 0xTanzim/convolink
-
-# Or native ConvoLink CLI:
-convo skill install --harness antigravity   # or claude, cursor, codex, opencode
 ```
 
+You can also use the built-in installer: `convo skill install --harness cursor` (replace `cursor` with your supported harness). See [agent skills](/convolink/agents/skills/).

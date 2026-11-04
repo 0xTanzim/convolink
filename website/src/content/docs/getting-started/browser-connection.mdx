@@ -1,154 +1,109 @@
 ---
-title: Zero Ghost Browser Setup
-description: How ConvoLink connects directly to your everyday authenticated browser profiles.
+title: Browser connections
+description: Choose and configure the right browser transport for your signed-in AI tabs.
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-## The Ghost Browser Problem
+ConvoLink can work with the AI tabs you already use or with a separate browser profile for automation. The best connection depends on the browser and whether you want to reuse your everyday profile.
 
-Starting in **Google Chrome 136+**, Chromium security policies block `--remote-debugging-port` against the default user-data directory to prevent malware from hijacking active browser profiles.
+## Choose a connection
 
-Automated tools often bypass this by spawning a fresh Chrome with a custom `--user-data-dir`. This creates an **unauthenticated "ghost browser"**: a blank profile with zero cookies, zero saved Google accounts, and zero ChatGPT/Claude/DeepSeek sessions.
-
-```
-❌ Traditional Spawner: Spawns blank browser (No logins, no ChatGPT Plus/Claude Pro)
-✅ ConvoLink Connection: Hooks into your real, authenticated everyday session
-```
-
-## The 4-Tier Connection Engine
-
-ConvoLink implements the **Zero Ghost Browser Law** (`AGENTS.md`) using one rule above all
-others: **it never asks you to relaunch your everyday browser with debug flags.**
-
-| Situation | What to use | Port | Flags needed |
+| Browser and use case | Transport | Port | Best for |
 | :--- | :--- | :--- | :--- |
-| **All Browsers (Chrome, Firefox, Zen, Brave, Edge) — everyday profile** | **Companion Extension** (recommended) | `9224` (WebSocket bridge) | **None** |
-| Dedicated Chromium profile for automation | Direct CDP (`raw-cdp`) | `9222` | `--remote-debugging-port=9222` + `--user-data-dir` |
-| Dedicated Gecko profile (Firefox / Zen) | WebDriver BiDi (`firefox-bidi`) | `9223` | `--remote-debugging-port 9223` |
-| Headless / CI containers | Direct CDP on dedicated profile | `9222` | Headless flags |
+| Chrome, Brave, Edge, or Chromium everyday profile | Companion Extension | `9224` | Using your existing signed-in tabs without debug flags or a restart. |
+| Firefox or Zen | WebDriver BiDi | `9223` | Native browser automation; installing the extension is optional. |
+| Separate Chromium profile, headless, or CI | Chrome DevTools Protocol (CDP) | `9222` | A dedicated profile you can configure for automation. |
 
-<Aside type="caution" title="Chrome 136+ blocks CDP on your default profile">
-Since Chrome 136, `--remote-debugging-port` is ignored for the default user-data
-directory. The endpoint still accepts TCP, but `/json/version` answers **HTTP 404** and any
-WebSocket attempt stalls. ConvoLink probes that endpoint and fails fast instead of
-hanging:
+## Chromium: use the Companion Extension for your everyday profile
 
-```text
-debug-endpoint  fail  Blocked: this endpoint is the browser's default profile, which
-                      Chrome blocks from remote debugging even after approval.
-                      Use the Companion Extension, or point at a dedicated debug profile.
-```
+Chrome 136 and newer require a non-default user-data directory to enable remote debugging. A browser launched with debugging flags can therefore be a different profile from the one where you are signed in. The Companion Extension connects to your existing Chrome-family browser without those flags.
 
-The fix is **not** a flag. Use the extension for your normal profile; use a dedicated
-profile for CDP.
+1. Install the [Companion Extension](/convolink/extension/overview/).
+2. Run `convo ext pair` and follow its instructions to pair the extension with the CLI.
+3. Run `convo doctor` to confirm the bridge and tabs are available.
+
+The local extension bridge listens on `127.0.0.1:9224`. Pairing authorizes the local CLI to use the extension; it does not enable arbitrary JavaScript execution.
+
+<Aside type="caution" title="Do not add debugging flags to your everyday profile">
+  For Chrome 136+, use the extension with your normal profile. If you need CDP, launch a separate profile with its own `--user-data-dir` and sign in to the AI sites there.
 </Aside>
 
-## Extension or CDP? Choose Once, Stop Guessing
+## Firefox and Zen
 
-Both transports drive the same platforms and the same commands (`convo ask`,
-`convo compare`, `convo list`, `convo tab`). They differ in what the browser allows.
-
-| | Companion Extension | Direct CDP |
-| :--- | :--- | :--- |
-| Works on your everyday, logged-in profile | **Yes** | No (blocked on Chrome 136+) |
-| Needs browser flags or a restart | **No** | Yes (`--remote-debugging-port`) |
-| Port | `9224` (bridge) | `9222` by default |
-| Arbitrary JavaScript evaluation | No — a fixed operation set | Yes |
-| Screenshots | Needs `<all_urls>` or a user gesture, otherwise `unsupported` | Yes |
-| Close a tab you opened | Refused (`not-owned`, exit 4) — by design | Same policy |
-| Trusted typing on rich text editors | Yes (`chrome.debugger`) | Yes (CDP `Input.insertText`) |
-| Best for | Real work in your real browser | Automation profiles, headless, CI |
-
-**Rule of thumb:** if you are sitting in front of the browser and you are logged in,
-use the extension. Reach for CDP only when you are driving a dedicated profile you can
-relaunch freely.
-
-### Confirm which transport is active
+Firefox and Zen have native BiDi support. Use the matching command to launch/connect through ConvoLink:
 
 ```bash
-convo doctor            # shows the configured transport and whether the endpoint works
-convo ext status        # extension only: client, profile, build id, tab count
+convo connect --firefox
+# or
+convo connect --zen
 ```
 
-`convo ext status` prints the id of the running bundle. If it differs from
-`.output/chrome-mv3/build-meta.json`, Chrome is still running an older bundle — reload at
-`chrome://extensions`. ConvoLink reports that mismatch explicitly instead of letting you
-debug the wrong code.
+ConvoLink enables BiDi for the selected browser profile and connects over the local endpoint on port `9223`. The Companion Extension is available as an optional alternative, but it is not required for Firefox or Zen.
 
-## Cross-Platform Setup
+If the selected browser is already open without BiDi enabled, close it normally and retry the command. The command reports this condition rather than silently replacing that browser session.
 
-ConvoLink is engineered to run seamlessly across all modern operating systems, CPU architectures, and containerized cloud environments:
+## Chromium CDP: use a dedicated profile
+
+CDP is useful for repeatable automation, headless runs, and CI. Start Chromium with a non-default profile directory and port `9222`:
 
 <Tabs>
   <TabItem label="Linux">
     ```bash
-    # Standard Google Chrome / Chromium
-    google-chrome --remote-debugging-port=9222 &
-
-    # ConvoLink auto-launch
-    convo doctor --launch
+    google-chrome \
+      --remote-debugging-port=9222 \
+      --user-data-dir="$HOME/.convo/chrome-profile"
     ```
-    *Supports Fedora, Ubuntu, Debian, Arch Linux, Alpine (musl), Flatpak, and Snap.*
+    Replace `google-chrome` with your Chromium, Brave, or Edge executable as needed.
   </TabItem>
   <TabItem label="macOS">
     ```bash
-    # Apple Silicon (M1/M2/M3/M4) & Intel
-    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --remote-debugging-port=9222 &
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" \
+      --remote-debugging-port=9222 \
+      --user-data-dir="$HOME/.convo/chrome-profile"
     ```
-    *Also supports Brave, Microsoft Edge, and Arc Browser.*
   </TabItem>
-  <TabItem label="Windows">
+  <TabItem label="Windows PowerShell">
     ```powershell
-    # PowerShell Native
-    Start-Process "chrome.exe" -ArgumentList "--remote-debugging-port=9222"
-    ```
-    *Or run `powershell -File .\scripts\convo-debug.ps1` for interactive diagnostics.*
-  </TabItem>
-  <TabItem label="WSL2">
-    **Windows Host Chrome to WSL2 Bridging:**
-    1. Launch Chrome on Windows with `--remote-debugging-port=9222`.
-    2. Allow port 9222 across the WSL virtual ethernet adapter in Administrator PowerShell:
-    ```powershell
-    netsh interface portproxy add v4tov4 listenport=9222 listenaddress=0.0.0.0 connectport=9222 connectaddress=127.0.0.1
-    New-NetFirewallRule -DisplayName "WSL Chrome CDP" -Direction Inbound -Protocol TCP -LocalPort 9222 -Action Allow
-    ```
-    3. Run `convo doctor` inside WSL2. ConvoLink automatically resolves the Windows default gateway.
-  </TabItem>
-  <TabItem label="Cloud / Headless">
-    ```bash
-    # Auto-injects --headless=new, --disable-gpu, --disable-dev-shm-usage, --no-sandbox
-    convo doctor --launch
+    Start-Process "chrome.exe" -ArgumentList @(
+      "--remote-debugging-port=9222",
+      "--user-data-dir=$env:LOCALAPPDATA\ConvoLink\ChromeProfile"
+    )
     ```
   </TabItem>
 </Tabs>
 
-## Multi-Profile Discovery (`convo profile`)
+Sign in to the AI sites in this profile, then run `convo doctor`. Keep the profile directory dedicated to this automation session.
 
-Developers often use multiple browser profiles (e.g., Personal vs Work). ConvoLink reads browser `Local State` to extract human-readable profile names and Google emails:
+## Confirm the active connection
 
 ```bash
-# List all discovered profiles
+convo doctor
+convo status
+```
+
+`convo doctor` checks browser connectivity and supported AI tabs. `convo status` shows the resolved browser, transport, endpoint, and configuration source. To inspect extension pairing and build details, run:
+
+```bash
+convo ext status
+```
+
+## Choose a browser profile
+
+When multiple browser profiles are available, list and select one:
+
+```bash
 convo profile list
-```
-
-```text
-Discovered Profiles:
-  1) [Google Chrome] Work <work@example.com>
-  2) [Google Chrome] Personal <personal@example.com>
-  3) [Brave Browser] Default
-```
-
-Link your project workspace to a profile:
-
-```bash
-convo profile select 1
-# Or select by email:
 convo profile select work@example.com
 ```
 
-This choice is persisted in `.convo/config.json` for all future agent commands in this repository.
+The selected profile is saved for the current workspace. Use `convo status` to confirm the resolved configuration.
 
-<Aside type="note">
-  If you ever suspect a stray debug process was left behind, run `convo clean` to terminate orphan processes and purge temporary directories safely.
-</Aside>
+## Security and ownership
+
+- Browser transports connect to a local browser; they do not send prompts through a ConvoLink-hosted service.
+- The extension accepts a fixed set of operations. It does not expose arbitrary page JavaScript evaluation.
+- ConvoLink avoids stealing window focus and does not close browser tabs it did not open.
+- Keep a CDP debugging port bound to a trusted local environment and use a dedicated profile.
+
+For extension permissions and pairing, see [Companion Extension](/convolink/extension/overview/) and [pairing](/convolink/extension/pairing/).

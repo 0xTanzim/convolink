@@ -1,103 +1,115 @@
 ---
 title: ConvoLink
-description: Autonomous AI conversation runtime linking web models to local development workflows.
+description: Connect local coding agents to your authenticated browser AI sessions, then keep the work searchable and portable.
 template: splash
 hero:
-  tagline: Connect local autonomous coding agents (Cursor, Claude Code, Antigravity) directly to your live authenticated web AI sessions (ChatGPT, Claude, DeepSeek, Gemini).
+  tagline: Your browser AI knows the conversation. Your coding agent can finally use it.
   image:
     file: ../../assets/logo.svg
   actions:
-    - text: 60-Second Quickstart
+    - text: Start in 60 seconds
       link: /convolink/getting-started/quickstart/
       icon: right-arrow
       variant: primary
-    - text: View on GitHub
-      link: https://github.com/0xTanzim/convolink
-      icon: external
+    - text: Choose a browser connection
+      link: /convolink/getting-started/browser-connection/
+      icon: right-arrow
       variant: secondary
 ---
 
-import { Card, CardGrid, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
+import { Card, CardGrid, Tabs, TabItem } from '@astrojs/starlight/components';
 
-## The Three Architectural Pillars
+ConvoLink connects a local CLI or coding agent to AI conversations already open in your browser. Ask a web model for a design review, compare answers across models, and bring the result back into your project without copying prompts and replies by hand.
+
+It uses your existing signed-in browser sessions. Model access and account plans remain with the AI provider; ConvoLink does not replace them with an API or proxy service.
+
+## What you can do
 
 <CardGrid stagger>
-  <Card title="The Context Bridge" icon="document">
-    **Symmetric turn persistence & SQLite FTS5 ledger.**
-    Durable conversation ledger in WAL mode, capturing user prompts and assistant specs to eliminate human copy-paste relays.
+  <Card title="Keep the conversation" icon="document">
+    Save prompts and replies in a local SQLite ledger. Search past conversations, export a thread, or resume it later.
   </Card>
-
-  <Card title="The Intelligence Bridge" icon="laptop">
-    **Asymmetric intelligence delegation.**
-    Empower local coding agents running smaller or cost-effective models to delegate difficult debugging and architecture to frontier web models.
+  <Card title="Ask the right model" icon="laptop">
+    Send a task from the terminal or an agent to ChatGPT, Claude, DeepSeek, or Gemini in your authenticated browser session.
   </Card>
-
-  <Card title="The Capability Bridge" icon="puzzle">
-    **Borrow live web AI superpowers.**
-    Access extended thinking (e.g. DeepSeek v4.1 Flash, GPT-6 Asta), live web search grounding, and multi-model consensus validation without per-token API charges.
+  <Card title="Compare before you build" icon="puzzle">
+    Run a prompt across several models, review each answer, and optionally ask an arbiter model to synthesize a recommendation.
   </Card>
-
-  <Card title="Zero Ghost Browsers" icon="approve-check-circle">
-    **Everyday authenticated profile protection.**
-    Connects to your real browser session via dynamic CDP inspection or our zero-flag **Companion Extension** (Chrome & Firefox MV3).
+  <Card title="Bring results into your project" icon="document">
+    Extract code files from responses, connect the MCP server to an AI harness, and keep browser automation behind explicit transports.
   </Card>
 </CardGrid>
 
----
+## Three bridges, one workflow
 
-## Live Workflow Preview
+```mermaid
+flowchart LR
+  Agent[Local coding agent or CLI] -->|ask, compare, manage| Link[ConvoLink]
+  Link -->|extension, BiDi, or CDP| Browser[Your signed-in browser]
+  Browser --> Models[ChatGPT · Claude · DeepSeek · Gemini]
+  Link <--> Ledger[(Local conversation ledger)]
+  Models -->|responses and code| Link
+  Link -->|files, history, context| Agent
+```
+
+### Context bridge
+
+ConvoLink stores both sides of each exchange in a local SQLite ledger. Use `convo search` to find decisions and prior answers, `convo export` to share a thread, and `convo resume` to return to a saved conversation. A compiled `.convo/CONTEXT.md` can give an agent a concise project history.
+
+### Intelligence bridge
+
+Use `convo ask` when one model should help with a focused task. Use `convo compare` when you want independent proposals, a second opinion, or a synthesized answer. Search and extended reasoning options depend on the selected platform and its web interface.
+
+### Capability bridge
+
+ConvoLink can read and operate supported browser tabs, continue long responses, and extract file paths marked in generated code. The transport defines the available browser operations: the Companion Extension is the normal choice for an everyday Chromium profile; Firefox and Zen can use native BiDi; CDP is for a dedicated Chromium profile.
+
+## Common workflows
 
 <Tabs>
-  <TabItem label="CLI Ask">
+  <TabItem label="Ask from the terminal">
     ```bash
-    # Query upstream architect for design specifications & state invariants
-    convo ask --platform claude \
-      "We are ready to implement Milestone 2. Provide the transition table, invariant list, and error codes we decided on during research."
+    convo ask --platform claude "Review this migration plan for data-loss risks."
     ```
+    Use a focused question when you already know which model and browser session you want.
   </TabItem>
-
-  <TabItem label="Multi-Model Compare">
+  <TabItem label="Compare model answers">
     ```bash
-    # Fan out proposal to ChatGPT, Claude, DeepSeek, and Gemini in parallel
-    convo compare \
-      "Evaluate trade-offs between distributed SQLite (Litestream/LiteFS) vs PostgreSQL for a multi-tenant event ledger." \
-      --platforms chatgpt,claude,deepseek,gemini \
-      --arbitrate \
-      --arbiter deepseek
+    convo compare "Propose a safe rollout plan for this schema change." \
+      --platforms chatgpt,claude,deepseek \
+      --arbitrate --arbiter claude
     ```
+    Compare independent answers before committing to an implementation.
   </TabItem>
-
-  <TabItem label="File Extraction (-w)">
+  <TabItem label="Connect an AI agent">
     ```bash
-    # Automatically extract tagged source code directly to your local file tree
-    convo ask --platform deepseek \
-      "Implement the token rotation service using // filepath: src/auth/token.service.ts" \
-      -w --out-dir .
+    bunx -y convolink@latest mcp
     ```
+    Register ConvoLink as an MCP server in your coding agent. The server exposes tools for onboarding, setup, asking, comparing, tab management, search, and thread history.
   </TabItem>
-
-  <TabItem label="MCP Server">
-    ```json
-    // Connect Cursor, Claude Desktop, or Windsurf in 30 seconds
-    {
-      "mcpServers": {
-        "convolink": {
-          "command": "bunx",
-          "args": ["-y", "convolink@latest", "mcp"]
-        }
-      }
-    }
+  <TabItem label="Save generated files">
+    ```bash
+    convo ask --platform deepseek -w --out-dir ./src \
+      "Implement the parser. Put the file path above each code block using // filepath:."
     ```
+    Use `// filepath: relative/path` markers in the answer when you want code blocks written to files.
   </TabItem>
 </Tabs>
 
----
+## Pick the connection that fits your browser
 
-## Supported Frontier Web AI Platforms
+| Browser and use case | Recommended connection | What to expect |
+| :--- | :--- | :--- |
+| Chrome, Brave, Edge, Chromium with your everyday profile | [Companion Extension](/convolink/extension/overview/) | No debug flags or browser restart; pair the extension once. |
+| Firefox or Zen | Native WebDriver BiDi | Connect with `convo connect --firefox` or `convo connect --zen`; the extension is optional. |
+| Separate Chromium automation profile, headless, or CI | CDP | Start a dedicated profile with a remote debugging port. |
 
-| Platform | Authentication | Streaming Detection | Thinking Mode |
-| :--- | :--- | :--- | :--- |
-| **ChatGPT** | Everyday Plus / Team Profile | 3-Signal DOM Settling | Supported (GPT-6 Asta Reasoning) |
-| **Claude** | Pro / Enterprise Session | ProseMirror Mutation Watcher | Extended Thinking (Opus 5.5 / Sonnet 4.6) |
-| **DeepSeek** | Authenticated Web Session | Vue Microtask Event Bus | Reasoning v4.1 Flash (`--think`) |
-| **Gemini** | Google Account Profile | Quill Editor DOM Observer | Search Grounding (Gemini 4 Carbon / Argon) |
+See [browser connection setup](/convolink/getting-started/browser-connection/) for exact steps and trade-offs.
+
+## Where to go next
+
+- [Quickstart](/convolink/getting-started/quickstart/) — install, connect, and make your first request.
+- [Browser connections](/convolink/getting-started/browser-connection/) — choose Extension, BiDi, or CDP.
+- [MCP integration](/convolink/integrations/mcp/) — connect an AI coding harness.
+- [Three-pillar architecture](/convolink/architecture/three-pillars/) — understand the boundaries and data flow.
+- [Command reference](/convolink/commands/overview/) — see the CLI commands and options.
