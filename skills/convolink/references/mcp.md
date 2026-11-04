@@ -1,4 +1,4 @@
-# ConvoLink MCP Reference (v1.3.4)
+# ConvoLink MCP Reference (v1.3.7)
 
 Registered as `convolink` over stdio (`convo mcp`). Add to your MCP config:
 
