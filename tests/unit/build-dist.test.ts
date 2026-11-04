@@ -29,7 +29,7 @@ describe("Milestone 6: Standalone Dist Bundling & npm Packaging", () => {
       expect(pkg.files).toEqual(expect.arrayContaining(["dist", "README.md", "LICENSE"]));
 
       expect(pkg.engines).toBeDefined();
-      expect(pkg.engines.bun).toBe(">=1.2.0");
+      expect(pkg.engines.bun).toBe(">=1.4.0");
 
       expect(pkg.publishConfig).toBeDefined();
       expect(pkg.publishConfig.access).toBe("public");

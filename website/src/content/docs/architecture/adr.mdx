@@ -15,7 +15,7 @@ ConvoLink is engineered according to 17 formal Architecture Decision Records (AD
 
 ### ADR-002: 3-Signal Streaming Settling & In-Page DOM Extraction
 - **Decision:** Generation is declared complete only when three independent signals coincide: Action Container State (stop button/spinner absent), Thinking Transition (reasoning accordions finalized), and Quiescence Window (zero DOM mutations for $\ge$ 400ms).
-- **Consequence:** Prevents stream cutoffs during silent calculation phases in DeepSeek v4.1 Flash and GPT-6 Asta.
+- **Consequence:** Reduces premature completion when visible output pauses while a response is still in progress.
 
 ### ADR-003: Ordered Selector Fallback Chains with Layout Telemetry
 - **Decision:** Web AI DOM structures change weekly. ConvoLink platform drivers define an ordered fallback array of semantic CSS selectors, resolving dynamically via in-page probes.
@@ -37,6 +37,6 @@ ConvoLink is engineered according to 17 formal Architecture Decision Records (AD
 - **Decision:** Sensitive secrets (OpenAI keys, GitHub PATs, AWS secrets, `.env` pairs) are automatically scrubbed to `[REDACTED_SECRET]` before transmission. Destructive command detection never pauses stdio.
 - **Consequence:** Safe automated execution without deadlocking parent coding agents.
 
-### ADR-017: Zero "Ghost Browser" Guarantee & 4-Tier Connection Engine
-- **Decision:** Starting in Chrome 136+, `--remote-debugging-port` is blocked on default profiles. ConvoLink forbids spawning blank "ghost" profiles, connecting instead via dynamic `DevToolsActivePort`, active CDP ports, or our **Companion Extension Bridge**.
-- **Consequence:** 100% preservation of developer cookies, Google accounts, and web subscriptions.
+### ADR-017: Browser connection choices
+- **Decision:** Use the Companion Extension for an everyday Chrome-family profile, native WebDriver BiDi for Firefox and Zen, and CDP for a dedicated Chromium profile. Chrome 136 and newer require a non-default user-data directory for remote debugging.
+- **Consequence:** Users can choose whether to keep their everyday profile or use a separate automation profile. ConvoLink does not silently substitute a blank profile for the one they selected.
