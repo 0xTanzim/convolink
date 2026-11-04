@@ -11,54 +11,117 @@ import { clearDaemonStatus, readDaemonStatus, writeDaemonStatus } from "./daemon
 export interface DaemonCliOptions {
   readonly socketPath?: string;
   readonly pidPath?: string;
+  readonly timeoutMs?: number;
+}
+
+function tryAcquireSpawnLock(spawnLockPath: string): number | null {
+  try {
+    return fs.openSync(spawnLockPath, "wx");
+  } catch (err: any) {
+    if (err?.code === "EEXIST") {
+      try {
+        const raw = fs.readFileSync(spawnLockPath, "utf8");
+        const parsed = JSON.parse(raw);
+        const age = Date.now() - (parsed.createdAt || 0);
+        let pidAlive = true;
+        if (parsed.pid) {
+          try {
+            process.kill(parsed.pid, 0);
+          } catch {
+            pidAlive = false;
+          }
+        }
+        if (!pidAlive || age > 15000) {
+          try { fs.unlinkSync(spawnLockPath); } catch {}
+          return fs.openSync(spawnLockPath, "wx");
+        }
+      } catch {
+        try { fs.unlinkSync(spawnLockPath); } catch {}
+        try { return fs.openSync(spawnLockPath, "wx"); } catch {}
+      }
+    }
+    return null;
+  }
 }
 
 /**
  * Automatically ensures the background daemon is running, spawning it detached
- * if needed. Crucial for single-session Gecko BiDi and extension bridge stability.
+ * if needed with atomic spawn-lock arbitration to prevent bootstrap races.
  */
 export async function ensureDaemonRunning(options: DaemonCliOptions = {}): Promise<boolean> {
   const socketPath = options.socketPath ?? HostEnv.getSocketPath();
   const client = new DaemonClient({ socketPath });
-  if (await client.isAlive()) return true;
-
-  const script = process.argv[1] ?? "";
-  if (!script) return false;
-
-  let cliScript = script;
-  if (/mcp\.(js|ts)$/.test(script)) {
-    const candidate = script.replace(/mcp\.(js|ts)$/, "cli.$1");
-    if (fs.existsSync(candidate)) {
-      cliScript = candidate;
-    } else {
-      const distCandidate = path.join(path.dirname(script), "cli.js");
-      if (fs.existsSync(distCandidate)) cliScript = distCandidate;
-    }
-  }
-
-  const dir = path.dirname(socketPath);
-  if (!fs.existsSync(dir)) {
-    try { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); } catch {}
-  }
-  const logPath = path.join(dir, "daemon.log");
-
   try {
-    const out = fs.openSync(logPath, "a");
-    const child = spawn(process.execPath, [cliScript, "daemon", "start", "--foreground"], {
-      detached: true,
-      stdio: ["ignore", out, out],
-      env: { ...process.env },
-    });
-    child.unref();
+    if (await client.isAlive()) return true;
 
-    for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 100));
-      if (await client.isAlive()) return true;
+    const dir = path.dirname(socketPath);
+    if (!fs.existsSync(dir)) {
+      try { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); } catch {}
     }
-  } catch {
+    const spawnLockPath = `${socketPath}.spawning`;
+
+    const maxAttempts = Math.min(30, Math.ceil((options.timeoutMs ?? 3000) / 100));
+    let fd = tryAcquireSpawnLock(spawnLockPath);
+    if (fd === null) {
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (await client.isAlive()) return true;
+        if (!fs.existsSync(spawnLockPath)) {
+          if (await client.isAlive()) return true;
+          fd = tryAcquireSpawnLock(spawnLockPath);
+          if (fd !== null) break;
+        }
+      }
+      if (await client.isAlive()) return true;
+      if (fd === null) return false;
+    }
+
+    try {
+      fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, createdAt: Date.now() }));
+      fs.closeSync(fd);
+    } catch {}
+
+    const script = process.argv[1] ?? "";
+    if (!script || /\.test\.[tj]sx?$/.test(script) || script.includes("/bun:test")) {
+      try { fs.unlinkSync(spawnLockPath); } catch {}
+      return false;
+    }
+
+    let cliScript = script;
+    if (/mcp\.(js|ts)$/.test(script)) {
+      const candidate = script.replace(/mcp\.(js|ts)$/, "cli.$1");
+      if (fs.existsSync(candidate)) {
+        cliScript = candidate;
+      } else {
+        const distCandidate = path.join(path.dirname(script), "cli.js");
+        if (fs.existsSync(distCandidate)) cliScript = distCandidate;
+      }
+    }
+
+    const logPath = path.join(dir, "daemon.log");
+    try {
+      const out = fs.openSync(logPath, "a");
+      const child = spawn(process.execPath, [cliScript, "daemon", "start", "--foreground"], {
+        detached: true,
+        stdio: ["ignore", out, out],
+        env: { ...process.env },
+      });
+      child.unref();
+
+      for (let i = 0; i < maxAttempts; i++) {
+        await new Promise((r) => setTimeout(r, 100));
+        if (await client.isAlive()) return true;
+      }
+    } catch {
+      return false;
+    } finally {
+      try { fs.unlinkSync(spawnLockPath); } catch {}
+    }
+
     return false;
+  } finally {
+    client.disconnect();
   }
-  return false;
 }
 
 export async function handleDaemon(args: string[], options: DaemonCliOptions = {}): Promise<number> {

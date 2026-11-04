@@ -17,6 +17,7 @@ export type ConvoErrorCode =
   | "challenge-detected"
   | "not-ready"
   | "submission-failed"
+  | "daemon-required"
   | "internal";
 
 /**
@@ -45,6 +46,7 @@ export const EXIT_CODES: Readonly<Record<ConvoErrorCode, number>> = {
   "challenge-detected": 4,
   "not-ready": 5,
   "submission-failed": 5,
+  "daemon-required": 3,
   internal: 6,
 };
 

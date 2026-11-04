@@ -4,7 +4,7 @@ description: Drive real, logged-in browsers (Mozilla Firefox, Zen Browser, Googl
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
-  version: 1.3.4
+  version: 1.3.5
   package: convolink
   homepage: https://0xtanzim.github.io/convolink/
   repository: https://github.com/0xTanzim/convolink
@@ -28,6 +28,8 @@ metadata:
 | Search conversation history | `convo_search` | `convo search "..."` | `query`, `limit` |
 
 > **Config Rule:** Workspace configuration lives strictly in `.convo/config.json`. Never edit this file directly; use `convo_setup` or `convo setup --save-only`.
+>
+> **Daemon Architecture (v1.3.5):** ConvoLink enforces *Daemon-as-Sole-Session-Owner* with persistent multiplexed IPC and atomic spawn locks. Gecko BiDi single-session conflicts are prevented automatically.
 
 ---
 

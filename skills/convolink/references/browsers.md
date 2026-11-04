@@ -58,6 +58,12 @@ firefox --remote-debugging-port 9223 -P <profile-name>
 # Launch Zen Browser with WebDriver BiDi remote debugging port
 zen --remote-debugging-port 9223 -P <profile-name>
 ```
+
+### Zen Browser Hibernated Workspaces & Tab Visibility
+Zen Browser employs aggressive tab unloading and workspace separation:
+- **BiDi Transport (`:9223`):** W3C WebDriver BiDi only enumerates awake/active browsing contexts. Dormant tabs in inactive workspaces do not appear in `convo_list_tabs`. However, calling `convo ask -p deepseek "..."` will automatically create a new tab if no awake tab is found.
+- **Extension Bridge (`:9224`, Recommended):** Uses WebExtensions `browser.tabs.query({})`, retaining visibility across all workspaces even when tabs are unloaded.
+- **Single-Session Daemon Invariant:** Gecko WebDriver BiDi strictly enforces `max_sessions: 1`. ConvoLink automatically routes all agent and CLI access through the persistent ConvoLink Daemon to prevent session contention and port conflicts.
 Then configure ConvoLink:
 ```bash
 convo setup --browser zen --transport firefox-bidi --port 9223 --save-only

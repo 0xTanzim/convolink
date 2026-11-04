@@ -124,6 +124,15 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
     ...(extension.running ? {} : { remediation: "convo ext pair" }),
   });
 
+  if (resolution && (resolution.browserId === "zen" || resolution.browserId === "firefox")) {
+    items.push({
+      id: "workspace-tabs",
+      state: "ok",
+      detail: "Gecko BiDi reports awake tabs; 'convo ask -p <platform>' auto-creates tabs for sleeping workspaces",
+      remediation: "Install ConvoLink Companion Extension for cross-workspace visibility without tab waking",
+    });
+  }
+
   return items;
 }
 

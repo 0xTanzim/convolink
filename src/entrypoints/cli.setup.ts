@@ -87,6 +87,12 @@ export async function applySetup(input: SetupInput): Promise<SetupOutcome> {
     warning = "Saved without socket verification (--save-only).";
   }
 
+  if (descriptor.family === "firefox" && resolution.transport === "firefox-bidi") {
+    const zenNotice =
+      "Notice: W3C WebDriver BiDi only enumerates awake/active tabs. For full visibility across hibernated Zen workspaces, the Extension Bridge transport is recommended.";
+    warning = warning ? `${warning}\n${zenNotice}` : zenNotice;
+  }
+
   const config: ConvoProjectConfig = {
     version: 1,
     browserId,

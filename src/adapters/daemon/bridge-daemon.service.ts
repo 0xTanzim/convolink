@@ -66,14 +66,14 @@ export class BridgeDaemonService {
     this.activeSockets.add(socket);
     let buffer = "";
 
-    socket.on("data", async (chunk) => {
+    socket.on("data", (chunk) => {
       buffer += chunk.toString("utf8");
       let newlineIdx: number;
       while ((newlineIdx = buffer.indexOf("\n")) !== -1) {
         const line = buffer.slice(0, newlineIdx).trim();
         buffer = buffer.slice(newlineIdx + 1);
         if (!line) continue;
-        await this.processRequest(socket, line);
+        void this.processRequest(socket, line);
       }
     });
 

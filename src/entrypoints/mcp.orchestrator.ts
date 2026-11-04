@@ -1,6 +1,7 @@
 import type { SessionOrchestrator } from "../core/services/orchestrator.js";
 import type { SessionCheckpoint } from "../core/services/journal.service.js";
 import { DaemonClient } from "../adapters/daemon/daemon-client.js";
+import { ConvoError } from "../core/errors/convo-error.js";
 
 interface DaemonReply<T> {
   readonly ok: boolean;
@@ -80,17 +81,36 @@ export function forward(
     if (mockOrchestrator) {
       return invokeInProcess(command, payload);
     }
+    const checkGeckoGuard = async () => {
+      const { loadResolution } = await import("./config-context.js");
+      const res = await loadResolution();
+      const transport = res.ok ? res.value.transport : process.env.CONVOLINK_TRANSPORT;
+      if (transport === "firefox-bidi" || transport === "extension-bridge") {
+        throw new ConvoError(
+          "daemon-required",
+          `The ConvoLink daemon is required to coordinate single-session browser access for '${transport}'.`,
+          "Run 'convo daemon start' in a terminal or restart your workspace.",
+        );
+      }
+    };
+
     try {
       let alive = await client.isAlive();
       if (!alive) {
         try {
           const { loadResolution } = await import("./config-context.js");
           const res = await loadResolution();
-          if (res.ok && (res.value.transport === "firefox-bidi" || res.value.transport === "extension-bridge")) {
+          const transport = res.ok ? res.value.transport : process.env.CONVOLINK_TRANSPORT;
+          if (transport === "firefox-bidi" || transport === "extension-bridge") {
             const { ensureDaemonRunning } = await import("./cli.daemon.js");
             alive = await ensureDaemonRunning();
           }
-        } catch {}
+        } catch (e) {
+          if (e instanceof ConvoError) throw e;
+        }
+      }
+      if (!alive) {
+        await checkGeckoGuard();
       }
       if (alive) {
         const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
@@ -99,7 +119,9 @@ export function forward(
       }
       return await invokeInProcess(command, payload);
     } catch (error) {
+      if (error instanceof ConvoError) throw error;
       if (isSocketDead(error)) {
+        await checkGeckoGuard();
         return await invokeInProcess(command, payload);
       }
       throw error;
