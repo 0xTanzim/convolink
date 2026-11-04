@@ -60,6 +60,7 @@ export function resolveExtensionApi(): ExtensionApi {
 }
 
 export interface OwnershipPort {
+  ids(): readonly number[];
   has(tabId: number): boolean;
   add(tabId: number): void;
   remove(tabId: number): void;

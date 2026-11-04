@@ -48,6 +48,21 @@ export async function handleTabCommand(
     case "LIST_TABS": {
       const tabs = await api.tabs.query({});
       await ctx.loadOwnedTabs();
+      const seenIds = new Set(tabs.map((tab) => tab.id).filter((tabId): tabId is number => tabId !== undefined));
+      for (const ownedId of ownership.ids()) {
+        if (!seenIds.has(ownedId)) {
+          try {
+            const hiddenTab = await api.tabs.get(ownedId);
+            if (hiddenTab && hiddenTab.id !== undefined) {
+              tabs.push(hiddenTab);
+              seenIds.add(ownedId);
+            }
+          } catch {
+            ownership.remove(ownedId);
+          }
+        }
+      }
+      await ctx.saveOwnedTabs();
       ctx.sendResult(
         id,
         tabs

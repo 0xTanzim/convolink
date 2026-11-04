@@ -110,6 +110,7 @@ async function runInTab<T>(tabId: number, func: (...args: never[]) => T, args: u
 const routerContext: RouterContext = {
   api,
   ownership: {
+    ids: () => ownership.ids(),
     has: (tabId) => ownership.has(tabId),
     add: (tabId) => ownership.add(tabId),
     remove: (tabId) => ownership.remove(tabId),
