@@ -2,7 +2,7 @@
 
 > Autonomous AI conversation continuity runtime linking upstream web AI models (ChatGPT, Claude, DeepSeek, Gemini) to local development workflows with automated artifact extraction, stream continuation, PID-aware mutex locking, and Model Context Protocol (MCP) tooling.
 
-Version: 1.3.2
+Version: 1.3.3
 Date: November 2026
 Repository: https://github.com/0xTanzim/convolink
 Documentation: https://0xtanzim.github.io/convolink/
@@ -232,3 +232,32 @@ Code blocks marked with `// filepath: path/to/file.ext` or `<!-- file: path/to/f
 
 ### 6.4 PID-Aware `tmpfs` Mutex Locking
 Tab locks reside in `$XDG_RUNTIME_DIR/convolink/` in RAM (`tmpfs`), avoiding disk wear. Lock handles verify PID ownership on release, use atomic POSIX `wx` creation to prevent TOCTOU races, and automatically reclaim dead-PID locks (`process.kill(pid, 0)`).
+
+---
+
+## 7. Agent Skills Specification & Universal Installation
+
+ConvoLink packages its runtime knowledge in the standard `SKILL.md` format using 3-layer progressive disclosure:
+
+### 7.1 Installation Commands
+```bash
+# Universal Agent Skills Standard:
+npx skills add 0xTanzim/convolink
+# or via bunx:
+bunx skills add 0xTanzim/convolink
+
+# Native ConvoLink CLI:
+convo skill install --harness antigravity   # or claude, cursor, codex, opencode
+```
+
+### 7.2 Directory Layout & Progressive Disclosure
+```text
+skills/convolink/
+├── SKILL.md                  ← L2: Core instructions (< 150 lines, timing contracts & anti-patterns)
+└── references/               ← L3: On-demand deep documentation
+    ├── browsers.md           ← Complete setup for Firefox, Zen Browser, Chrome, Brave, Edge
+    ├── cli.md                ← Exhaustive 12-command CLI manual
+    ├── mcp.md                ← Full 11-tool MCP catalog & error code schemas
+    └── directives.md         ← Multi-file artifact extraction (// filepath:)
+```
+Running `convo skill install` automatically bundles the entire `references/` directory into the target agent environment.

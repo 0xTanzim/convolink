@@ -8,20 +8,21 @@ async function isBidiAvailable(port = 9223): Promise<boolean> {
       const timer = setTimeout(() => {
         try { ws.close(); } catch {}
         resolve(false);
-      }, 500);
-      // Firefox allows one session, so a probe must actually request one: an
-      // open socket is not the same as an available session.
+      }, 1000);
+      // Query session status without creating a session to prevent ghost session contention.
       ws.onopen = () => {
-        ws.send(JSON.stringify({ id: 1, method: "session.new", params: { capabilities: {} } }));
+        ws.send(JSON.stringify({ id: 1, method: "session.status", params: {} }));
       };
       ws.onmessage = (event) => {
-        const data = JSON.parse(String(event.data));
         clearTimeout(timer);
         try {
-          ws.send(JSON.stringify({ id: 2, method: "session.end", params: {} }));
+          const data = JSON.parse(String(event.data));
           ws.close();
-        } catch {}
-        resolve(data.type !== "error");
+          resolve(data.type === "success" && data.result?.ready === true);
+        } catch {
+          try { ws.close(); } catch {}
+          resolve(false);
+        }
       };
       ws.onerror = () => {
         clearTimeout(timer);

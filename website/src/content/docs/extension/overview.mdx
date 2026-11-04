@@ -5,15 +5,11 @@ description: Zero-flag browser integration for ConvoLink.
 
 import { Aside, Tabs, TabItem, Badge } from '@astrojs/starlight/components';
 
-<Aside type="tip" title="Recommended transport for Chrome, Brave, Edge and Chromium">
+<Aside type="tip" title="Recommended transport for All Browsers (Chrome, Firefox, Zen, Brave, Edge)">
 If you want ConvoLink to drive the browser you are already using — the one with your
-ChatGPT Plus, Claude Pro and DeepSeek sessions — **use this extension**. Chrome 136+
-refuses `--remote-debugging-port` on the default profile, so CDP is not an option there
-at all. The extension needs no flags, no restart and no second profile.
-
-Reach for CDP only for a dedicated automation profile, a headless container, or a
-capability the extension deliberately does not expose (see
-[what the extension cannot do](#what-the-extension-cannot-do)).
+ChatGPT Plus, Claude Pro, DeepSeek and Gemini sessions — **use this extension**. Chrome 136+
+refuses `--remote-debugging-port` on the default profile, and Gecko BiDi enforces a single session.
+The extension needs no flags, no restart and no second profile.
 </Aside>
 
 The **ConvoLink Companion Extension** bridges local autonomous coding agents to your active browser tabs without restarting your browser, launching debug flags, or triggering yellow warning banners.
@@ -24,7 +20,7 @@ The extension is built in strict TypeScript using the WebExtensions Manifest V3 
 
 ```mermaid
 flowchart LR
-    BrowserTab["Active Web AI Tab<br/>(ChatGPT / Claude / DeepSeek)"] <--> ExtContent["Content Script<br/>(DOM Mutation Watcher)"]
+    BrowserTab["Active Web AI Tab<br/>(ChatGPT / Claude / DeepSeek / Gemini)"] <--> ExtContent["Content Script<br/>(DOM Mutation Watcher)"]
     ExtContent <--> ExtBg["Background Service Worker<br/>(chrome.debugger / tabs)"]
     ExtBg <-->|"Authenticated Local WebSocket<br/>ws://127.0.0.1:9224"| BridgeAdapter["ConvoLink ExtensionBridgeAdapter"]
     BridgeAdapter <--> LocalAgent["Local Agent / CLI"]
@@ -32,7 +28,9 @@ flowchart LR
 
 ## Installation
 
-Download pre-built packages directly from [GitHub Releases v1.2.1](https://github.com/0xTanzim/convolink/releases/tag/v1.2.1):
+Download pre-built packages directly from [GitHub Releases](https://github.com/0xTanzim/convolink/releases):
+- **Chrome / Brave / Edge / Chromium:** `convolink-companion-chrome.zip`
+- **Firefox / Zen Browser:** `convolink-companion-firefox.zip`
 
 <Tabs>
   <TabItem label="Chromium (Chrome, Brave, Edge)">

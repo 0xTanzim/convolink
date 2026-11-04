@@ -13,9 +13,9 @@ The **ConvoLink Companion** extension provides a **100% zero-flag, authenticated
 
 ## Option 1: Download from GitHub Releases (Recommended for Developers)
 
-Download pre-built extension packages directly from the repository's [Releases](https://github.com/convolink/convolink/releases):
+Download pre-built extension packages directly from the repository's [Releases](https://github.com/0xTanzim/convolink/releases):
 - **Chromium Browsers (Chrome, Brave, Edge):** Download `convolink-companion-chrome.zip`.
-- **Mozilla Firefox:** Download `convolink-companion-firefox.zip`.
+- **Gecko Browsers (Mozilla Firefox, Zen Browser):** Download `convolink-companion-firefox.zip`.
 
 ### Installation:
 #### In Google Chrome / Brave / Microsoft Edge:
@@ -24,7 +24,7 @@ Download pre-built extension packages directly from the repository's [Releases](
 3. Toggle on **Developer mode** in the top-right corner.
 4. Click **Load unpacked** and select the extracted folder.
 
-#### In Mozilla Firefox:
+#### In Mozilla Firefox & Zen Browser:
 1. Open `about:debugging#/runtime/this-firefox`.
 2. Click **Load Temporary Add-on...**
 3. Select `convolink-companion-firefox.zip` (or `manifest.json` from the extracted folder).

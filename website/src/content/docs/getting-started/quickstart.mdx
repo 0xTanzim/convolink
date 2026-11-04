@@ -51,19 +51,23 @@ Connect your local coding agent directly to your active browser tabs.
 
 <Tabs>
   <TabItem label="Path A: Companion Extension (Recommended)">
-    Download and install the zero-flag extension from [GitHub Releases v1.2.1](https://github.com/0xTanzim/convolink/releases/tag/v1.2.1):
-    - Chromium (`convolink-companion-chrome.zip`) for Chrome, Brave, and Edge.
-    - Firefox (`convolink-companion-firefox.zip`) for Mozilla Firefox.
+    Download and install the zero-flag extension from [GitHub Releases](https://github.com/0xTanzim/convolink/releases):
+    - **Chromium:** `convolink-companion-chrome.zip` for Chrome, Brave, Edge, and Chromium.
+    - **Gecko:** `convolink-companion-firefox.zip` for Mozilla Firefox and Zen Browser.
 
-    Load the unpacked folder into `chrome://extensions` or `about:debugging`, then pair:
+    Load the unpacked folder into `chrome://extensions` or `about:debugging#/runtime/this-firefox`, then pair:
     ```bash
     convo ext pair
     ```
   </TabItem>
-  <TabItem label="Path B: Direct CDP Inspection">
-    Enable remote debugging via `chrome://inspect/#remote-debugging` in your browser, or start Chrome with:
+  <TabItem label="Path B: Direct Debugging Ports (Dev Profile)">
+    Start your browser with dedicated automation port:
     ```bash
-    google-chrome --remote-debugging-port=9222
+    # Chromium:
+    google-chrome --remote-debugging-port=9222 --user-data-dir=/tmp/convo-chrome-dev
+
+    # Firefox / Zen Browser:
+    zen --remote-debugging-port 9223 -P <profile-name>
     ```
   </TabItem>
 </Tabs>
@@ -97,3 +101,16 @@ convo ask --platform chatgpt "Explain the data model for our user authentication
 <Aside type="tip">
   You can target specific tabs with shorthand `#1`, `#2` or by specifying `--platform claude`.
 </Aside>
+
+### 5. Install the Agent Skill for Your AI IDE
+
+Make your coding agents (Antigravity, Cursor, Claude Code, OpenCode) aware of ConvoLink:
+
+```bash
+# Universal Agent Skills CLI:
+npx skills add 0xTanzim/convolink
+
+# Or native ConvoLink CLI:
+convo skill install --harness antigravity   # or claude, cursor, codex, opencode
+```
+

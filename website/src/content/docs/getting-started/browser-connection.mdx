@@ -23,10 +23,10 @@ others: **it never asks you to relaunch your everyday browser with debug flags.*
 
 | Situation | What to use | Port | Flags needed |
 | :--- | :--- | :--- | :--- |
-| **Chrome, Brave, Edge, Chromium — your normal profile** | **Companion Extension** (recommended) | `9224` (WebSocket bridge) | **None** |
-| A separate profile you deliberately use for automation | Direct CDP (`raw-cdp`) | `9222` (or any port you choose) | `--remote-debugging-port` + `--user-data-dir` |
-| Headless / CI containers | Direct CDP on a dedicated profile | `9222` | Headless flags |
-| Firefox / Zen | Firefox BiDi (`firefox-bidi`) | n/a | `convo connect --firefox` |
+| **All Browsers (Chrome, Firefox, Zen, Brave, Edge) — everyday profile** | **Companion Extension** (recommended) | `9224` (WebSocket bridge) | **None** |
+| Dedicated Chromium profile for automation | Direct CDP (`raw-cdp`) | `9222` | `--remote-debugging-port=9222` + `--user-data-dir` |
+| Dedicated Gecko profile (Firefox / Zen) | WebDriver BiDi (`firefox-bidi`) | `9223` | `--remote-debugging-port 9223` |
+| Headless / CI containers | Direct CDP on dedicated profile | `9222` | Headless flags |
 
 <Aside type="caution" title="Chrome 136+ blocks CDP on your default profile">
 Since Chrome 136, `--remote-debugging-port` is ignored for the default user-data

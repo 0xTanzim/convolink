@@ -1,59 +1,95 @@
 ---
 title: Install the Agent Skill
-description: One command puts ConvoLink's operating rules into your harness, so the agent stops rediscovering them.
+description: Connect your AI coding agents to ConvoLink using the standard SKILL.md specification.
 ---
 
 import { Aside, Tabs, TabItem } from '@astrojs/starlight/components';
 
-## Why a skill
+## Why an Agent Skill?
 
-A harness starts every session with no memory of ConvoLink. Without a skill it rediscovers
-the transport, the pairing flow and the exit codes by reading the repository — slowly, and
-often wrongly. The skill is one file that states those rules up front.
+An autonomous coding agent (Antigravity, Cursor, Claude Code, Codex, OpenCode, Windsurf) starts each session with no prior knowledge of ConvoLink. Without a skill, it attempts to guess commands, hallucinates non-existent flags, or struggles with browser connection ports.
+
+The **ConvoLink Agent Skill** packages the complete runtime contract into a standard `SKILL.md` bundle with progressive disclosure, providing:
+- Explicit trigger conditions and quick-reference syntax.
+- Machine-actionable exit code contracts (`convo onboard --json`).
+- Concrete instructions for **Mozilla Firefox & Zen Browser** alongside Chrome, Brave, and Edge.
+- Exhaustive reference manuals loaded on demand without polluting the agent's context window.
+
+---
+
+## 🚀 Installation
+
+### Option A: Universal Agent Skills Standard (Recommended)
+
+ConvoLink adheres to the universal Agent Skills specification (`skills add`):
+
+<Tabs>
+  <TabItem label="npx">
+    ```bash
+    npx skills add 0xTanzim/convolink
+    ```
+  </TabItem>
+  <TabItem label="bunx">
+    ```bash
+    bunx skills add 0xTanzim/convolink
+    ```
+  </TabItem>
+</Tabs>
+
+### Option B: Native ConvoLink CLI Installer
 
 ```bash
-convo skill install --harness opencode   # or claude, cursor, codex, antigravity
-convo skill list                         # show every destination
+# Install directly into your active coding harness:
+convo skill install --harness antigravity   # or claude, cursor, codex, opencode
+
+# List all supported destinations:
+convo skill list
 ```
 
-| Harness | Destination |
-|---|---|
-| OpenCode | `.opencode/skills/convolink/SKILL.md` |
-| Claude Code | `.claude/skills/convolink/SKILL.md` |
-| Cursor | `.cursor/rules/convolink.mdc` |
-| Codex | `.codex/skills/convolink/SKILL.md` |
-| Antigravity | `.agents/skills/convolink/SKILL.md` |
+| Harness / Agent | Target Skill Path | Format |
+|---|---|---|
+| **Antigravity** | `.agents/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Claude Code** | `.claude/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **OpenCode** | `.opencode/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Codex** | `.codex/skills/convolink/SKILL.md` | Standard `SKILL.md` + references |
+| **Cursor** | `.cursor/rules/convolink.mdc` | MDC Rule format |
+| **Windsurf** | `.windsurfrules` | Context Rules format |
 
-Unknown layout? Point it at a directory you control:
-
+Custom project structure? Point it at an explicit directory:
 ```bash
-convo skill install --dir ./agent-context --harness claude
+convo skill install --dir ./custom-agent-context --harness claude
 ```
 
-The installer refuses to overwrite an edited file unless you pass `--force` (exit `4`), so a
-hand-tuned skill is never silently replaced.
-
-<Aside type="tip" title="Commit the installed skill">
-The skill is project state, not machine state. Commit it with your repo so every agent that
-opens the project — and every teammate — gets the same instructions.
+<Aside type="tip" title="Automatic References Bundling">
+When you run `convo skill install`, ConvoLink automatically copies the complete `references/` directory alongside `SKILL.md` so all deep documentation is instantly available to your agent.
 </Aside>
 
-## What the skill tells the agent
+---
 
-- Start with `convo onboard --json` and obey `nextAction`.
-- Exit `4` means a human must act; show the instruction and stop.
-- Never edit `.convo/config.json` by hand, never spawn a browser, never close a tab
-  ConvoLink did not open.
-- Extension is the transport for the user's real profile (`9224`); CDP is for dedicated
-  profiles (`9222`).
-- `--json` envelopes: branch on `ok` and `error.code`.
+## 3-Layer Progressive Disclosure Architecture
 
-## Verify it took
+ConvoLink's skill is engineered to maintain a lean context window while providing comprehensive domain knowledge:
 
-```bash
-ls .opencode/skills/convolink/SKILL.md     # wherever you installed it
-convo onboard --json                       # the skill's first instruction
+```text
+skills/convolink/
+├── SKILL.md                  ← L2: Core instructions (< 150 lines, quick reference & guardrails)
+└── references/               ← L3: On-demand deep documentation (loaded only when needed)
+    ├── browsers.md           ← Firefox, Zen Browser, Chrome, Brave, Edge guide
+    ├── cli.md                ← Exhaustive 12-command CLI manual
+    ├── mcp.md                ← Full 11-tool MCP schema & structured error codes
+    └── directives.md         ← Multi-file artifact extraction (// filepath:)
 ```
 
-The skill and this site's [setup contract](/convolink/agents/setup-contract/) must agree. If
-they ever diverge, the skill in the repository is the source of truth — reinstall it.
+1. **Level 1 (Metadata ~100 tokens):** YAML frontmatter in `SKILL.md`. Loaded at agent startup to route relevant user queries.
+2. **Level 2 (Instructions < 150 lines):** Main body of `SKILL.md`. Injected on-demand when the skill is activated. Contains timing contracts, session pinning rules, and anti-patterns.
+3. **Level 3 (References on-demand):** Deep technical manuals in `references/`. Read only when specific deep syntax or edge-case troubleshooting is required.
+
+---
+
+## Direct Links & Resources
+
+- **Raw Skill:** [`https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md`](https://raw.githubusercontent.com/0xTanzim/convolink/main/skills/convolink/SKILL.md)
+- **GitHub Repository:** [`https://github.com/0xTanzim/convolink/tree/main/skills/convolink`](https://github.com/0xTanzim/convolink/tree/main/skills/convolink)
+- **Browser Automation Reference:** [`references/browsers.md`](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/browsers.md)
+- **CLI Commands Reference:** [`references/cli.md`](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/cli.md)
+- **MCP Tool Catalog:** [`references/mcp.md`](https://github.com/0xTanzim/convolink/blob/main/skills/convolink/references/mcp.md)

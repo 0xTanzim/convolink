@@ -4,7 +4,7 @@ description: Drive real, logged-in browsers (Mozilla Firefox, Zen Browser, Googl
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
-  version: 1.3.2
+  version: 1.3.3
   package: convolink
   homepage: https://0xtanzim.github.io/convolink/
   repository: https://github.com/0xTanzim/convolink
