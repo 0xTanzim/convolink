@@ -25,6 +25,17 @@ export async function ensureDaemonRunning(options: DaemonCliOptions = {}): Promi
   const script = process.argv[1] ?? "";
   if (!script) return false;
 
+  let cliScript = script;
+  if (/mcp\.(js|ts)$/.test(script)) {
+    const candidate = script.replace(/mcp\.(js|ts)$/, "cli.$1");
+    if (fs.existsSync(candidate)) {
+      cliScript = candidate;
+    } else {
+      const distCandidate = path.join(path.dirname(script), "cli.js");
+      if (fs.existsSync(distCandidate)) cliScript = distCandidate;
+    }
+  }
+
   const dir = path.dirname(socketPath);
   if (!fs.existsSync(dir)) {
     try { fs.mkdirSync(dir, { recursive: true, mode: 0o700 }); } catch {}
@@ -33,7 +44,7 @@ export async function ensureDaemonRunning(options: DaemonCliOptions = {}): Promi
 
   try {
     const out = fs.openSync(logPath, "a");
-    const child = spawn(process.execPath, [script, "daemon", "start", "--foreground"], {
+    const child = spawn(process.execPath, [cliScript, "daemon", "start", "--foreground"], {
       detached: true,
       stdio: ["ignore", out, out],
       env: { ...process.env },

@@ -1,4 +1,4 @@
-# ConvoLink MCP Reference (v1.3.3)
+# ConvoLink MCP Reference (v1.3.4)
 
 Registered as `convolink` over stdio (`convo mcp`). Add to your MCP config:
 
@@ -59,6 +59,8 @@ All tools emit errors as `isError:true` with a `structured.error` object. Branch
 
 **BLOCKING — 10 to 180 s. Do NOT call any other tool until it returns.**
 
+**Autonomous & Self-Provisioning:** Passing `platform: "deepseek"` (or any supported platform) automatically connects to an existing open tab or spawns a new one in the background. Calling `convo_list_tabs` or `convo_tab` beforehand is NOT required.
+
 ```typescript
 convo_ask({
   prompt: string,               // required
@@ -69,9 +71,9 @@ convo_ask({
   search?: boolean,             // enable live web search grounding
   writeFiles?: boolean,         // extract code blocks via '// filepath:' directives
   outDir?: string,              // output dir for extracted files (default: ./artifacts)
-  openTab?: boolean,            // spawn tab only when convo_list_tabs shows none
+  openTab?: boolean,            // force spawn a new background tab (auto-created if none exists)
   newChat?: boolean,            // DESTRUCTIVE — resets current thread context
-  workspaceRoot?: string,       // absolute project path (required if MCP started from $HOME)
+  workspaceRoot?: string,       // absolute project path (auto-discovered if omitted)
 })
 ```
 

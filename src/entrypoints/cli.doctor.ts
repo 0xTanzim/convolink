@@ -63,16 +63,33 @@ export async function buildCapabilities(input: CapabilityInput): Promise<Capabil
             return port ? `http://${host}:${port}` : endpoint;
           })(),
         }
-      : {
-          id: "debug-endpoint",
-          state: "fail",
-          detail: input.transportError ?? "debug endpoint not reachable",
-          remediation: resolution?.browserId === "zen"
-            ? "convo connect --zen"
-            : resolution?.browserId === "firefox"
-            ? "convo connect --firefox"
-            : `start ${resolution?.browserId ?? "the browser"} with --remote-debugging-port=<port>`,
-        },
+      : (() => {
+          const isGhostSession =
+            input.transportError &&
+            (input.transportError.includes("active BiDi session") ||
+              input.transportError.includes("Maximum number of active sessions") ||
+              input.transportError.includes("session-busy"));
+          if (isGhostSession) {
+            return {
+              id: "debug-endpoint",
+              state: "fail" as const,
+              detail: `Gecko is holding a ghost BiDi session in memory (${input.transportError})`,
+              remediation: resolution?.browserId === "zen"
+                ? "convo connect --zen --restart"
+                : "convo connect --firefox --restart",
+            };
+          }
+          return {
+            id: "debug-endpoint",
+            state: "fail" as const,
+            detail: input.transportError ?? "debug endpoint not reachable",
+            remediation: resolution?.browserId === "zen"
+              ? "convo connect --zen"
+              : resolution?.browserId === "firefox"
+              ? "convo connect --firefox"
+              : `start ${resolution?.browserId ?? "the browser"} with --remote-debugging-port=<port>`,
+          };
+        })(),
   );
 
   if (resolution?.profilePath) {

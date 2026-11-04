@@ -8,23 +8,25 @@ interface DaemonReply<T> {
   readonly error?: string;
 }
 
-let fallbackOrchestrator: SessionOrchestrator | null = null;
+let mockOrchestrator: SessionOrchestrator | null = null;
+let cachedFallbackOrchestrator: SessionOrchestrator | null = null;
 
 /** Test seam allowing injection or reset of the in-process fallback orchestrator. */
 export function setFallbackOrchestrator(orch: SessionOrchestrator | null): void {
-  fallbackOrchestrator = orch;
+  mockOrchestrator = orch;
 }
 
 async function getFallbackOrchestrator(): Promise<SessionOrchestrator> {
-  if (!fallbackOrchestrator) {
+  if (mockOrchestrator) return mockOrchestrator;
+  if (!cachedFallbackOrchestrator) {
     const [{ loadResolution }, { createContainer }] = await Promise.all([
       import("./config-context.js"),
       import("../container.js"),
     ]);
     const resolution = await loadResolution();
-    fallbackOrchestrator = createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
+    cachedFallbackOrchestrator = createContainer(resolution.ok ? { resolution: resolution.value } : {}).orchestrator;
   }
-  return fallbackOrchestrator;
+  return cachedFallbackOrchestrator;
 }
 
 function isSocketDead(err: unknown): boolean {
@@ -75,11 +77,22 @@ export function forward(
   payload?: Record<string, unknown>,
 ): () => Promise<any> {
   return async () => {
-    if (fallbackOrchestrator) {
+    if (mockOrchestrator) {
       return invokeInProcess(command, payload);
     }
     try {
-      if (await client.isAlive()) {
+      let alive = await client.isAlive();
+      if (!alive) {
+        try {
+          const { loadResolution } = await import("./config-context.js");
+          const res = await loadResolution();
+          if (res.ok && (res.value.transport === "firefox-bidi" || res.value.transport === "extension-bridge")) {
+            const { ensureDaemonRunning } = await import("./cli.daemon.js");
+            alive = await ensureDaemonRunning();
+          }
+        } catch {}
+      }
+      if (alive) {
         const reply = (await client.sendRequest(command, payload)) as DaemonReply<unknown>;
         if (!reply.ok) throw new Error(reply.error ?? `daemon command '${command}' failed`);
         return reply.result;

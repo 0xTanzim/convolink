@@ -77,6 +77,8 @@ const NEXT_TOOL_HINTS: Partial<Record<ConvoErrorCode, { tool: string; args: Reco
   "not-ready": { tool: "convo_doctor", args: { fix: false } },
   "session-busy": { tool: "convo_ask", args: {} },
   "thread-not-found": { tool: "convo_search", args: {} },
+  "login-required": { tool: "convo_doctor", args: { fix: false } },
+  "challenge-detected": { tool: "convo_doctor", args: { fix: false } },
 };
 
 export async function executeMcpTool(

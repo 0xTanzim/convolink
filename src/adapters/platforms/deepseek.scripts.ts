@@ -60,9 +60,11 @@ export function getDeepSeekAwaitCompletionExpr(beforeTurnCount: number): string 
     ${IS_VISIBLE_JS}
     const circleBtn = document.querySelector('div[role="button"].ds-button--circle, div[role="button"][class*="circle"], div.ds-icon-button');
     const svg = circleBtn ? circleBtn.querySelector('svg') : null;
-    const stopBtn = document.querySelector('button[aria-label*="Stop"]');
+    const stopBtn = document.querySelector('button[aria-label*="Stop"], [aria-label*="stop"], div[role="button"][aria-label*="Stop"]');
+    const hasStopSquare = Boolean(svg && (svg.querySelector('rect') || svg.innerHTML.includes('rect')));
     const isGenerating = Boolean(
       (stopBtn && isVisible(stopBtn)) ||
+      (circleBtn && isVisible(circleBtn) && hasStopSquare) ||
       (svg && (svg.innerHTML.includes('linearGradient') || svg.classList.toString().includes('spin'))) ||
       (circleBtn && (circleBtn.querySelector('.ds-icon-spinning') || circleBtn.className.includes('loading')))
     );

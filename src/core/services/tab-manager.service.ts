@@ -143,11 +143,9 @@ export class TabManagerService {
     if (options.openTab) return this.createTab(options.platform ?? "chatgpt");
     if (options.thread) return this.resolveThread(options.thread, tabs);
 
-    const hasDriver = options.platform
-      ? this.drivers.some((driver) => driver.id === options.platform)
-      : false;
+    const hasDriver = options.platform ? this.drivers.some((d) => d.id === options.platform) : false;
     if (options.platform && hasDriver && this.browser.createTab) {
-      const managed = latestManagedTab(tabs, options.platform, (tab) => this.tabRegistry.isManagedTabRef(tab));
+      const managed = latestManagedTab(tabs, options.platform, (t) => this.tabRegistry.isManagedTabRef(t));
       if (managed) return managed;
       return this.createTab(options.platform);
     }

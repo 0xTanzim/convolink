@@ -11,6 +11,7 @@ import type {
   DownloadLinkDescriptor,
 } from "../../core/ports/platform.port.js";
 import { TimeoutError, AuthChallengeError } from "../../core/errors/bridge-errors.js";
+import { getTurnstileDetectionExpr, type TurnstileDetectionResult } from "../common/turnstile-detector.js";
 import { buildStatusProbeExpr } from "./page-events.js";
 import { submitWithRecovery, pollUntilSettled, completionText, hasNewCompletion, IS_VISIBLE_JS } from "./driver-helpers.js";
 import { getClaudeResolveSelectorsExpr, getClaudeReadThreadExpr, getClaudeFingerprintExpr, getClaudeAwaitCompletionExpr } from "./claude.scripts.js";
@@ -62,6 +63,13 @@ export class ClaudeDriver implements PlatformPort {
       return Boolean(login && !composer);
     })()`).catch(() => false);
     if (isLoginWall === true) throw new AuthChallengeError("login_required", this.getBaseUrl());
+
+    const cf = await browser
+      .evaluate<TurnstileDetectionResult>(handle, getTurnstileDetectionExpr())
+      .catch(() => ({ detected: false, isInteractive: false }));
+    if (cf.detected) {
+      throw new AuthChallengeError(cf.isInteractive ? "turnstile" : "cloudflare", this.getBaseUrl());
+    }
 
     const fingerprint = await browser
       .evaluate<TurnFingerprint>(handle, getClaudeFingerprintExpr(prompt.length))

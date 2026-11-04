@@ -4,7 +4,7 @@ description: Drive real, logged-in browsers (Mozilla Firefox, Zen Browser, Googl
 license: MIT
 compatibility: claude-code, cursor, codex, opencode, antigravity, windsurf
 metadata:
-  version: 1.3.3
+  version: 1.3.4
   package: convolink
   homepage: https://0xtanzim.github.io/convolink/
   repository: https://github.com/0xTanzim/convolink
@@ -100,7 +100,7 @@ bunx convolink@latest onboard --json
 
 ### 2. Tab Pinning & Conversational Continuity
 To hold a continuous conversation without context drift:
-1. On the first turn, execute `convo_ask(prompt, platform: "deepseek")`.
+1. On the first turn, execute `convo_ask(prompt, platform: "deepseek")`. (Automatically self-provisions: connects to an existing tab or spawns one in the background — no prior `convo_list_tabs` or `convo_tab` call needed).
 2. Inspect the result: read `result.tabId` and `result.threadUrl`.
 3. On every subsequent turn, pass `targetId: <tabId>` to maintain the chat thread.
 4. If reconnecting across days or workspaces, pass `threadUrl: "<url>"` directly to `convo_ask`.
