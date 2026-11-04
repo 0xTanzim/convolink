@@ -118,7 +118,7 @@ describe("Comprehensive Issues (comprehensive-issue-report.md)", () => {
       const resolved = await tabManager.resolveOrAutoOpenTab({ platform: "deepseek" }, []);
 
       expect(resolved.targetId).toBe("tab-new-deepseek");
-      expect(createdTabUrl).toBe("https://chat.deepseek.com/");
+      expect(String(createdTabUrl)).toBe("https://chat.deepseek.com/");
     });
   });
 
